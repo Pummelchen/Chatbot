@@ -4,6 +4,7 @@ from lantern_house.db.repository import StoryRepository
 from lantern_house.domain.contracts import (
     AudienceControlReport,
     CharacterContextPacket,
+    HouseStateSnapshot,
     ManagerContextPacket,
 )
 from lantern_house.quality.governance import StoryGovernanceEvaluator
@@ -26,6 +27,7 @@ class ContextAssembler:
         self,
         *,
         audience_control: AudienceControlReport | None = None,
+        include_strategic: bool = True,
     ) -> ManagerContextPacket:
         world = self.repository.get_world_state_snapshot()
         scene = self.repository.get_scene_snapshot()
@@ -35,6 +37,17 @@ class ContextAssembler:
         summaries = self.repository.list_recent_summaries(limit=2)
         arcs = self.repository.list_open_arcs(limit=4)
         continuity_flags = self.repository.list_open_continuity_flags(limit=4)
+        house_state = _repo_call(
+            self.repository,
+            "get_house_state_snapshot",
+            default=HouseStateSnapshot(),
+        )
+        pending_beats = _repo_call(self.repository, "list_pending_beats", limit=4, default=[])
+        strategic_brief = (
+            _repo_call(self.repository, "get_latest_strategic_brief", default=None)
+            if include_strategic
+            else None
+        )
 
         pacing_health = self.pacing_evaluator.evaluate(messages=messages, events=events)
         story_engine = world["metadata"].get("story_engine", {})
@@ -122,6 +135,27 @@ class ContextAssembler:
             pacing_health=pacing_health,
             story_governance=story_governance,
             audience_control=audience_control or AudienceControlReport(),
+            house_state=house_state,
+            pending_beats=[
+                _compact_text(
+                    (
+                        f"{beat.beat_type} / {beat.status}: {beat.objective}"
+                        + (f" @ {isoformat(beat.due_by)}" if beat.due_by else "")
+                    ),
+                    limit=180,
+                )
+                for beat in pending_beats
+            ],
+            strategic_guidance=[
+                _compact_text(strategic_brief.viewer_value_thesis, limit=180),
+                *[
+                    _compact_text(item, limit=150)
+                    for item in (strategic_brief.recommendations[:2] if strategic_brief else [])
+                ],
+            ]
+            if strategic_brief
+            else [],
+            simulation_ranking=strategic_brief.simulation_ranking[:4] if strategic_brief else [],
         )
 
     def build_character_packet(
@@ -130,9 +164,7 @@ class ContextAssembler:
         overview = self.repository.get_character_overview(character_slug)
         scene = self.repository.get_scene_snapshot()
         recent_messages = self.repository.list_recent_messages(limit=5)
-        recent_events = self.repository.list_recent_events(
-            hours=6, limit=5, minimum_significance=3
-        )
+        recent_events = self.repository.list_recent_events(hours=6, limit=5, minimum_significance=3)
         relationships = self.repository.list_relationship_snapshots(character_slug)[:3]
         relevant_facts = self.repository.get_relevant_facts(
             location_id=scene["location_id"], limit=3
@@ -140,6 +172,12 @@ class ContextAssembler:
         boundaries = self.repository.get_forbidden_boundaries(
             character_slug=character_slug, limit=3
         )
+        house_state = _repo_call(
+            self.repository,
+            "get_house_state_snapshot",
+            default=HouseStateSnapshot(),
+        )
+        pending_beats = _repo_call(self.repository, "list_pending_beats", limit=3, default=[])
         story_engine = self.repository.get_world_state_snapshot()["metadata"].get(
             "story_engine", {}
         )
@@ -195,6 +233,16 @@ class ContextAssembler:
                 )
                 for event in recent_events
             ],
+            live_pressures=[
+                *[
+                    _compact_text(
+                        f"{item.label}: {item.recommended_move or item.summary}",
+                        limit=120,
+                    )
+                    for item in house_state.active_pressures[:2]
+                ],
+                *[_compact_text(beat.objective, limit=120) for beat in pending_beats[:1]],
+            ],
             manager_directive=_compact_text(directive_text, limit=220),
             forbidden_boundaries=[_compact_text(item, limit=100) for item in boundaries],
         )
@@ -212,3 +260,10 @@ def _compact_text(value: str, *, limit: int) -> str:
     if len(text) <= limit:
         return text
     return text[: limit - 3].rstrip() + "..."
+
+
+def _repo_call(repository, method_name: str, *args, default=None, **kwargs):
+    method = getattr(repository, method_name, None)
+    if method is None:
+        return default
+    return method(*args, **kwargs)

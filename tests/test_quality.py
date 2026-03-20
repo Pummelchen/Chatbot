@@ -178,6 +178,16 @@ def test_character_service_filters_fragment_questions() -> None:
     assert sanitized.answered_questions == ["How much of the debt is real?"]
 
 
+def test_character_service_drops_placeholder_thought_pulse() -> None:
+    service = CharacterService.__new__(CharacterService)
+    turn = CharacterTurn(
+        public_message="Watch the desk, not me.",
+        thought_pulse="rare",
+    )
+    sanitized = service._sanitize(turn, thought_pulse_allowed=True)
+    assert sanitized.thought_pulse is None
+
+
 def test_character_service_detects_template_leak() -> None:
     service = CharacterService.__new__(CharacterService)
     turn = CharacterTurn(public_message="the visible message")

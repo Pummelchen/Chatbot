@@ -183,11 +183,7 @@ class StoryProgressionService:
                 *arc.unresolved_questions[:3],
             ]
         ).lower()
-        return {
-            token
-            for token in re.findall(r"[a-z]{4,}", text)
-            if token not in self._STOPWORDS
-        }
+        return {token for token in re.findall(r"[a-z]{4,}", text) if token not in self._STOPWORDS}
 
     def _points_for_event(self, event: EventCandidate) -> int:
         points = 1

@@ -77,9 +77,11 @@ class OllamaClient:
         system: str | None = None,
         temperature: float = 0.8,
         max_output_tokens: int | None = None,
+        max_retries: int | None = None,
     ) -> tuple[dict, InvocationStats]:
         last_error: Exception | None = None
-        for attempt in range(1, self.config.max_retries + 1):
+        retry_budget = max(1, max_retries or self.config.max_retries)
+        for attempt in range(1, retry_budget + 1):
             started = perf_counter()
             try:
                 response = await self._client.post(

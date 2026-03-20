@@ -39,6 +39,32 @@ class WorldState(Base):
     )
 
 
+class HouseState(Base):
+    __tablename__ = "house_state"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    state_key: Mapped[str] = mapped_column(
+        String(50), unique=True, nullable=False, default="primary"
+    )
+    capacity: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    occupied_rooms: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    vacancy_pressure: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    cash_on_hand: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    hourly_burn_rate: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    payroll_due_in_hours: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    repair_backlog: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    inspection_risk: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    guest_tension: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    weather_pressure: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    staff_fatigue: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    reputation_risk: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    active_pressures: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    metadata_json: Mapped[dict] = mapped_column("metadata", JSON, default=dict, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, onupdate=_utcnow
+    )
+
+
 class Location(Base):
     __tablename__ = "locations"
 
@@ -210,6 +236,31 @@ class Beat(Base):
     significance: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
     metadata_json: Mapped[dict] = mapped_column("metadata", JSON, default=dict, nullable=False)
     due_by: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, nullable=False
+    )
+
+
+class StrategicBrief(Base):
+    __tablename__ = "strategic_briefs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    source: Mapped[str] = mapped_column(String(50), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="active")
+    model_name: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    title: Mapped[str] = mapped_column(String(200), nullable=False)
+    viewer_value_thesis: Mapped[str] = mapped_column(Text, nullable=False)
+    urgency: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
+    next_hour_focus: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    next_six_hours: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    recommendations: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    risk_alerts: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    house_pressure_actions: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    audience_rollout_actions: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    manager_biases: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    simulation_ranking: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    metadata_json: Mapped[dict] = mapped_column("metadata", JSON, default=dict, nullable=False)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow, nullable=False
     )

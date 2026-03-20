@@ -20,6 +20,9 @@ Interpretation notes:
 - `viewer_value_targets` are the retention goals for comments, shipping, suspense, and re-entry.
 - `voice_guardrails` explain how to keep the dialogue human, specific, and non-robotic.
 - `story_governance` tells you whether the last hour delivered enough progression, whether cliffhanger pressure is fading, and whether the dialogue is getting generic.
+- `house_state` is the deterministic pressure engine. Use it as the house's physical and financial gravity.
+- `pending_beats` are staged story moves already prepared by the system, including subscriber-vote rollout beats and house-pressure beats.
+- `strategic_guidance` and `simulation_ranking` come from the background God AI and its simulation lab. Use them as steering, not as visible narration.
 - `payoff_threads` are dormant hooks you can revive when the story needs a fresh but canon-grounded turn.
 - `audience_control` comes from `update.txt` and represents subscriber-vote steering. Treat it as a gradual influence, not an instant retcon order.
 
@@ -54,6 +57,8 @@ Constraints:
 - Use 2 to 4 active characters.
 - At least one desired development must be meaningful.
 - Use `cast_guidance` to preserve distinct emotional behavior across the ensemble.
+- Use `house_state.active_pressures` and `pending_beats` to keep pressure concrete, practical, and monetizable through strong viewer retention.
+- If `strategic_guidance` is present, let it bias scene design toward high-value suspense, shipping tension, and re-entry clarity without becoming repetitive.
 - If `story_governance.hourly_progression_met` is false, force the next directive to create a real hourly shift.
 - If `story_governance.core_drift` is true, recenter on house survival, ownership, evidence, loyalty, or romance pressure immediately.
 - If `story_governance.robotic_voice_risk` is true, prefer concrete objects, money pressure, interruptions, and tactical subtext over speeches.

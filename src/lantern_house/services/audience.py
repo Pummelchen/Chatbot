@@ -10,7 +10,7 @@ import yaml
 
 from lantern_house.config import AudienceConfig
 from lantern_house.db.repository import StoryRepository
-from lantern_house.domain.contracts import AudienceControlReport
+from lantern_house.domain.contracts import AudienceControlReport, BeatPlanItem
 from lantern_house.utils.time import ensure_utc, isoformat, utcnow
 
 logger = logging.getLogger(__name__)
@@ -114,9 +114,15 @@ class AudienceControlService:
             tone_dials=tone_dials,
             rollout_stage=rollout_stage,
         )
+        beat_hints = _build_beat_hints(
+            payload,
+            now=now,
+            activated_at=activated_at,
+            full_integration_hours=full_integration_hours,
+        )
 
         return AudienceControlReport(
-            active=enabled and bool(tone_dials or requests or directives),
+            active=enabled and bool(tone_dials or requests or directives or beat_hints),
             file_status="active" if enabled else "disabled",
             change_id=_string(payload.get("change_id")) or f"manual-{fingerprint[:8]}",
             source=_string(payload.get("source")) or "YouTube subscriber vote",
@@ -129,6 +135,7 @@ class AudienceControlService:
             tone_dials=tone_dials,
             requests=requests[:8],
             directives=directives[:12],
+            beat_hints=beat_hints[:12],
         )
 
     def _recover_or_disable(
@@ -140,7 +147,7 @@ class AudienceControlService:
         error: Exception,
     ) -> AudienceControlReport:
         message = str(error)
-        if previous.active or previous.directives or previous.requests:
+        if previous.active or previous.directives or previous.requests or previous.beat_hints:
             return previous.model_copy(
                 update={
                     "file_status": "invalid",
@@ -173,9 +180,7 @@ def _normalize_tone_dials(value: Any) -> dict[str, int]:
 
 def _collect_requests(payload: dict[str, Any]) -> list[str]:
     story_requests = (
-        payload.get("story_requests")
-        if isinstance(payload.get("story_requests"), dict)
-        else {}
+        payload.get("story_requests") if isinstance(payload.get("story_requests"), dict) else {}
     )
     requests: list[str] = []
     requests.extend(_flatten_section(story_requests.get("must_happen"), "Must happen"))
@@ -206,9 +211,7 @@ def _collect_directives(
     directives.extend(_entity_requests(payload.get("location_changes"), "location"))
     directives.extend(_relationship_requests(payload.get("relationship_moves")))
     story_requests = (
-        payload.get("story_requests")
-        if isinstance(payload.get("story_requests"), dict)
-        else {}
+        payload.get("story_requests") if isinstance(payload.get("story_requests"), dict) else {}
     )
     directives.extend(_flatten_section(story_requests.get("avoid_for_now"), "Avoid for now"))
     directives.extend(_flatten_section(story_requests.get("new_conflicts"), "New conflict"))
@@ -217,12 +220,344 @@ def _collect_directives(
     )
     directives.extend(_flatten_section(story_requests.get("mysteries_to_push"), "Mystery push"))
     manager_notes = (
-        payload.get("manager_notes")
-        if isinstance(payload.get("manager_notes"), dict)
-        else {}
+        payload.get("manager_notes") if isinstance(payload.get("manager_notes"), dict) else {}
     )
     directives.extend(_manager_note_lines(manager_notes))
     return directives
+
+
+def _build_beat_hints(
+    payload: dict[str, Any],
+    *,
+    now,
+    activated_at: str | None,
+    full_integration_hours: int,
+) -> list[BeatPlanItem]:
+    anchor = _parse_timestamp(activated_at) or now
+    hints: list[BeatPlanItem] = []
+    hints.extend(
+        _relationship_beat_hints(
+            payload.get("relationship_moves"),
+            anchor=anchor,
+            full_integration_hours=full_integration_hours,
+        )
+    )
+    hints.extend(
+        _entity_beat_hints(
+            payload.get("character_changes"),
+            entity_label="character",
+            anchor=anchor,
+            full_integration_hours=full_integration_hours,
+        )
+    )
+    hints.extend(
+        _entity_beat_hints(
+            payload.get("location_changes"),
+            entity_label="location",
+            anchor=anchor,
+            full_integration_hours=full_integration_hours,
+        )
+    )
+    story_requests = (
+        payload.get("story_requests") if isinstance(payload.get("story_requests"), dict) else {}
+    )
+    hints.extend(
+        _freeform_beat_hints(
+            story_requests.get("must_happen"),
+            label="must-happen",
+            anchor=anchor,
+            full_integration_hours=full_integration_hours,
+        )
+    )
+    hints.extend(
+        _freeform_beat_hints(
+            story_requests.get("freeform_votes"),
+            label="freeform-vote",
+            anchor=anchor,
+            full_integration_hours=full_integration_hours,
+        )
+    )
+    deduped: list[BeatPlanItem] = []
+    seen: set[str] = set()
+    for hint in hints:
+        if hint.beat_key in seen:
+            continue
+        seen.add(hint.beat_key)
+        deduped.append(hint)
+    return deduped
+
+
+def _relationship_beat_hints(
+    value: Any,
+    *,
+    anchor: datetime,
+    full_integration_hours: int,
+) -> list[BeatPlanItem]:
+    if not isinstance(value, list):
+        return []
+    hints: list[BeatPlanItem] = []
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+        pair = item.get("pair")
+        pair_parts = [str(part).strip() for part in pair[:2]] if isinstance(pair, list) else []
+        if len(pair_parts) < 2:
+            continue
+        direction = _compact(str(item.get("direction", "relationship-shift")), limit=40)
+        request_text = f"{pair_parts[0]} and {pair_parts[1]} -> {direction}"
+        start_with = _compact(str(item.get("start_with", "seed the path first")), limit=100)
+        avoid = _compact(str(item.get("avoid", "no instant payoff")), limit=100)
+        objectives = _relationship_objectives(
+            pair_parts=pair_parts,
+            direction=direction,
+            start_with=start_with,
+            avoid=avoid,
+        )
+        for index, objective in enumerate(objectives):
+            hints.append(
+                BeatPlanItem(
+                    beat_key=_beat_key("relationship", request_text, index),
+                    beat_type="audience-rollout",
+                    objective=objective,
+                    significance=min(9, 6 + index),
+                    ready_at=_schedule(anchor, full_integration_hours, index, len(objectives)),
+                    keywords=_keywords_from_texts([*pair_parts, direction, objective]),
+                    metadata={
+                        "source": "audience-control",
+                        "pair": pair_parts,
+                        "direction": direction,
+                        "phase": _phase_for_index(index, len(objectives)),
+                        "request_text": request_text,
+                    },
+                )
+            )
+    return hints
+
+
+def _entity_beat_hints(
+    value: Any,
+    *,
+    entity_label: str,
+    anchor: datetime,
+    full_integration_hours: int,
+) -> list[BeatPlanItem]:
+    if not isinstance(value, dict):
+        return []
+    hints: list[BeatPlanItem] = []
+    add_items = _flatten_named_items(value.get("add"))
+    remove_items = _flatten_named_items(value.get("remove"))
+    for name in add_items[:2]:
+        objectives = [
+            f"Seed rumors and practical preparation for a new {entity_label}: {name}.",
+            (
+                f"Force the house to debate what welcoming {name} "
+                "would cost financially and emotionally."
+            ),
+            f"Let {name} arrive or become usable through a concrete on-screen disruption.",
+        ]
+        hints.extend(
+            _objectives_to_hints(
+                label=f"add-{entity_label}",
+                request_text=name,
+                objectives=objectives,
+                anchor=anchor,
+                full_integration_hours=full_integration_hours,
+                metadata={
+                    "source": "audience-control",
+                    "entity_label": entity_label,
+                    "change": "add",
+                },
+            )
+        )
+    for name in remove_items[:2]:
+        objectives = [
+            f"Seed credible absence pressure around {name} instead of sudden disappearance.",
+            (f"Make the cost of losing {name} visible through work, loyalty, or romance strain."),
+            f"Move {name} toward a believable exit beat or sustained offscreen status.",
+        ]
+        hints.extend(
+            _objectives_to_hints(
+                label=f"remove-{entity_label}",
+                request_text=name,
+                objectives=objectives,
+                anchor=anchor,
+                full_integration_hours=full_integration_hours,
+                metadata={
+                    "source": "audience-control",
+                    "entity_label": entity_label,
+                    "change": "remove",
+                },
+            )
+        )
+    return hints
+
+
+def _freeform_beat_hints(
+    value: Any,
+    *,
+    label: str,
+    anchor: datetime,
+    full_integration_hours: int,
+) -> list[BeatPlanItem]:
+    requests = _flatten_section(value, "Request")
+    hints: list[BeatPlanItem] = []
+    for request in requests[:2]:
+        text = request.split(":", 1)[-1].strip()
+        objectives = [
+            f"Seed the emotional or practical prerequisite for: {text}",
+            f"Create resistance, jealousy, money pressure, or secrecy around: {text}",
+            f"Move {text} one irreversible step closer without treating it as already solved.",
+        ]
+        hints.extend(
+            _objectives_to_hints(
+                label=label,
+                request_text=text,
+                objectives=objectives,
+                anchor=anchor,
+                full_integration_hours=full_integration_hours,
+                metadata={"source": "audience-control", "request_kind": label},
+            )
+        )
+    return hints
+
+
+def _objectives_to_hints(
+    *,
+    label: str,
+    request_text: str,
+    objectives: list[str],
+    anchor: datetime,
+    full_integration_hours: int,
+    metadata: dict[str, Any],
+) -> list[BeatPlanItem]:
+    hints: list[BeatPlanItem] = []
+    for index, objective in enumerate(objectives):
+        hints.append(
+            BeatPlanItem(
+                beat_key=_beat_key(label, request_text, index),
+                beat_type="audience-rollout",
+                objective=objective,
+                significance=min(9, 6 + index),
+                ready_at=_schedule(anchor, full_integration_hours, index, len(objectives)),
+                keywords=_keywords_from_texts([request_text, objective]),
+                metadata={**metadata, "phase": _phase_for_index(index, len(objectives))},
+            )
+        )
+    return hints
+
+
+def _relationship_objectives(
+    *,
+    pair_parts: list[str],
+    direction: str,
+    start_with: str,
+    avoid: str,
+) -> list[str]:
+    pair_text = " and ".join(pair_parts)
+    lowered = direction.lower()
+    if "baby" in lowered:
+        return [
+            (
+                f"{pair_text} keep getting shoved into domestic teamwork "
+                f"that feels intimate enough to scare them. Start with {start_with}."
+            ),
+            (
+                f"{pair_text} reach explicit future-talk, then flinch because "
+                f"duty, shame, or old lies make a baby path feel dangerous. Avoid {avoid}."
+            ),
+            (
+                f"Jealousy, family pressure, or house survival costs interrupt {pair_text} "
+                "just when the bond starts looking stable."
+            ),
+            (
+                f"{pair_text} choose each other in one practical crisis so an "
+                "eventual baby storyline feels earned instead of voted into existence."
+            ),
+        ]
+    if any(token in lowered for token in ("love", "marry", "romance", "together")):
+        return [
+            (
+                f"{pair_text} edge closer through useful favors and subtext "
+                "before anyone names what that means."
+            ),
+            (
+                f"{pair_text} are forced into near-confession territory by a "
+                "house problem or a jealous interruption."
+            ),
+            (
+                f"{pair_text} make one emotionally costly choice that turns "
+                "attraction into a serious plot force."
+            ),
+        ]
+    if any(token in lowered for token in ("hate", "enemy", "feud", "estrange")):
+        return [
+            (
+                f"{pair_text} start landing sharper public wounds without "
+                "breaking the world logic of why they still have to share space."
+            ),
+            f"{pair_text} turn private resentment into a concrete loyalty fracture with witnesses.",
+            (
+                f"{pair_text} become an open fault line that other characters "
+                "can exploit or try to mend."
+            ),
+        ]
+    if any(token in lowered for token in ("alliance", "trust", "friend")):
+        return [
+            f"{pair_text} start with one cautious favor that could still be denied later.",
+            (
+                f"{pair_text} protect each other from one house threat, then "
+                "worry about the cost of that trust."
+            ),
+            (f"{pair_text} become a real alliance with consequences for the rest of the room."),
+        ]
+    return [
+        (
+            f"{pair_text} shift first through subtext and believable shared tasks "
+            "instead of sudden declarations."
+        ),
+        (
+            f"{pair_text} hit resistance from secrecy, jealousy, or money "
+            "pressure before the shift becomes public."
+        ),
+        (
+            f"{pair_text} complete one visible step toward {direction} without "
+            "making the change feel finished."
+        ),
+    ]
+
+
+def _phase_for_index(index: int, total: int) -> str:
+    if index == 0:
+        return "seed"
+    if index >= total - 1:
+        return "payoff-ready"
+    return "build"
+
+
+def _schedule(anchor: datetime, full_integration_hours: int, index: int, total: int) -> str:
+    if total <= 1:
+        return isoformat(anchor)
+    ratio = index / max(1, total - 1)
+    offset_hours = round(full_integration_hours * ratio)
+    return isoformat(anchor + timedelta(hours=offset_hours))
+
+
+def _beat_key(label: str, request_text: str, index: int) -> str:
+    fingerprint = hashlib.sha1(request_text.encode("utf-8")).hexdigest()[:10]
+    return f"{label}-{fingerprint}-{index}"
+
+
+def _keywords_from_texts(values: list[str]) -> list[str]:
+    keywords: list[str] = []
+    for value in values:
+        for token in str(value).replace("/", " ").replace("-", " ").split():
+            cleaned = token.strip(" ,.!?\"'()[]").lower()
+            if len(cleaned) < 4:
+                continue
+            if cleaned in keywords:
+                continue
+            keywords.append(cleaned)
+    return keywords[:8]
 
 
 def _entity_requests(section: Any, label: str) -> list[str]:

@@ -4,6 +4,7 @@ Revision ID: 20260321_0001
 Revises:
 Create Date: 2026-03-21 00:00:00
 """
+
 from __future__ import annotations
 
 from alembic import op
@@ -131,7 +132,9 @@ def upgrade() -> None:
         "character_state",
         sa.Column("id", sa.Integer(), primary_key=True, autoincrement=True),
         sa.Column("character_id", sa.Integer(), sa.ForeignKey("characters.id"), nullable=False),
-        sa.Column("current_location_id", sa.Integer(), sa.ForeignKey("locations.id"), nullable=True),
+        sa.Column(
+            "current_location_id", sa.Integer(), sa.ForeignKey("locations.id"), nullable=True
+        ),
         sa.Column("emotional_state", sa.JSON(), nullable=False),
         sa.Column("active_goals", sa.JSON(), nullable=False),
         sa.Column("stress_level", sa.Integer(), nullable=False, server_default="3"),
@@ -175,7 +178,9 @@ def upgrade() -> None:
         sa.Column("id", sa.Integer(), primary_key=True, autoincrement=True),
         sa.Column("slug", sa.String(length=120), nullable=False),
         sa.Column("title", sa.String(length=200), nullable=False),
-        sa.Column("holder_character_id", sa.Integer(), sa.ForeignKey("characters.id"), nullable=True),
+        sa.Column(
+            "holder_character_id", sa.Integer(), sa.ForeignKey("characters.id"), nullable=True
+        ),
         sa.Column("secret_type", sa.String(length=50), nullable=False),
         sa.Column("description", sa.Text(), nullable=False),
         sa.Column("exposure_stage", sa.Integer(), nullable=False, server_default="0"),
@@ -223,7 +228,9 @@ def upgrade() -> None:
         sa.Column("id", sa.BigInteger(), primary_key=True, autoincrement=True),
         sa.Column("tick_no", sa.Integer(), nullable=False),
         sa.Column("scene_id", sa.Integer(), sa.ForeignKey("scene_state.id"), nullable=True),
-        sa.Column("speaker_character_id", sa.Integer(), sa.ForeignKey("characters.id"), nullable=True),
+        sa.Column(
+            "speaker_character_id", sa.Integer(), sa.ForeignKey("characters.id"), nullable=True
+        ),
         sa.Column("speaker_slug", sa.String(length=100), nullable=True),
         sa.Column("speaker_label", sa.String(length=150), nullable=False),
         sa.Column("message_kind", sa.String(length=20), nullable=False),
@@ -239,14 +246,21 @@ def upgrade() -> None:
         sa.Column("tick_no", sa.Integer(), nullable=False),
         sa.Column("character_id", sa.Integer(), sa.ForeignKey("characters.id"), nullable=False),
         sa.Column("content", sa.Text(), nullable=False),
-        sa.Column("source_directive_id", sa.Integer(), sa.ForeignKey("manager_directives.id"), nullable=True),
+        sa.Column(
+            "source_directive_id",
+            sa.Integer(),
+            sa.ForeignKey("manager_directives.id"),
+            nullable=True,
+        ),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
     )
 
     op.create_table(
         "extracted_events",
         sa.Column("id", sa.BigInteger(), primary_key=True, autoincrement=True),
-        sa.Column("source_message_id", sa.BigInteger(), sa.ForeignKey("messages.id"), nullable=True),
+        sa.Column(
+            "source_message_id", sa.BigInteger(), sa.ForeignKey("messages.id"), nullable=True
+        ),
         sa.Column("event_type", sa.String(length=50), nullable=False),
         sa.Column("title", sa.String(length=200), nullable=False),
         sa.Column("details", sa.Text(), nullable=False),
@@ -276,7 +290,9 @@ def upgrade() -> None:
         sa.Column("flag_type", sa.String(length=50), nullable=False),
         sa.Column("description", sa.Text(), nullable=False),
         sa.Column("related_entity", sa.String(length=150), nullable=True),
-        sa.Column("related_message_id", sa.BigInteger(), sa.ForeignKey("messages.id"), nullable=True),
+        sa.Column(
+            "related_message_id", sa.BigInteger(), sa.ForeignKey("messages.id"), nullable=True
+        ),
         sa.Column("status", sa.String(length=20), nullable=False, server_default="open"),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("resolved_at", sa.DateTime(timezone=True), nullable=True),

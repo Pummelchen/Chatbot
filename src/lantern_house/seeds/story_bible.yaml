@@ -36,6 +36,88 @@ story_engine:
       keywords: ["kiss", "want", "jealous", "confess", "touch", "almost", "desire"]
     - key: inheritance-conflict
       keywords: ["claim", "family", "owner", "heir", "vale", "ortega", "control"]
+house_pressure_seed:
+  note: "The guesthouse must keep generating grounded pressure even when the cast gets evasive."
+  capacity: 14
+  occupied_rooms: 10
+  vacancy_pressure: 5
+  cash_on_hand: 7800
+  hourly_burn_rate: 46
+  payroll_due_in_hours: 30
+  repair_backlog: 7
+  inspection_risk: 5
+  guest_tension: 4
+  weather_pressure: 5
+  staff_fatigue: 5
+  reputation_risk: 4
+  active_pressures:
+    - slug: card-reader-instability
+      label: "Card reader instability"
+      intensity: 7
+      summary: "Late check-ins keep turning into payment friction at the desk."
+      recommended_move: "Let a failed payment, embarrassed guest, or delayed booking expose a character fault line."
+      source_metric: "repair_backlog"
+  pressure_catalog:
+    - slug: card-reader-instability
+      metric: repair_backlog
+      threshold: 6
+      comparison: gte
+      label: "Card reader instability"
+      summary: "The front desk payment flow is brittle enough to create public money tension."
+      recommended_move: "Break a check-in or payment in public and force someone to improvise badly."
+      beat_objective: "The card reader fails at the worst possible check-in, turning money stress into blame, flirtation, or exposed weakness."
+      ready_in_hours: 0
+      keywords: ["card", "reader", "payment", "desk", "invoice"]
+    - slug: payroll-cliff
+      metric: payroll_due_in_hours
+      threshold: 24
+      comparison: lte
+      label: "Payroll cliff"
+      summary: "Staff payroll is close enough to force desperate promises and private bargains."
+      recommended_move: "Make one character realize the next promise to staff might be a lie."
+      beat_objective: "Payroll pressure leaks into the group chat and makes loyalty feel expensive."
+      ready_in_hours: 2
+      keywords: ["payroll", "salary", "promise", "staff", "cash"]
+    - slug: inspection-hum
+      metric: inspection_risk
+      threshold: 6
+      comparison: gte
+      label: "Inspection hum"
+      summary: "Rumors of inspection or permit trouble can make every patch job feel dangerous."
+      recommended_move: "Seed a possible inspection, permit call, or guest complaint that nobody can ignore."
+      beat_objective: "A notice, call, or rumor suggests Lantern House may soon face inspection while the place is visibly not ready."
+      ready_in_hours: 4
+      keywords: ["inspection", "permit", "complaint", "notice", "lobby"]
+    - slug: storm-leak-memory
+      metric: weather_pressure
+      threshold: 6
+      comparison: gte
+      label: "Storm leak memory"
+      summary: "Bad weather keeps making the house remember the night Evelyn vanished."
+      recommended_move: "Use weather to reopen a room, a fear, or a buried version of typhoon night."
+      beat_objective: "Rain, wind, or a leak pushes the cast toward the sealed parts of the house and reactivates old fear."
+      ready_in_hours: 0
+      keywords: ["storm", "rain", "leak", "wing", "roof"]
+    - slug: guest-review-risk
+      metric: reputation_risk
+      threshold: 6
+      comparison: gte
+      label: "Guest review risk"
+      summary: "One public failure could turn the house's finances and dignity into the same emergency."
+      recommended_move: "Let a guest threaten a review, a clip, or a complaint that humiliates the wrong person."
+      beat_objective: "A guest threatens public embarrassment, forcing the house to stage charm while private tempers spike."
+      ready_in_hours: 3
+      keywords: ["guest", "review", "clip", "complaint", "camera"]
+    - slug: fatigue-slip
+      metric: staff_fatigue
+      threshold: 7
+      comparison: gte
+      label: "Fatigue slip"
+      summary: "Exhaustion can make a careful character careless at the exact wrong time."
+      recommended_move: "Use tiredness to create a mistake, overshare, or missed cover story."
+      beat_objective: "Someone running on fumes says or forgets one thing that should have stayed hidden."
+      ready_in_hours: 1
+      keywords: ["tired", "forgot", "slip", "mistake", "cover"]
 initial_scene:
   scene_key: opening-night
   objective: "Hold the lobby together through a brownout while Lucía arrives with an inheritance claim and Hana's return threatens the version of the past Amelia has been protecting."

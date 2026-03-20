@@ -33,6 +33,7 @@ class ModelConfig(BaseModel):
     character: str = "gemma3:1b"
     manager: str = "gemma3:4b"
     announcer: str = "gemma3:4b"
+    god_ai: str = "gemma3:12b"
 
 
 class RuntimeConfig(BaseModel):
@@ -41,6 +42,7 @@ class RuntimeConfig(BaseModel):
     active_character_min: int = 2
     active_character_max: int = 4
     manager_step_interval_messages: int = 4
+    manager_prefetch_threshold_messages: int = 2
     checkpoint_interval_seconds: int = 60
     periodic_flush_messages: int = 1
     degraded_mode_on_model_failure: bool = True
@@ -98,6 +100,40 @@ class AudienceConfig(BaseModel):
     check_interval_minutes: int = 10
 
 
+class HousePressureConfig(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    enabled: bool = True
+    refresh_interval_minutes: int = 5
+    max_active_signals: int = 4
+    max_pending_beats: int = 4
+
+
+class CriticConfig(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    enabled: bool = True
+    repair_threshold: int = 58
+    hard_fail_threshold: int = 34
+
+
+class GodAIConfig(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    enabled: bool = True
+    refresh_interval_minutes: int = 20
+    max_brief_age_minutes: int = 90
+    simulation_horizon_hours: int = 24
+    simulation_turns_per_hour: int = 90
+
+
+class SimulationConfig(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    default_horizon_hours: int = 24
+    default_turns_per_hour: int = 90
+
+
 class AppConfig(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
@@ -111,6 +147,10 @@ class AppConfig(BaseModel):
     story: StoryConfig = Field(default_factory=StoryConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
     audience: AudienceConfig = Field(default_factory=AudienceConfig)
+    house_pressure: HousePressureConfig = Field(default_factory=HousePressureConfig)
+    critic: CriticConfig = Field(default_factory=CriticConfig)
+    god_ai: GodAIConfig = Field(default_factory=GodAIConfig)
+    simulation: SimulationConfig = Field(default_factory=SimulationConfig)
 
 
 def load_config(config_path: str | Path | None = None) -> AppConfig:

@@ -4,6 +4,7 @@ Revision ID: 20260321_0003
 Revises: 20260321_0002
 Create Date: 2026-03-21 21:10:00
 """
+
 from __future__ import annotations
 
 from alembic import op
@@ -41,7 +42,9 @@ def upgrade() -> None:
         """
     )
 
-    op.alter_column("characters", "cultural_background", existing_type=sa.String(length=120), nullable=False)
+    op.alter_column(
+        "characters", "cultural_background", existing_type=sa.String(length=120), nullable=False
+    )
     op.alter_column("characters", "family_expectations", existing_type=sa.Text(), nullable=False)
     op.alter_column("characters", "conflict_style", existing_type=sa.Text(), nullable=False)
     op.alter_column("characters", "privacy_boundaries", existing_type=sa.Text(), nullable=False)

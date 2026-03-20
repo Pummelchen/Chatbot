@@ -26,6 +26,22 @@ class StorySeedLoader:
                 raise RuntimeError(
                     "Force reseed is not implemented to avoid accidental canon loss."
                 )
+            partial_tables = [
+                name
+                for name, model in {
+                    "world_state": models.WorldState,
+                    "house_state": models.HouseState,
+                    "scene_state": models.SceneState,
+                    "run_state": models.RunState,
+                }.items()
+                if session.scalar(select(model.id).limit(1)) is not None
+            ]
+            if partial_tables:
+                joined = ", ".join(partial_tables)
+                raise RuntimeError(
+                    "Database contains partial seeded state without characters: "
+                    f"{joined}. Reset the database before seeding again."
+                )
 
             location_map: dict[str, models.Location] = {}
             for item in payload["locations"]:
@@ -144,6 +160,7 @@ class StorySeedLoader:
                 )
 
             hour_bucket = floor_to_hour(utcnow())
+            house_seed = payload.get("house_pressure_seed", {})
             session.add(
                 models.WorldState(
                     title=payload["title"],
@@ -167,6 +184,28 @@ class StorySeedLoader:
                         "story_engine": payload.get("story_engine", {}),
                         "future_recurring_character": payload.get("future_recurring_character"),
                         "recap_examples": payload["recap_examples"],
+                    },
+                )
+            )
+            session.add(
+                models.HouseState(
+                    state_key="primary",
+                    capacity=house_seed.get("capacity", 0),
+                    occupied_rooms=house_seed.get("occupied_rooms", 0),
+                    vacancy_pressure=house_seed.get("vacancy_pressure", 0),
+                    cash_on_hand=house_seed.get("cash_on_hand", 0),
+                    hourly_burn_rate=house_seed.get("hourly_burn_rate", 0),
+                    payroll_due_in_hours=house_seed.get("payroll_due_in_hours", 0),
+                    repair_backlog=house_seed.get("repair_backlog", 0),
+                    inspection_risk=house_seed.get("inspection_risk", 0),
+                    guest_tension=house_seed.get("guest_tension", 0),
+                    weather_pressure=house_seed.get("weather_pressure", 0),
+                    staff_fatigue=house_seed.get("staff_fatigue", 0),
+                    reputation_risk=house_seed.get("reputation_risk", 0),
+                    active_pressures=house_seed.get("active_pressures", []),
+                    metadata_json={
+                        "pressure_catalog": house_seed.get("pressure_catalog", []),
+                        "seed_note": house_seed.get("note", ""),
                     },
                 )
             )
@@ -219,6 +258,7 @@ class StorySeedLoader:
     def _validate_existing_seed(self, session, payload: dict) -> None:
         required_models = {
             "world_state": models.WorldState,
+            "house_state": models.HouseState,
             "scene_state": models.SceneState,
             "run_state": models.RunState,
         }

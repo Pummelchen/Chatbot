@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 from pathlib import Path
 
@@ -20,16 +21,22 @@ from lantern_house.runtime.orchestrator import RuntimeOrchestrator
 from lantern_house.runtime.recovery import RecoveryService
 from lantern_house.runtime.scheduler import TurnScheduler
 from lantern_house.services.audience import AudienceControlService
+from lantern_house.services.beats import StoryBeatService
 from lantern_house.services.character import CharacterService
+from lantern_house.services.critic import TurnCriticService
 from lantern_house.services.event_extractor import EventExtractor
+from lantern_house.services.god_ai import GodAIService
+from lantern_house.services.house import HousePressureService
 from lantern_house.services.manager import StoryManagerService
 from lantern_house.services.progression import StoryProgressionService
 from lantern_house.services.recaps import RecapService
 from lantern_house.services.seed_loader import StorySeedLoader
+from lantern_house.services.simulation_lab import SimulationLabService
 from lantern_house.utils.time import floor_to_hour, utcnow
 
 app = typer.Typer(no_args_is_help=True)
 ROOT = Path(__file__).resolve().parents[2]
+logger = logging.getLogger(__name__)
 
 
 def _load(config_path: str | None) -> AppConfig:
@@ -104,6 +111,47 @@ def run(
     asyncio.run(_run_async(cfg, once=once))
 
 
+@app.command()
+def simulate(
+    config: str | None = typer.Option(None, "--config"),
+    hours: int = typer.Option(24, "--hours", min=1, max=168),
+    turns_per_hour: int = typer.Option(90, "--turns-per-hour", min=1, max=360),
+) -> None:
+    cfg = _load(config)
+    configure_logging(cfg.logging)
+    _simulate(cfg, hours=hours, turns_per_hour=turns_per_hour)
+
+
+def _simulate(config: AppConfig, *, hours: int, turns_per_hour: int) -> None:
+    engine = create_engine_from_config(config.database)
+    session_factory = SessionFactory(engine)
+    repository = StoryRepository(session_factory)
+    if not repository.seed_exists():
+        raise RuntimeError("No story seed found. Run `lantern-house seed` before `simulate`.")
+    audience_service = AudienceControlService(config.audience, repository)
+    beat_service = StoryBeatService(repository)
+    house_pressure_service = HousePressureService(repository, config.house_pressure)
+    house_pressure_service.refresh(force=True)
+    audience = audience_service.refresh_if_due(force=True)
+    beat_service.sync_audience_rollout(audience, now=utcnow())
+    assembler = ContextAssembler(repository, PacingHealthEvaluator())
+    packet = assembler.build_manager_packet(audience_control=audience)
+    report = SimulationLabService(config.simulation).evaluate(
+        packet,
+        horizon_hours=hours,
+        turns_per_hour=turns_per_hour,
+    )
+    typer.echo(f"Simulation horizon: {report.horizon_hours}h @ {report.turns_per_hour} turns/hour")
+    for candidate in report.candidates:
+        typer.echo(f"- {candidate.strategy_key}: {candidate.score}")
+        typer.echo(f"  next hour: {candidate.next_hour_focus}")
+        typer.echo(f"  six hours: {candidate.six_hour_path}")
+    if report.systemic_risks:
+        typer.echo("Risks:")
+        for risk in report.systemic_risks:
+            typer.echo(f"- {risk}")
+
+
 async def _run_async(config: AppConfig, *, once: bool) -> None:
     engine = create_engine_from_config(config.database)
     session_factory = SessionFactory(engine)
@@ -113,15 +161,36 @@ async def _run_async(config: AppConfig, *, once: bool) -> None:
         await client.ensure_models(
             [config.models.character, config.models.manager, config.models.announcer]
         )
+        god_ai_config = config.god_ai
+        if god_ai_config.enabled:
+            try:
+                await client.ensure_models([config.models.god_ai])
+            except Exception as exc:
+                logger.warning("god-ai model unavailable, disabling background planner: %s", exc)
+                god_ai_config = config.god_ai.model_copy(update={"enabled": False})
         pacing = PacingHealthEvaluator()
         assembler = ContextAssembler(repository, pacing)
+        audience_control_service = AudienceControlService(config.audience, repository)
+        beat_service = StoryBeatService(repository)
+        simulation_lab = SimulationLabService(config.simulation)
         orchestrator = RuntimeOrchestrator(
             config=config,
             repository=repository,
             assembler=assembler,
-            audience_control_service=AudienceControlService(config.audience, repository),
+            audience_control_service=audience_control_service,
+            beat_service=beat_service,
+            house_pressure_service=HousePressureService(repository, config.house_pressure),
+            god_ai_service=GodAIService(
+                config=god_ai_config,
+                assembler=assembler,
+                audience_control_service=audience_control_service,
+                simulation_lab=simulation_lab,
+                llm=client,
+                model_name=config.models.god_ai,
+            ),
             manager_service=StoryManagerService(client, config.models.manager, config.runtime),
             character_service=CharacterService(client, config.models.character),
+            critic_service=TurnCriticService(config.critic),
             recap_service=RecapService(repository, client, config.models.announcer),
             progression_service=StoryProgressionService(),
             scheduler=TurnScheduler(

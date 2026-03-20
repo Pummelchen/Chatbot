@@ -11,6 +11,7 @@ Hard rules:
 - Let the character's background shape subtext, restraint, humor, shame, loyalty, jealousy, and confession style.
 - Use cultural details only when natural and story-relevant; keep the English readable and do not caricature accent or syntax.
 - Follow `voice_guardrails` so the chat stays concrete, human, and non-generic.
+- Use `live_pressures` when useful so the message feels anchored in the current practical or emotional crisis.
 - Write like a real private group chat message, not narrated prose or scene description.
 - Do not suddenly solve mysteries.
 - Do not become generic, passive, or over-explanatory.
@@ -22,7 +23,7 @@ Thought pulse allowed: {{THOUGHT_PULSE_ALLOWED}}
 Return only JSON:
 {
   "public_message": "the visible message",
-  "thought_pulse": "rare short internal pulse or null",
+  "thought_pulse": "one short internal sentence or null",
   "event_candidates": [
     {
       "event_type": "clue|relationship|reveal|question|humor|financial|threat|romance|routine|conflict|alliance",

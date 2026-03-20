@@ -14,11 +14,13 @@ max_retries = 3
 character = "gemma3:1b"
 manager = "gemma3:4b"
 announcer = "gemma3:4b"
+god_ai = "gemma3:12b"
 
 [runtime]
 active_character_min = 2
 active_character_max = 4
 manager_step_interval_messages = 4
+manager_prefetch_threshold_messages = 2
 checkpoint_interval_seconds = 60
 periodic_flush_messages = 1
 degraded_mode_on_model_failure = true
@@ -56,3 +58,25 @@ file_name = "lantern_house.log"
 [audience]
 update_file_path = "update.txt"
 check_interval_minutes = 10
+
+[house_pressure]
+enabled = true
+refresh_interval_minutes = 5
+max_active_signals = 4
+max_pending_beats = 4
+
+[critic]
+enabled = true
+repair_threshold = 58
+hard_fail_threshold = 34
+
+[god_ai]
+enabled = true
+refresh_interval_minutes = 20
+max_brief_age_minutes = 90
+simulation_horizon_hours = 24
+simulation_turns_per_hour = 90
+
+[simulation]
+default_horizon_hours = 24
+default_turns_per_hour = 90

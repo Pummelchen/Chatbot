@@ -213,7 +213,130 @@ class AudienceControlReport(BaseModel):
     tone_dials: dict[str, int] = Field(default_factory=dict)
     requests: list[str] = Field(default_factory=list)
     directives: list[str] = Field(default_factory=list)
+    beat_hints: list[BeatPlanItem] = Field(default_factory=list)
     parse_error: str | None = None
+
+
+class HousePressureSignal(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    slug: str = "unspecified-pressure"
+    label: str = "Unspecified pressure"
+    intensity: int = Field(default=5, ge=1, le=10)
+    summary: str = ""
+    recommended_move: str = ""
+    source_metric: str = "unknown"
+
+
+class HouseStateSnapshot(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    state_key: str = "primary"
+    capacity: int = 0
+    occupied_rooms: int = 0
+    vacancy_pressure: int = Field(default=0, ge=0, le=10)
+    cash_on_hand: int = 0
+    hourly_burn_rate: int = 0
+    payroll_due_in_hours: int = 0
+    repair_backlog: int = Field(default=0, ge=0, le=10)
+    inspection_risk: int = Field(default=0, ge=0, le=10)
+    guest_tension: int = Field(default=0, ge=0, le=10)
+    weather_pressure: int = Field(default=0, ge=0, le=10)
+    staff_fatigue: int = Field(default=0, ge=0, le=10)
+    reputation_risk: int = Field(default=0, ge=0, le=10)
+    active_pressures: list[HousePressureSignal] = Field(default_factory=list)
+    metadata: dict = Field(default_factory=dict)
+    updated_at: datetime | None = None
+
+
+class BeatPlanItem(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    beat_key: str
+    beat_type: str
+    objective: str
+    significance: int = Field(default=5, ge=1, le=10)
+    ready_at: str | None = None
+    keywords: list[str] = Field(default_factory=list)
+    metadata: dict = Field(default_factory=dict)
+
+
+class BeatSnapshot(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    id: int | None = None
+    beat_key: str | None = None
+    beat_type: str
+    objective: str
+    status: str = "planned"
+    significance: int = Field(default=5, ge=1, le=10)
+    due_by: datetime | None = None
+    metadata: dict = Field(default_factory=dict)
+
+
+class SimulationCandidateScore(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    strategy_key: str
+    score: int = Field(default=50, ge=0, le=100)
+    rationale: list[str] = Field(default_factory=list)
+    next_hour_focus: str
+    six_hour_path: str
+
+
+class SimulationLabReport(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    generated_at: datetime | None = None
+    horizon_hours: int = Field(default=24, ge=1, le=168)
+    turns_per_hour: int = Field(default=90, ge=1, le=360)
+    candidates: list[SimulationCandidateScore] = Field(default_factory=list)
+    systemic_risks: list[str] = Field(default_factory=list)
+    recommended_focus: list[str] = Field(default_factory=list)
+
+
+class StrategicBriefPlan(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    title: str
+    viewer_value_thesis: str
+    urgency: int = Field(default=5, ge=1, le=10)
+    next_hour_focus: list[str] = Field(default_factory=list)
+    next_six_hours: list[str] = Field(default_factory=list)
+    recommendations: list[str] = Field(default_factory=list)
+    risk_alerts: list[str] = Field(default_factory=list)
+    house_pressure_actions: list[str] = Field(default_factory=list)
+    audience_rollout_actions: list[str] = Field(default_factory=list)
+    manager_biases: dict[str, list[str]] = Field(default_factory=dict)
+    expires_in_minutes: int = Field(default=90, ge=10, le=720)
+
+
+class StrategicBriefSnapshot(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    source: str = "god-ai"
+    model_name: str | None = None
+    title: str = ""
+    viewer_value_thesis: str = ""
+    urgency: int = Field(default=5, ge=1, le=10)
+    next_hour_focus: list[str] = Field(default_factory=list)
+    next_six_hours: list[str] = Field(default_factory=list)
+    recommendations: list[str] = Field(default_factory=list)
+    risk_alerts: list[str] = Field(default_factory=list)
+    house_pressure_actions: list[str] = Field(default_factory=list)
+    audience_rollout_actions: list[str] = Field(default_factory=list)
+    manager_biases: dict[str, list[str]] = Field(default_factory=dict)
+    simulation_ranking: list[str] = Field(default_factory=list)
+    created_at: datetime | None = None
+    expires_at: datetime | None = None
+
+
+class TurnCriticReport(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    score: int = Field(default=100, ge=0, le=100)
+    reasons: list[str] = Field(default_factory=list)
+    should_repair: bool = False
 
 
 class ContinuityFlagDraft(BaseModel):
@@ -247,6 +370,10 @@ class ManagerContextPacket(BaseModel):
     pacing_health: PacingHealthReport
     story_governance: StoryGovernanceReport = Field(default_factory=StoryGovernanceReport)
     audience_control: AudienceControlReport = Field(default_factory=AudienceControlReport)
+    house_state: HouseStateSnapshot = Field(default_factory=HouseStateSnapshot)
+    pending_beats: list[str] = Field(default_factory=list)
+    strategic_guidance: list[str] = Field(default_factory=list)
+    simulation_ranking: list[str] = Field(default_factory=list)
 
 
 class CharacterContextPacket(BaseModel):
@@ -274,5 +401,9 @@ class CharacterContextPacket(BaseModel):
     recent_messages: list[str] = Field(default_factory=list)
     relevant_facts: list[str] = Field(default_factory=list)
     recent_events: list[str] = Field(default_factory=list)
+    live_pressures: list[str] = Field(default_factory=list)
     manager_directive: str
     forbidden_boundaries: list[str] = Field(default_factory=list)
+
+
+AudienceControlReport.model_rebuild()

@@ -49,6 +49,28 @@ class TurnScheduler:
             return True
         return False
 
+    def should_prefetch_manager(
+        self,
+        *,
+        run_state: dict,
+        directive: dict | None,
+        health: PacingHealthReport,
+        governance: StoryGovernanceReport | None = None,
+    ) -> bool:
+        if directive is None:
+            return False
+        messages_since = max(0, run_state["last_tick_no"] - directive["tick_no"])
+        if messages_since >= self.runtime_config.manager_prefetch_threshold_messages:
+            return True
+        if health.score < 75:
+            return True
+        if governance and governance.viewer_value_score < 82:
+            return True
+        created_at = directive.get("created_at")
+        if created_at is not None and utcnow() - ensure_utc(created_at) > timedelta(minutes=6):
+            return True
+        return False
+
     def select_speaker(self, *, directive: dict, character_states: list[dict]) -> str:
         active = directive.get("active_character_slugs") or [
             item["slug"] for item in character_states

@@ -33,6 +33,7 @@ class StoryManagerService:
                 prompt=prompt,
                 temperature=0.7,
                 max_output_tokens=480,
+                max_retries=2,
             )
             plan = ManagerDirectivePlan.model_validate(payload)
         except Exception as exc:
@@ -87,6 +88,8 @@ class StoryManagerService:
             active = roster[: self.runtime_config.active_character_min]
         governance = context.story_governance
         audience = context.audience_control
+        pending_beats = context.pending_beats
+        strategic = context.strategic_guidance
         objective = (
             "Disturb the fragile calm with one practical problem "
             "and one emotionally loaded question."
@@ -110,12 +113,19 @@ class StoryManagerService:
             "Surface a clue linked to the debt or the sealed lantern wing.",
             "Sharpen an old romantic or loyalty fault line without resolving it.",
         ]
+        if pending_beats:
+            desired[0] = f"Land this prepared beat in a grounded way: {pending_beats[0]}"
         if audience.active and audience.requests:
             desired[0] = f"Begin gradual integration of: {audience.requests[0]}"
         if context.payoff_threads:
-            desired[0] = (
-                f"Revive this dormant hook in a grounded way: {context.payoff_threads[0]}"
+            desired[0] = f"Revive this dormant hook in a grounded way: {context.payoff_threads[0]}"
+        if context.house_state.active_pressures:
+            signal = context.house_state.active_pressures[0]
+            objective = (
+                "Use a house-pressure problem to expose loyalty, money fear, or attraction "
+                "without solving the deeper issue."
             )
+            desired[0] = signal.recommended_move or signal.summary or desired[0]
         if context.pacing_health.mystery_stalled:
             desired[0] = (
                 "Force a more specific question about the vanished owner, "
@@ -160,6 +170,7 @@ class StoryManagerService:
             pacing_actions=(
                 context.pacing_health.recommendations
                 + governance.recommendations
+                + strategic[:2]
                 + audience.directives[:2]
             )[:4],
             continuity_watch=context.continuity_warnings[:4],

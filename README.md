@@ -2,13 +2,16 @@
 
 Lantern House is a local-first Python system for running a 24/7 fictional live group chat designed for terminal output and later OBS capture. It is built for long-form serialized drama: a fading guesthouse, six emotionally loaded characters, a manager agent that controls canon and pacing, structured recap generation, and persistence in MySQL so the story can survive restarts without losing coherence.
 
-The project targets macOS Apple Silicon with Python 3.12+, MySQL 8.4, and Ollama. Character agents use `gemma3:1b`; the story manager and announcer use `gemma3:4b`.
+The project targets macOS Apple Silicon with Python 3.12+, MySQL 8.4, and Ollama. Character agents use `gemma3:1b`; the story manager and announcer use `gemma3:4b`; the background strategic planner uses `gemma3:12b`.
 
 ## What This Repo Contains
 
 - Modular application code under `src/lantern_house`
 - MySQL schema and Alembic migration
 - A production-minded orchestrator with recovery, pacing checks, recap scheduling, and context retrieval
+- A deterministic house-pressure engine that keeps the guesthouse generating believable financial, repair, inspection, weather, and fatigue pressure
+- A staged audience-rollout beat system that converts `update.txt` votes into prerequisite beats instead of instant retcons
+- A lightweight public-turn critic plus a deterministic simulation lab and background God-AI strategist
 - Prompt templates for manager, characters, and recap generation
 - A live-editable `update.txt` control file for subscriber-vote steering
 - A detailed story bible with cast, secrets, hooks, recap examples, and early arc plans
@@ -37,6 +40,18 @@ The runtime now includes a dedicated story-governance layer in addition to pacin
 - It advances persistent story-arc pressure and reveal stages from structured events, so long-form continuity lives in state, not only in transcript momentum.
 
 The seeded `story_engine` defines the permanent north star for the drama, so the manager is not improvising the project’s value proposition from scratch every few turns.
+
+## Pressure And Planning
+
+Two new systems now keep the story from flattening over very long runs:
+
+- `house_state` is a persistent operational model of Lantern House. It tracks cash, burn rate, payroll timing, repair backlog, inspection risk, weather strain, staff fatigue, and reputation risk.
+- Active house pressures are converted into reusable `beats`, so the manager always has grounded practical conflict available.
+- Subscriber votes in `update.txt` are compiled into staged rollout beats with prerequisite timing, not just passed through as text.
+- Pending beats are ordered by readiness, and future payoff beats cannot complete before their due window, so long-form vote changes unfold in sequence instead of skipping ahead.
+- A simulation lab ranks candidate strategic directions like house-pressure-first, mystery-evidence-first, romance-faultline-first, audience-rollout-first, and ensemble-refresh-first.
+- A background God-AI planner uses `gemma3:12b` plus the simulation ranking to persist strategic briefs for the live manager without blocking the chat loop.
+- The visible hot path is protected by prefetching manager directives in the background and by a lightweight critic that repairs bad live-turn output before persistence.
 
 ## Live Update Control
 
@@ -72,6 +87,7 @@ These backgrounds are not cosmetic. They are persisted as structured character c
 ```bash
 ollama pull gemma3:1b
 ollama pull gemma3:4b
+ollama pull gemma3:12b
 ```
 
 3. Create a database:
@@ -114,6 +130,7 @@ lantern-house run
 - `lantern-house migrate`: apply Alembic migrations
 - `lantern-house seed`: load the initial story bible into MySQL
 - `lantern-house run`: start the live terminal chat runtime
+- `lantern-house simulate`: run the accelerated deterministic simulation lab against the current world state
 - `lantern-house recap-now`: generate recap blocks immediately
 - `lantern-house healthcheck`: verify database and Ollama availability
 
@@ -127,7 +144,11 @@ lantern-house run
 - Recovery logic resumes from persisted run state after restart and flags unclean shutdowns for the manager.
 - After the first directive, manager refreshes can happen off the hot path so steady-state chat flow does not stop every time the planner updates.
 - The manager also carries a persisted `audience_control` block sourced from `update.txt`, including tone dials, vote requests, rollout stage, and the last successful parse.
+- Audience steering is also compiled into persisted rollout beats so major vote requests land as staged prerequisites over time.
+- `house_state` is persisted separately from transcript memory, giving the manager a deterministic practical gravity field even when models get vague.
+- The background God-AI planner can persist long-horizon strategic briefs during live operation, while `run --once` skips that loop to keep smoke runs fast.
 - Degraded mode can keep the simulation alive when a model request fails, but it does so conservatively.
+- Manager and God-AI planners now use shorter retry budgets because both have deterministic fallbacks; this keeps fallback guidance timely instead of minutes late.
 - Recap prompts are compacted into bounded event digests so 12h and 24h summaries stay stable during true 24/7 operation.
 - Low-quality unresolved-question fragments are filtered before they enter canon memory.
 - If a model turn drifts into robotic or prose-like register, the runtime repairs it before persisting public output.
@@ -142,6 +163,7 @@ python3 -m compileall alembic src tests
 python3 -m ruff check src tests
 pytest -q
 lantern-house healthcheck
+lantern-house simulate --hours 24 --turns-per-hour 90
 ```
 
 ## Documentation

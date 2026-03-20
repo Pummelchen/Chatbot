@@ -79,3 +79,22 @@ def test_scheduler_refreshes_manager_on_governance_drop() -> None:
         ),
     )
     assert should_refresh is True
+
+
+def test_scheduler_prefetches_manager_before_hard_refresh() -> None:
+    scheduler = TurnScheduler(
+        runtime_config=RuntimeConfig(
+            manager_step_interval_messages=10,
+            manager_prefetch_threshold_messages=2,
+        ),
+        timing_config=TimingConfig(),
+        thought_pulse_config=ThoughtPulseConfig(),
+        rng=random.Random(2),
+    )
+    should_prefetch = scheduler.should_prefetch_manager(
+        run_state={"last_tick_no": 5},
+        directive={"tick_no": 3, "created_at": utcnow()},
+        health=PacingHealthReport(score=80),
+        governance=StoryGovernanceReport(viewer_value_score=86),
+    )
+    assert should_prefetch is True

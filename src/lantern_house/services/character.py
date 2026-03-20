@@ -37,6 +37,16 @@ class CharacterService:
         "visible message",
         "the public message",
     }
+    _INVALID_THOUGHT_PULSE_MARKERS: ClassVar[set[str]] = {
+        "rare",
+        "null",
+        "none",
+        "n/a",
+        "short internal pulse",
+        "one short internal sentence",
+        "rare short internal pulse or null",
+        "one short internal sentence or null",
+    }
 
     def __init__(self, llm: OllamaClient, model_name: str) -> None:
         self.llm = llm
@@ -76,12 +86,12 @@ class CharacterService:
         message = " ".join(turn.public_message.split())
         if len(message) > 280:
             message = message[:277].rstrip() + "..."
-        pulse = None
-        if thought_pulse_allowed and turn.thought_pulse:
-            pulse = " ".join(turn.thought_pulse.split())[:160]
         return CharacterTurn(
             public_message=message,
-            thought_pulse=pulse,
+            thought_pulse=self._sanitize_thought_pulse(
+                turn.thought_pulse,
+                thought_pulse_allowed=thought_pulse_allowed,
+            ),
             event_candidates=turn.event_candidates[:4],
             relationship_updates=turn.relationship_updates[:3],
             new_questions=self._sanitize_questions(turn.new_questions),
@@ -103,6 +113,7 @@ class CharacterService:
     ) -> CharacterTurn:
         directive_lead = packet.manager_directive.split(".")[0].lower()
         message = f"I can keep pretending this is normal, but {directive_lead} isn't going away."
+        live_pressure = packet.live_pressures[0] if packet.live_pressures else ""
         role = packet.ensemble_role.lower()
         if "young worker" in role or "reception" in role or "helper" in role:
             message = (
@@ -135,6 +146,8 @@ class CharacterService:
             message = (
                 "Funny thing about old houses: they remember who ran when the storm got personal."
             )
+        if live_pressure:
+            message = f"{message} Also, {live_pressure.lower().rstrip('.')}."
 
         events = [
             EventCandidate(
@@ -283,13 +296,30 @@ class CharacterService:
                 break
         return cleaned
 
+    def _sanitize_thought_pulse(
+        self,
+        value: str | None,
+        *,
+        thought_pulse_allowed: bool,
+    ) -> str | None:
+        if not thought_pulse_allowed or not value:
+            return None
+        pulse = " ".join(str(value).split())[:160].strip("\"'")
+        if not pulse:
+            return None
+        lowered = pulse.lower().rstrip(".")
+        if lowered in self._EMPTY_MARKERS or lowered in self._INVALID_THOUGHT_PULSE_MARKERS:
+            return None
+        if len(pulse.split()) < 2:
+            return None
+        return pulse
+
     def _looks_like_template_leak(self, turn: CharacterTurn) -> bool:
         message = " ".join(turn.public_message.lower().split()).strip("\"'")
         if message in self._TEMPLATE_MESSAGE_MARKERS:
             return True
         if any(
-            candidate.title.lower() == "short event title"
-            for candidate in turn.event_candidates
+            candidate.title.lower() == "short event title" for candidate in turn.event_candidates
         ):
             return True
         if any(

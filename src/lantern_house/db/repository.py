@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Any
 
 from sqlalchemy import and_, desc, func, or_, select, update
@@ -9,19 +9,25 @@ from sqlalchemy import and_, desc, func, or_, select, update
 from lantern_house.db import models
 from lantern_house.db.session import SessionFactory
 from lantern_house.domain.contracts import (
+    BeatPlanItem,
+    BeatSnapshot,
     CharacterTurn,
     ContinuityFlagDraft,
     EventCandidate,
     EventView,
+    HouseStateSnapshot,
     ManagerDirectivePlan,
     MessageView,
     RelationshipSnapshot,
+    SimulationLabReport,
     StoryArcSnapshot,
     StoryProgressionPlan,
+    StrategicBriefPlan,
+    StrategicBriefSnapshot,
     SummaryView,
 )
 from lantern_house.domain.enums import MessageKind, SummaryWindow
-from lantern_house.utils.time import floor_to_hour, isoformat, utcnow
+from lantern_house.utils.time import ensure_utc, floor_to_hour, isoformat, utcnow
 
 _MAX_UNRESOLVED_QUESTIONS = 12
 _MAX_ARCHIVED_THREADS = 24
@@ -387,6 +393,59 @@ class StoryRepository:
                 "metadata": row.metadata_json,
             }
 
+    def get_house_state_snapshot(self) -> HouseStateSnapshot:
+        with self.session_factory.session_scope() as session:
+            row = session.scalar(
+                select(models.HouseState).where(models.HouseState.state_key == "primary")
+            )
+            if row is None:
+                return HouseStateSnapshot()
+            return HouseStateSnapshot(
+                state_key=row.state_key,
+                capacity=row.capacity,
+                occupied_rooms=row.occupied_rooms,
+                vacancy_pressure=row.vacancy_pressure,
+                cash_on_hand=row.cash_on_hand,
+                hourly_burn_rate=row.hourly_burn_rate,
+                payroll_due_in_hours=row.payroll_due_in_hours,
+                repair_backlog=row.repair_backlog,
+                inspection_risk=row.inspection_risk,
+                guest_tension=row.guest_tension,
+                weather_pressure=row.weather_pressure,
+                staff_fatigue=row.staff_fatigue,
+                reputation_risk=row.reputation_risk,
+                active_pressures=row.active_pressures,
+                metadata=row.metadata_json,
+                updated_at=row.updated_at,
+            )
+
+    def save_house_state(self, snapshot: HouseStateSnapshot, *, now=None) -> HouseStateSnapshot:
+        now = now or utcnow()
+        with self.session_factory.session_scope() as session:
+            row = session.scalar(
+                select(models.HouseState).where(models.HouseState.state_key == snapshot.state_key)
+            )
+            if row is None:
+                row = models.HouseState(state_key=snapshot.state_key)
+                session.add(row)
+            row.capacity = snapshot.capacity
+            row.occupied_rooms = snapshot.occupied_rooms
+            row.vacancy_pressure = snapshot.vacancy_pressure
+            row.cash_on_hand = snapshot.cash_on_hand
+            row.hourly_burn_rate = snapshot.hourly_burn_rate
+            row.payroll_due_in_hours = snapshot.payroll_due_in_hours
+            row.repair_backlog = snapshot.repair_backlog
+            row.inspection_risk = snapshot.inspection_risk
+            row.guest_tension = snapshot.guest_tension
+            row.weather_pressure = snapshot.weather_pressure
+            row.staff_fatigue = snapshot.staff_fatigue
+            row.reputation_risk = snapshot.reputation_risk
+            row.active_pressures = [item.model_dump() for item in snapshot.active_pressures]
+            row.metadata_json = dict(snapshot.metadata)
+            row.updated_at = now
+            session.flush()
+            return snapshot.model_copy(update={"updated_at": now})
+
     def get_scene_snapshot(self) -> dict[str, Any]:
         with self.session_factory.session_scope() as session:
             stmt = (
@@ -424,6 +483,268 @@ class StoryRepository:
             if row is None:
                 return None
             return self._directive_dict(row)
+
+    def list_pending_beats(
+        self,
+        *,
+        limit: int = 6,
+        now=None,
+        include_future_hours: int = 24,
+    ) -> list[BeatSnapshot]:
+        now = ensure_utc(now or utcnow())
+        threshold = now + timedelta(hours=max(1, include_future_hours))
+        with self.session_factory.session_scope() as session:
+            rows = session.scalars(
+                select(models.Beat)
+                .where(models.Beat.status.in_(["planned", "ready", "active"]))
+                .order_by(models.Beat.due_by, desc(models.Beat.significance), models.Beat.id)
+            ).all()
+            snapshots: list[BeatSnapshot] = []
+            for row in rows:
+                due_by = ensure_utc(row.due_by) if row.due_by else None
+                if due_by is not None and due_by > threshold:
+                    continue
+                status = _effective_beat_status(row.status, due_by=due_by, now=now)
+                snapshots.append(
+                    BeatSnapshot(
+                        id=row.id,
+                        beat_key=_stringy(row.metadata_json.get("beat_key")),
+                        beat_type=row.beat_type,
+                        objective=row.objective,
+                        status=status,
+                        significance=row.significance,
+                        due_by=due_by,
+                        metadata=row.metadata_json,
+                    )
+                )
+            snapshots.sort(key=lambda beat: _beat_sort_key(beat, now=now))
+            return snapshots[:limit]
+
+    def sync_beats(
+        self,
+        *,
+        beat_type: str,
+        items: list[BeatPlanItem],
+        source_key: str,
+        now=None,
+    ) -> list[BeatSnapshot]:
+        now = ensure_utc(now or utcnow())
+        with self.session_factory.session_scope() as session:
+            scene = session.scalar(
+                select(models.SceneState)
+                .where(models.SceneState.status == "active")
+                .order_by(desc(models.SceneState.id))
+            )
+            if scene is None:
+                raise RuntimeError("Cannot sync beats without an active scene.")
+            rows = session.scalars(
+                select(models.Beat).where(
+                    models.Beat.beat_type == beat_type,
+                    models.Beat.status.in_(["planned", "ready", "active"]),
+                )
+            ).all()
+            existing = {
+                row.metadata_json.get("beat_key"): row
+                for row in rows
+                if row.metadata_json.get("source_key") == source_key
+            }
+            active_keys = {item.beat_key for item in items}
+            snapshots: list[BeatSnapshot] = []
+            for item in items:
+                row = existing.get(item.beat_key)
+                due_by = _parse_optional_timestamp(item.ready_at, default=now)
+                status = "ready" if due_by <= now else "planned"
+                metadata = dict(item.metadata)
+                metadata.update(
+                    {
+                        "beat_key": item.beat_key,
+                        "source_key": source_key,
+                        "keywords": item.keywords,
+                    }
+                )
+                if row is None:
+                    row = models.Beat(
+                        scene_id=scene.id,
+                        beat_type=beat_type,
+                        objective=item.objective,
+                        significance=item.significance,
+                        due_by=due_by,
+                        status=status,
+                        metadata_json=metadata,
+                    )
+                    session.add(row)
+                    session.flush()
+                else:
+                    row.objective = item.objective
+                    row.significance = item.significance
+                    row.due_by = due_by
+                    row.status = status
+                    row.metadata_json = metadata
+                snapshots.append(
+                    BeatSnapshot(
+                        id=row.id,
+                        beat_key=item.beat_key,
+                        beat_type=beat_type,
+                        objective=item.objective,
+                        status=status,
+                        significance=item.significance,
+                        due_by=due_by,
+                        metadata=metadata,
+                    )
+                )
+
+            for beat_key, row in existing.items():
+                if beat_key in active_keys:
+                    continue
+                row.status = "archived"
+                metadata = dict(row.metadata_json)
+                metadata["archived_at"] = isoformat(now)
+                row.metadata_json = metadata
+
+            return snapshots
+
+    def complete_matching_beats(
+        self, *, texts: list[str], now=None, limit: int = 4
+    ) -> list[BeatSnapshot]:
+        now = ensure_utc(now or utcnow())
+        normalized_text = " ".join(_normalize_memory_item(text) for text in texts if text).strip()
+        if not normalized_text:
+            return []
+        with self.session_factory.session_scope() as session:
+            rows = session.scalars(
+                select(models.Beat).where(models.Beat.status.in_(["planned", "ready", "active"]))
+            ).all()
+            completed: list[BeatSnapshot] = []
+            for row in rows:
+                due_by = ensure_utc(row.due_by) if row.due_by else None
+                effective_status = _effective_beat_status(row.status, due_by=due_by, now=now)
+                if effective_status == "planned":
+                    continue
+                metadata = dict(row.metadata_json)
+                keywords = [
+                    _normalize_memory_item(keyword)
+                    for keyword in metadata.get("keywords", [])
+                    if _normalize_memory_item(keyword)
+                ]
+                if not keywords:
+                    continue
+                required_hits = 1 if len(keywords) == 1 else min(2, len(keywords))
+                hits = sum(keyword in normalized_text for keyword in keywords)
+                if hits < required_hits:
+                    continue
+                row.status = "completed"
+                metadata["completed_at"] = isoformat(now)
+                metadata["completion_excerpt"] = normalized_text[:180]
+                row.metadata_json = metadata
+                completed.append(
+                    BeatSnapshot(
+                        id=row.id,
+                        beat_key=_stringy(metadata.get("beat_key")),
+                        beat_type=row.beat_type,
+                        objective=row.objective,
+                        status=row.status,
+                        significance=row.significance,
+                        due_by=due_by,
+                        metadata=metadata,
+                    )
+                )
+                if len(completed) >= limit:
+                    break
+            return completed
+
+    def get_latest_strategic_brief(
+        self, *, now=None, active_only: bool = True
+    ) -> StrategicBriefSnapshot | None:
+        now = ensure_utc(now or utcnow())
+        with self.session_factory.session_scope() as session:
+            row = session.scalar(
+                select(models.StrategicBrief).order_by(desc(models.StrategicBrief.created_at))
+            )
+            if row is None:
+                return None
+            if active_only and row.expires_at and ensure_utc(row.expires_at) < now:
+                return None
+            return StrategicBriefSnapshot(
+                source=row.source,
+                model_name=row.model_name,
+                title=row.title,
+                viewer_value_thesis=row.viewer_value_thesis,
+                urgency=row.urgency,
+                next_hour_focus=row.next_hour_focus,
+                next_six_hours=row.next_six_hours,
+                recommendations=row.recommendations,
+                risk_alerts=row.risk_alerts,
+                house_pressure_actions=row.house_pressure_actions,
+                audience_rollout_actions=row.audience_rollout_actions,
+                manager_biases=row.manager_biases,
+                simulation_ranking=row.simulation_ranking,
+                created_at=row.created_at,
+                expires_at=row.expires_at,
+            )
+
+    def record_strategic_brief(
+        self,
+        *,
+        plan: StrategicBriefPlan,
+        source: str,
+        model_name: str | None,
+        simulation_report: SimulationLabReport | None = None,
+        now=None,
+    ) -> StrategicBriefSnapshot:
+        now = ensure_utc(now or utcnow())
+        expires_at = now + timedelta(minutes=plan.expires_in_minutes)
+        with self.session_factory.session_scope() as session:
+            active_rows = session.scalars(
+                select(models.StrategicBrief).where(models.StrategicBrief.status == "active")
+            ).all()
+            for row in active_rows:
+                row.status = "archived"
+            row = models.StrategicBrief(
+                source=source,
+                status="active",
+                model_name=model_name,
+                title=plan.title,
+                viewer_value_thesis=plan.viewer_value_thesis,
+                urgency=plan.urgency,
+                next_hour_focus=plan.next_hour_focus,
+                next_six_hours=plan.next_six_hours,
+                recommendations=plan.recommendations,
+                risk_alerts=plan.risk_alerts,
+                house_pressure_actions=plan.house_pressure_actions,
+                audience_rollout_actions=plan.audience_rollout_actions,
+                manager_biases=plan.manager_biases,
+                simulation_ranking=[
+                    f"{candidate.strategy_key}: {candidate.score}"
+                    for candidate in (simulation_report.candidates if simulation_report else [])
+                ],
+                metadata_json={
+                    "expires_in_minutes": plan.expires_in_minutes,
+                    "simulation_report": simulation_report.model_dump(mode="json")
+                    if simulation_report
+                    else {},
+                },
+                expires_at=expires_at,
+                created_at=now,
+            )
+            session.add(row)
+            session.flush()
+            return StrategicBriefSnapshot(
+                source=row.source,
+                model_name=row.model_name,
+                title=row.title,
+                viewer_value_thesis=row.viewer_value_thesis,
+                urgency=row.urgency,
+                next_hour_focus=row.next_hour_focus,
+                next_six_hours=row.next_six_hours,
+                recommendations=row.recommendations,
+                risk_alerts=row.risk_alerts,
+                house_pressure_actions=row.house_pressure_actions,
+                audience_rollout_actions=row.audience_rollout_actions,
+                manager_biases=row.manager_biases,
+                simulation_ranking=row.simulation_ranking,
+                created_at=row.created_at,
+                expires_at=row.expires_at,
+            )
 
     def get_relevant_facts(self, *, location_id: int | None, limit: int = 6) -> list[str]:
         with self.session_factory.session_scope() as session:
@@ -603,10 +924,10 @@ class StoryRepository:
                 pair_key = tuple(sorted((speaker.id, counterpart.id)))
                 relationship = relationship_lookup.get(pair_key)
                 if relationship is None:
-                    relationship = models.Relationship(
-                        character_a_id=pair_key[0],
-                        character_b_id=pair_key[1],
+                    relationship = self._build_relationship(
+                        pair_key=pair_key,
                         summary=delta.summary,
+                        now=now,
                     )
                     session.add(relationship)
                     relationship_lookup[pair_key] = relationship
@@ -944,7 +1265,7 @@ class StoryRepository:
         if len(existing) > _MAX_UNRESOLVED_QUESTIONS:
             overflow = existing[:-_MAX_UNRESOLVED_QUESTIONS]
             archive = _merge_memory_lists(archive, overflow, limit=_MAX_ARCHIVED_THREADS)
-            existing = existing[-_MAX_UNRESOLVED_QUESTIONS :]
+            existing = existing[-_MAX_UNRESOLVED_QUESTIONS:]
 
         archive = _merge_memory_lists(
             archive,
@@ -993,6 +1314,21 @@ class StoryRepository:
             lookup[key] = relationship
         return lookup
 
+    @staticmethod
+    def _build_relationship(
+        *, pair_key: tuple[int, int], summary: str, now
+    ) -> models.Relationship:
+        return models.Relationship(
+            character_a_id=pair_key[0],
+            character_b_id=pair_key[1],
+            trust_score=0,
+            desire_score=0,
+            suspicion_score=0,
+            obligation_score=0,
+            summary=summary,
+            last_shift_at=now,
+        )
+
 
 def _clamp(value: int, minimum: int = -10, maximum: int = 10) -> int:
     return max(minimum, min(maximum, value))
@@ -1025,3 +1361,32 @@ def _deep_merge_dicts(left: dict[str, Any], right: dict[str, Any]) -> dict[str, 
             continue
         merged[key] = value
     return merged
+
+
+def _parse_optional_timestamp(value: str | None, *, default):
+    if not value:
+        return default
+    try:
+        return ensure_utc(datetime.fromisoformat(value))
+    except ValueError:
+        return default
+
+
+def _stringy(value: object) -> str | None:
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text or None
+
+
+def _effective_beat_status(status: str, *, due_by, now) -> str:
+    if status == "planned" and (due_by is None or due_by <= now):
+        return "ready"
+    return status
+
+
+def _beat_sort_key(beat: BeatSnapshot, *, now) -> tuple[int, datetime, int, int]:
+    status = _effective_beat_status(beat.status, due_by=beat.due_by, now=now)
+    status_priority = {"active": 0, "ready": 1, "planned": 2}.get(status, 3)
+    due_by = ensure_utc(beat.due_by) if beat.due_by else datetime.max.replace(tzinfo=now.tzinfo)
+    return (status_priority, due_by, -beat.significance, beat.id or 0)
