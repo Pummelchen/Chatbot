@@ -175,11 +175,25 @@ class StorySeedLoader:
                 )
             )
 
-            session.add(
-                models.RunState(
-                    runtime_key="primary",
-                    status="idle",
-                    metadata_json={"seed_title": payload["title"]},
-                )
+            run_state = session.scalar(
+                select(models.RunState).where(models.RunState.runtime_key == "primary")
             )
-
+            if run_state is None:
+                session.add(
+                    models.RunState(
+                        runtime_key="primary",
+                        status="idle",
+                        metadata_json={"seed_title": payload["title"]},
+                    )
+                )
+            else:
+                run_state.status = "idle"
+                run_state.last_tick_no = 0
+                run_state.last_public_message_at = None
+                run_state.last_manager_run_at = None
+                run_state.last_recap_hour = None
+                run_state.last_thought_pulse_at = None
+                run_state.degraded_mode = False
+                metadata = dict(run_state.metadata_json)
+                metadata["seed_title"] = payload["title"]
+                run_state.metadata_json = metadata

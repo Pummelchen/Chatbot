@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+from copy import deepcopy
 
 from lantern_house.domain.contracts import CharacterContextPacket, CharacterTurn, EventCandidate, RelationshipUpdate
 from lantern_house.domain.enums import EventType
@@ -32,6 +33,7 @@ class CharacterService:
         )
         try:
             payload, stats = await self.llm.generate_json(model=self.model_name, prompt=prompt, temperature=0.9)
+            payload = self._coerce_payload(payload)
             turn = CharacterTurn.model_validate(payload)
             sanitized = self._sanitize(turn, thought_pulse_allowed=thought_pulse_allowed)
             return sanitized, stats, False
@@ -109,3 +111,62 @@ class CharacterService:
             tone="sharp",
             silence=False,
         )
+
+    def _coerce_payload(self, payload: dict) -> dict:
+        coerced = deepcopy(payload)
+        candidates = coerced.get("event_candidates")
+        if isinstance(candidates, list):
+            normalized_candidates = []
+            for candidate in candidates:
+                if not isinstance(candidate, dict):
+                    continue
+                raw_type = candidate.get("event_type")
+                candidate["event_type"] = self._coerce_event_type(
+                    raw_type,
+                    title=str(candidate.get("title", "")),
+                    details=str(candidate.get("details", "")),
+                )
+                normalized_candidates.append(candidate)
+            coerced["event_candidates"] = normalized_candidates
+
+        relationship_updates = coerced.get("relationship_updates")
+        if isinstance(relationship_updates, list):
+            coerced["relationship_updates"] = [
+                update for update in relationship_updates if isinstance(update, dict)
+            ]
+        return coerced
+
+    def _coerce_event_type(self, raw_type: object, *, title: str, details: str) -> str:
+        if isinstance(raw_type, EventType):
+            return raw_type.value
+
+        valid = {item.value for item in EventType}
+        text = str(raw_type or "").strip().lower()
+        if text in valid:
+            return text
+
+        if "|" in text:
+            options = [item.strip() for item in text.split("|")]
+            for option in options:
+                if option in valid:
+                    text = option
+                    break
+
+        combined = f"{title} {details}".lower()
+        heuristics = [
+            ("romance", ("kiss", "touch", "want", "flirt", "jealous", "confess")),
+            ("financial", ("debt", "invoice", "money", "payment", "sale", "blackwake")),
+            ("threat", ("threat", "danger", "warn", "cornered")),
+            ("question", ("?", "why", "who", "what", "how")),
+            ("reveal", ("admit", "confession", "truth comes out", "finally said")),
+            ("clue", ("key", "ledger", "record", "recording", "evidence", "document", "page")),
+            ("relationship", ("trust", "alliance", "bond", "distance", "relationship")),
+            ("humor", ("joke", "laugh", "funny")),
+            ("routine", ("tea", "kitchen", "desk", "clean", "repair")),
+        ]
+        for event_type, markers in heuristics:
+            if any(marker in combined for marker in markers):
+                return event_type
+        if text in valid:
+            return text
+        return "conflict"

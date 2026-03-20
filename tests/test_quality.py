@@ -5,6 +5,7 @@ from datetime import timedelta
 from lantern_house.domain.contracts import CharacterContextPacket, CharacterTurn, EventCandidate, MessageView
 from lantern_house.domain.enums import EventType
 from lantern_house.quality.pacing import ContinuityGuard, PacingHealthEvaluator
+from lantern_house.services.character import CharacterService
 from lantern_house.utils.time import utcnow
 
 
@@ -62,3 +63,19 @@ def test_continuity_guard_flags_reveal_budget_and_long_message() -> None:
     assert "voice-integrity" in flag_types
     assert "reveal-budget" in flag_types
 
+
+def test_character_service_coerces_broken_event_type_hint() -> None:
+    service = CharacterService.__new__(CharacterService)
+    payload = {
+        "public_message": "The key matters more than you're admitting.",
+        "event_candidates": [
+            {
+                "event_type": "clue|relationship|reveal|question|humor|financial|threat|romance|routine|conflict|alliance",
+                "title": "The brass key matters",
+                "details": "A hidden key became central to the scene.",
+                "significance": 7,
+            }
+        ],
+    }
+    coerced = service._coerce_payload(payload)
+    assert coerced["event_candidates"][0]["event_type"] == "clue"

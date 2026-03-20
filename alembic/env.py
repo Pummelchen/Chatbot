@@ -18,7 +18,8 @@ target_metadata = Base.metadata
 
 database_url = os.getenv("LANTERN_HOUSE_DATABASE_URL")
 if database_url:
-    config.set_main_option("sqlalchemy.url", database_url)
+    # ConfigParser treats % as interpolation markers, so encoded passwords need escaping.
+    config.set_main_option("sqlalchemy.url", database_url.replace("%", "%%"))
 
 
 def run_migrations_offline() -> None:
@@ -52,4 +53,3 @@ if context.is_offline_mode():
     run_migrations_offline()
 else:
     run_migrations_online()
-

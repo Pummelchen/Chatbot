@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from collections import Counter
 
 from lantern_house.db.repository import StoryRepository
@@ -25,6 +26,13 @@ class RecapService:
         events_24h = self.repository.load_events_for_window(bucket_end_at=bucket_end_at, hours=24)
         recent_summaries = self.repository.list_recent_summaries(limit=4)
 
+        if len(events_24h) < 4:
+            return RecapBundle(
+                one_hour=self._fallback_window(events_1h, "Last hour"),
+                twelve_hours=self._fallback_window(events_12h, "Last 12 hours"),
+                twenty_four_hours=self._fallback_window(events_24h, "Last 24 hours"),
+            )
+
         prompt = render_template(
             "lantern_house.prompts",
             "announcer.md",
@@ -41,7 +49,15 @@ class RecapService:
 
         try:
             payload, _stats = await self.llm.generate_json(model=self.model_name, prompt=prompt, temperature=0.5)
-            return RecapBundle.model_validate(payload)
+            bundle = RecapBundle.model_validate(payload)
+            if self._mentions_unknown_entities(bundle):
+                logger.warning("recap bundle mentioned off-canon entities; using deterministic fallback")
+                return RecapBundle(
+                    one_hour=self._fallback_window(events_1h, "Last hour"),
+                    twelve_hours=self._fallback_window(events_12h, "Last 12 hours"),
+                    twenty_four_hours=self._fallback_window(events_24h, "Last 24 hours"),
+                )
+            return bundle
         except Exception as exc:
             logger.warning("recap fallback due to model issue: %s", exc)
             return RecapBundle(
@@ -94,3 +110,70 @@ class RecapService:
             romance_status=romance,
             watch_next="Watch the next pair of characters who think they can talk privately.",
         )
+
+    def _mentions_unknown_entities(self, bundle: RecapBundle) -> bool:
+        known = {
+            "Saltglass",
+            "House",
+            "Mara",
+            "Dela",
+            "Cruz",
+            "Elias",
+            "Roan",
+            "Sora",
+            "Lin",
+            "Julian",
+            "Vale",
+            "Nia",
+            "Mercado",
+            "Luca",
+            "Serrano",
+            "Celeste",
+            "Blackwake",
+            "Hana",
+        }
+        neutral = {
+            "Last",
+            "Trust",
+            "Watch",
+            "Changed",
+            "Emotion",
+            "Clues",
+            "Questions",
+            "Romance",
+            "The",
+            "A",
+            "An",
+            "No",
+        }
+        text = " ".join(
+            [
+                bundle.one_hour.headline,
+                *bundle.one_hour.what_changed,
+                *bundle.one_hour.emotional_shifts,
+                *bundle.one_hour.clues,
+                *bundle.one_hour.unresolved_questions,
+                bundle.one_hour.loyalty_status,
+                bundle.one_hour.romance_status,
+                bundle.one_hour.watch_next,
+                bundle.twelve_hours.headline,
+                *bundle.twelve_hours.what_changed,
+                *bundle.twelve_hours.emotional_shifts,
+                *bundle.twelve_hours.clues,
+                *bundle.twelve_hours.unresolved_questions,
+                bundle.twelve_hours.loyalty_status,
+                bundle.twelve_hours.romance_status,
+                bundle.twelve_hours.watch_next,
+                bundle.twenty_four_hours.headline,
+                *bundle.twenty_four_hours.what_changed,
+                *bundle.twenty_four_hours.emotional_shifts,
+                *bundle.twenty_four_hours.clues,
+                *bundle.twenty_four_hours.unresolved_questions,
+                bundle.twenty_four_hours.loyalty_status,
+                bundle.twenty_four_hours.romance_status,
+                bundle.twenty_four_hours.watch_next,
+            ]
+        )
+        tokens = re.findall(r"\b[A-Z][a-z]{2,}\b", text)
+        unknown = [token for token in tokens if token not in known and token not in neutral]
+        return len(set(unknown)) >= 3

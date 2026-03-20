@@ -5,7 +5,7 @@ from datetime import timedelta
 
 from lantern_house.config import RuntimeConfig, ThoughtPulseConfig, TimingConfig
 from lantern_house.domain.contracts import PacingHealthReport
-from lantern_house.utils.time import utcnow
+from lantern_house.utils.time import ensure_utc, utcnow
 
 
 class TurnScheduler:
@@ -37,7 +37,7 @@ class TurnScheduler:
         if health.score < 60:
             return True
         created_at = directive["created_at"]
-        if created_at is not None and utcnow() - created_at > timedelta(minutes=10):
+        if created_at is not None and utcnow() - ensure_utc(created_at) > timedelta(minutes=10):
             return True
         return False
 
@@ -50,8 +50,10 @@ class TurnScheduler:
             if state["slug"] not in active:
                 continue
             weight = float(weights.get(state["slug"], 1.0))
-            if state["last_spoke_at"] and now - state["last_spoke_at"] < timedelta(seconds=45):
-                weight *= 0.45
+            if state["last_spoke_at"]:
+                last_spoke_at = ensure_utc(state["last_spoke_at"])
+                if now - last_spoke_at < timedelta(seconds=45):
+                    weight *= 0.45
             weight *= 1 + min(state["silence_streak"], 5) * 0.18
             weighted.append((state["slug"], max(0.05, weight)))
         return self._weighted_choice(weighted)
@@ -92,7 +94,7 @@ class TurnScheduler:
         if recent_pulse_count >= self.thought_pulse_config.hourly_budget:
             return False
         last_pulse = run_state.get("last_thought_pulse_at")
-        if last_pulse and utcnow() - last_pulse < timedelta(minutes=self.thought_pulse_config.cooldown_minutes):
+        if last_pulse and utcnow() - ensure_utc(last_pulse) < timedelta(minutes=self.thought_pulse_config.cooldown_minutes):
             return False
         return True
 

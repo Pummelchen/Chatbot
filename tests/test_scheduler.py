@@ -5,7 +5,7 @@ from datetime import timedelta
 
 from lantern_house.config import RuntimeConfig, ThoughtPulseConfig, TimingConfig
 from lantern_house.runtime.scheduler import TurnScheduler
-from lantern_house.utils.time import utcnow
+from lantern_house.utils.time import ensure_utc, floor_to_hour, utcnow
 
 
 def test_scheduler_prefers_silenced_character() -> None:
@@ -50,3 +50,8 @@ def test_scheduler_enforces_thought_pulse_budget() -> None:
     assert allowed is True
     assert blocked is False
 
+
+def test_time_helpers_treat_naive_mysql_timestamps_as_utc() -> None:
+    naive = utcnow().replace(tzinfo=None, minute=27, second=12, microsecond=0)
+    assert ensure_utc(naive).tzinfo is not None
+    assert floor_to_hour(naive).minute == 0
