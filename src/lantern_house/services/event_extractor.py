@@ -8,7 +8,7 @@ from lantern_house.domain.enums import EventType
 
 class EventExtractor:
     def extract(self, *, speaker_slug: str, turn: CharacterTurn) -> list[EventCandidate]:
-        events: "OrderedDict[tuple[str, str], EventCandidate]" = OrderedDict()
+        events: OrderedDict[tuple[str, str], EventCandidate] = OrderedDict()
         for event in turn.event_candidates:
             events[(event.event_type.value, event.title)] = event
 
@@ -23,7 +23,9 @@ class EventExtractor:
                 )
                 events[(event.event_type.value, event.title + question)] = event
 
-        if turn.relationship_updates and not any(event.event_type == EventType.RELATIONSHIP for event in events.values()):
+        if turn.relationship_updates and not any(
+            event.event_type == EventType.RELATIONSHIP for event in events.values()
+        ):
             event = EventCandidate(
                 event_type=EventType.RELATIONSHIP,
                 title=f"Relationship shift around {speaker_slug}",
@@ -44,4 +46,3 @@ class EventExtractor:
             events[(event.event_type.value, event.title)] = event
 
         return list(events.values())
-

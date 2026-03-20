@@ -80,8 +80,22 @@ lantern-house run
 - Public chat output goes only to the terminal renderer.
 - Internal logs are written to `logs/lantern_house.log`.
 - Hourly recap blocks emit 1h, 12h, and 24h summaries.
-- Recovery logic resumes from persisted run state after restart.
+- Runtime state is persisted on every turn and checkpointed independently on a background interval.
+- Default recovery protection includes per-turn checkpoint snapshots plus a 60-second heartbeat.
+- Recovery logic resumes from persisted run state after restart and flags unclean shutdowns for the manager.
 - Degraded mode can keep the simulation alive when a model request fails, but it does so conservatively.
+
+## Quality Checks
+
+For local verification before a presentation or long unattended run:
+
+```bash
+source .venv/bin/activate
+python3 -m compileall alembic src tests
+python3 -m ruff check src tests
+pytest -q
+lantern-house healthcheck
+```
 
 ## Documentation
 

@@ -20,7 +20,10 @@ lantern-house run
 ## Operational Behavior
 
 - The runtime keeps a persistent `run_state` row with the last tick, message, recap hour, and degraded-mode markers.
+- The runtime writes a structured checkpoint snapshot into `run_state.metadata` on every configured flush and on a background heartbeat.
+- Default settings checkpoint every minute even if the scene is stalled, and also snapshot on every turn.
 - Recovery checks for missed recap windows and produces them on the next start.
+- Recovery marks an `unclean-shutdown` continuity flag if the prior process died while `run_state.status` was `starting` or `running`.
 - Manager refreshes are interval-based with health-triggered overrides.
 - Logs are written to `logs/lantern_house.log`.
 
@@ -28,6 +31,7 @@ lantern-house run
 
 - If Ollama times out, the runtime retries with backoff.
 - If the model response is malformed, the client attempts JSON extraction before falling back.
+- If a character payload omits optional-but-expected relationship details, the coercion layer fills safe defaults instead of crashing the turn.
 - If model generation still fails and degraded mode is enabled, the service emits conservative continuity-safe output.
 - Database errors should stop the runtime rather than risk silent canon loss.
 
@@ -37,4 +41,3 @@ lantern-house run
 - Tune prompt behavior in `src/lantern_house/prompts`
 - Adjust pacing thresholds in configuration
 - Replace the terminal renderer with a stream adapter later without rewriting the domain layer
-

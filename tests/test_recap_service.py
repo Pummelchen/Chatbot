@@ -46,4 +46,3 @@ async def test_recap_service_fallback_uses_structured_events() -> None:
     assert "Brass key resurfaces" in bundle.one_hour.headline
     assert bundle.one_hour.clues
     assert bundle.twelve_hours.headline.startswith("Last 12 hours")
-

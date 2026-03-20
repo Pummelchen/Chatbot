@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 import signal
 
@@ -54,14 +55,20 @@ class RuntimeOrchestrator:
         if not roster:
             raise RuntimeError("No story seed found. Run `lantern-house seed` first.")
 
-        self.repository.set_runtime_status("starting", degraded_mode=False)
         self.renderer.register_characters(self.repository.get_character_color_map())
         self._install_signal_handlers()
+        checkpoint_task: asyncio.Task[None] | None = None
 
         try:
             recovery = self.recovery_service.recover()
+            if recovery["unclean_shutdown"]:
+                logger.warning("Recovered from unclean shutdown using persisted checkpoint state.")
+            self.repository.write_checkpoint(reason="startup", phase="recovery")
             for bucket in recovery["missed_recap_hours"]:
                 await self._emit_recap(bucket)
+
+            self.repository.set_runtime_status("running", degraded_mode=False, phase="loop-ready")
+            checkpoint_task = asyncio.create_task(self._checkpoint_loop())
 
             while not self._stop_event.is_set():
                 now = utcnow()
@@ -77,6 +84,12 @@ class RuntimeOrchestrator:
                     directive=directive,
                     health=manager_packet.pacing_health,
                 ):
+                    self.repository.set_runtime_status(
+                        "running",
+                        phase="manager-request",
+                        extra_metadata={"manager_requested_at": now.isoformat()},
+                        now=now,
+                    )
                     directive_plan = await self.manager_service.plan(manager_packet, roster)
                     directive = self.repository.record_manager_directive(
                         directive_plan,
@@ -85,7 +98,9 @@ class RuntimeOrchestrator:
                     )
 
                 character_states = self.repository.list_character_states()
-                speaker_slug = self.scheduler.select_speaker(directive=directive, character_states=character_states)
+                speaker_slug = self.scheduler.select_speaker(
+                    directive=directive, character_states=character_states
+                )
                 packet = self.assembler.build_character_packet(speaker_slug, directive)
                 thought_pulse_allowed = self.scheduler.allow_thought_pulse(
                     directive=directive,
@@ -94,6 +109,12 @@ class RuntimeOrchestrator:
                     recent_pulse_count=self.repository.count_recent_thought_pulses(hours=1),
                 )
 
+                self.repository.set_runtime_status(
+                    "running",
+                    phase="character-request",
+                    extra_metadata={"candidate_speaker": speaker_slug},
+                    now=now,
+                )
                 turn, stats, degraded_mode = await self.character_service.generate(
                     packet=packet,
                     thought_pulse_allowed=thought_pulse_allowed,
@@ -130,17 +151,46 @@ class RuntimeOrchestrator:
                         content=persisted["thought_pulse"],
                     )
 
+                flush_every = max(1, self.config.runtime.periodic_flush_messages)
+                if persisted["tick_no"] % flush_every == 0:
+                    self.repository.write_checkpoint(reason="turn-flush")
+
                 if once:
                     break
 
-                await asyncio.sleep(self.scheduler.compute_delay_seconds(health=manager_packet.pacing_health))
+                delay = self.scheduler.compute_delay_seconds(health=manager_packet.pacing_health)
+                self.repository.set_runtime_status(
+                    "running",
+                    phase="sleeping",
+                    extra_metadata={"next_delay_seconds": round(delay, 3)},
+                )
+                await asyncio.sleep(delay)
         finally:
-            self.repository.set_runtime_status("idle")
+            if checkpoint_task is not None:
+                checkpoint_task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await checkpoint_task
+            self.repository.write_checkpoint(reason="shutdown", phase="shutdown")
+            self.repository.set_runtime_status("idle", degraded_mode=False, phase="idle")
 
     async def _emit_recap(self, bucket_end_at) -> None:
+        self.repository.set_runtime_status(
+            "running",
+            phase="recap-generation",
+            extra_metadata={"recap_bucket_end_at": bucket_end_at.isoformat()},
+        )
         bundle = await self.recap_service.generate_bundle(bucket_end_at=bucket_end_at)
         self.repository.save_recap_bundle(bucket_end_at=bucket_end_at, bundle=bundle)
+        self.repository.write_checkpoint(reason="recap")
         self.renderer.render_recap(when=bucket_end_at, bundle=bundle)
+
+    async def _checkpoint_loop(self) -> None:
+        interval = max(1, self.config.runtime.checkpoint_interval_seconds)
+        while not self._stop_event.is_set():
+            try:
+                await asyncio.wait_for(self._stop_event.wait(), timeout=interval)
+            except TimeoutError:
+                self.repository.write_checkpoint(reason="heartbeat")
 
     def stop(self) -> None:
         self._stop_event.set()

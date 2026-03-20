@@ -1,12 +1,16 @@
 from __future__ import annotations
 
-import json
 import logging
 from copy import deepcopy
 
-from lantern_house.domain.contracts import CharacterContextPacket, CharacterTurn, EventCandidate, RelationshipUpdate
+from lantern_house.domain.contracts import (
+    CharacterContextPacket,
+    CharacterTurn,
+    EventCandidate,
+    RelationshipUpdate,
+)
 from lantern_house.domain.enums import EventType
-from lantern_house.llm.ollama import InvocationStats, OllamaClient, OllamaClientError
+from lantern_house.llm.ollama import InvocationStats, OllamaClient
 from lantern_house.utils.resources import render_template
 
 logger = logging.getLogger(__name__)
@@ -32,7 +36,9 @@ class CharacterService:
             },
         )
         try:
-            payload, stats = await self.llm.generate_json(model=self.model_name, prompt=prompt, temperature=0.9)
+            payload, stats = await self.llm.generate_json(
+                model=self.model_name, prompt=prompt, temperature=0.9
+            )
             payload = self._coerce_payload(payload)
             turn = CharacterTurn.model_validate(payload)
             sanitized = self._sanitize(turn, thought_pulse_allowed=thought_pulse_allowed)
@@ -59,23 +65,42 @@ class CharacterService:
             silence=False,
         )
 
-    def _fallback(self, packet: CharacterContextPacket, *, thought_pulse_allowed: bool) -> CharacterTurn:
-        other = packet.relationship_snapshots[0] if packet.relationship_snapshots else "someone in the room"
-        message = (
-            f"I can keep pretending this is normal, but {packet.manager_directive.split('.')[0].lower()} isn't going away."
-        )
+    def _fallback(
+        self, packet: CharacterContextPacket, *, thought_pulse_allowed: bool
+    ) -> CharacterTurn:
+        directive_lead = packet.manager_directive.split(".")[0].lower()
+        message = f"I can keep pretending this is normal, but {directive_lead} isn't going away."
         if packet.character_slug == "nia":
-            message = "If everyone is going to lie in shifts, at least let me schedule the lies so the lobby stays charming."
+            message = (
+                "If everyone is going to lie in shifts, "
+                "at least let me schedule the lies "
+                "so the lobby stays charming."
+            )
         elif packet.character_slug == "elias":
-            message = "If we're opening old doors tonight, pick one and stop hovering like the house owes you courage."
+            message = (
+                "If we're opening old doors tonight, "
+                "pick one and stop hovering like "
+                "the house owes you courage."
+            )
         elif packet.character_slug == "mara":
-            message = "No one is tearing this place open on adrenaline. Say what you actually want, then we decide."
+            message = (
+                "No one is tearing this place open on adrenaline. "
+                "Say what you actually want, then we decide."
+            )
         elif packet.character_slug == "sora":
-            message = "Interesting how every answer in this house arrives wearing a different disguise."
+            message = (
+                "Interesting how every answer in this house arrives wearing a different disguise."
+            )
         elif packet.character_slug == "julian":
-            message = "I would love to be treated like the problem after someone shows me a document that isn't already lying."
+            message = (
+                "I would love to be treated like the problem "
+                "after someone shows me a document "
+                "that isn't already lying."
+            )
         elif packet.character_slug == "luca":
-            message = "Funny thing about old houses: they remember who ran when the storm got personal."
+            message = (
+                "Funny thing about old houses: they remember who ran when the storm got personal."
+            )
 
         events = [
             EventCandidate(
@@ -96,13 +121,16 @@ class CharacterService:
                     desire_delta=0,
                     suspicion_delta=1,
                     obligation_delta=0,
-                    summary=f"{packet.character_slug} forced tension into the open around {target_slug}.",
+                    summary=(
+                        f"{packet.character_slug} forced tension "
+                        f"into the open around {target_slug}."
+                    ),
                 )
             )
 
         pulse = None
         if thought_pulse_allowed:
-            pulse = f"I am closer to saying the wrong thing than they know."
+            pulse = "I am closer to saying the wrong thing than they know."
         return CharacterTurn(
             public_message=message,
             thought_pulse=pulse,
@@ -131,9 +159,27 @@ class CharacterService:
 
         relationship_updates = coerced.get("relationship_updates")
         if isinstance(relationship_updates, list):
-            coerced["relationship_updates"] = [
-                update for update in relationship_updates if isinstance(update, dict)
-            ]
+            normalized_updates = []
+            for update in relationship_updates:
+                if not isinstance(update, dict):
+                    continue
+                character_slug = str(update.get("character_slug", "")).strip()
+                if not character_slug:
+                    continue
+                update["character_slug"] = character_slug
+                for delta_key in (
+                    "trust_delta",
+                    "desire_delta",
+                    "suspicion_delta",
+                    "obligation_delta",
+                ):
+                    update[delta_key] = self._coerce_delta(update.get(delta_key))
+                summary = str(update.get("summary", "")).strip()
+                if not summary:
+                    summary = f"Tension shifted around {character_slug}."
+                update["summary"] = summary
+                normalized_updates.append(update)
+            coerced["relationship_updates"] = normalized_updates
         return coerced
 
     def _coerce_event_type(self, raw_type: object, *, title: str, details: str) -> str:
@@ -170,3 +216,10 @@ class CharacterService:
         if text in valid:
             return text
         return "conflict"
+
+    def _coerce_delta(self, value: object) -> int:
+        try:
+            parsed = int(value)
+        except (TypeError, ValueError):
+            return 0
+        return max(-3, min(3, parsed))

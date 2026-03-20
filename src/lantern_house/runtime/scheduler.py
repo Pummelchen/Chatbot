@@ -42,7 +42,9 @@ class TurnScheduler:
         return False
 
     def select_speaker(self, *, directive: dict, character_states: list[dict]) -> str:
-        active = directive.get("active_character_slugs") or [item["slug"] for item in character_states]
+        active = directive.get("active_character_slugs") or [
+            item["slug"] for item in character_states
+        ]
         weights = directive.get("speaker_weights", {})
         now = utcnow()
         weighted: list[tuple[str, float]] = []
@@ -94,7 +96,9 @@ class TurnScheduler:
         if recent_pulse_count >= self.thought_pulse_config.hourly_budget:
             return False
         last_pulse = run_state.get("last_thought_pulse_at")
-        if last_pulse and utcnow() - ensure_utc(last_pulse) < timedelta(minutes=self.thought_pulse_config.cooldown_minutes):
+        if last_pulse and utcnow() - ensure_utc(last_pulse) < timedelta(
+            minutes=self.thought_pulse_config.cooldown_minutes
+        ):
             return False
         return True
 

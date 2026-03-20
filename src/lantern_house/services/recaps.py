@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-import json
 import logging
 import re
 from collections import Counter
 
 from lantern_house.db.repository import StoryRepository
 from lantern_house.domain.contracts import EventView, RecapBundle, RecapWindowSummary
-from lantern_house.llm.ollama import OllamaClient, OllamaClientError
+from lantern_house.llm.ollama import OllamaClient
 from lantern_house.utils.resources import render_template
 from lantern_house.utils.time import isoformat
 
@@ -48,10 +47,14 @@ class RecapService:
         )
 
         try:
-            payload, _stats = await self.llm.generate_json(model=self.model_name, prompt=prompt, temperature=0.5)
+            payload, _stats = await self.llm.generate_json(
+                model=self.model_name, prompt=prompt, temperature=0.5
+            )
             bundle = RecapBundle.model_validate(payload)
             if self._mentions_unknown_entities(bundle):
-                logger.warning("recap bundle mentioned off-canon entities; using deterministic fallback")
+                logger.warning(
+                    "recap bundle mentioned off-canon entities; using deterministic fallback"
+                )
                 return RecapBundle(
                     one_hour=self._fallback_window(events_1h, "Last hour"),
                     twelve_hours=self._fallback_window(events_12h, "Last 12 hours"),
@@ -81,12 +84,12 @@ class RecapService:
 
         top = sorted(events, key=lambda item: item.significance, reverse=True)[:3]
         types = Counter(event.event_type for event in events)
-        questions = [
-            event.details
-            for event in events
-            if event.event_type == "question"
-        ][:3] or ["Who is protecting the oldest lie now?"]
-        clues = [event.title for event in events if event.event_type in {"clue", "reveal", "financial"}][:3]
+        questions = [event.details for event in events if event.event_type == "question"][:3] or [
+            "Who is protecting the oldest lie now?"
+        ]
+        clues = [
+            event.title for event in events if event.event_type in {"clue", "reveal", "financial"}
+        ][:3]
         emotion = []
         if types.get("conflict"):
             emotion.append("Conflict sharpened inside the house.")

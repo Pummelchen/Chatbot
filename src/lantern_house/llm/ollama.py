@@ -106,7 +106,10 @@ class OllamaClient:
                     raw_duration_ns=payload.get("total_duration"),
                 )
                 logger.info(
-                    "ollama generate ok model=%s latency_ms=%s prompt_tokens=%s completion_tokens=%s",
+                    (
+                        "ollama generate ok model=%s latency_ms=%s "
+                        "prompt_tokens=%s completion_tokens=%s"
+                    ),
                     model,
                     stats.latency_ms,
                     stats.prompt_tokens,
@@ -141,5 +144,6 @@ class OllamaClient:
         try:
             return json.loads(cleaned[start : end + 1])
         except json.JSONDecodeError as exc:
-            raise OllamaClientError(f"Unable to recover JSON from model output: {cleaned[:200]}") from exc
-
+            raise OllamaClientError(
+                f"Unable to recover JSON from model output: {cleaned[:200]}"
+            ) from exc

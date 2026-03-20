@@ -38,8 +38,18 @@ class FakeRepository:
     def list_recent_messages(self, limit=20):
         now = utcnow()
         return [
-            MessageView(speaker_label="Mara", content="Stay focused.", kind="chat", created_at=now - timedelta(minutes=5)),
-            MessageView(speaker_label="Luca", content="On what, exactly?", kind="chat", created_at=now - timedelta(minutes=4)),
+            MessageView(
+                speaker_label="Mara",
+                content="Stay focused.",
+                kind="chat",
+                created_at=now - timedelta(minutes=5),
+            ),
+            MessageView(
+                speaker_label="Luca",
+                content="On what, exactly?",
+                kind="chat",
+                created_at=now - timedelta(minutes=4),
+            ),
         ]
 
     def list_recent_events(self, hours=24, limit=20, minimum_significance=1):
@@ -82,7 +92,13 @@ class FakeRepository:
         ]
 
     def list_open_continuity_flags(self, limit=8):
-        return [{"severity": "warning", "flag_type": "repetition", "description": "Energy has flattened."}]
+        return [
+            {
+                "severity": "warning",
+                "flag_type": "repetition",
+                "description": "Energy has flattened.",
+            }
+        ]
 
     def get_relationship_map(self):
         return ["mara<->elias: trust 8, desire 7, suspicion 3, obligation 9."]
@@ -128,11 +144,12 @@ def test_context_assembler_builds_packets() -> None:
         "mara",
         {
             "objective": "Push the scene toward a sharper question.",
-            "per_character": {"mara": {"goal": "control the damage", "pressure_point": "Luca is back"}},
+            "per_character": {
+                "mara": {"goal": "control the damage", "pressure_point": "Luca is back"}
+            },
         },
     )
     assert manager_packet.title == "Saltglass House"
     assert "Who hid the ledger?" in manager_packet.unresolved_questions
     assert character_packet.character_slug == "mara"
     assert "control the damage" in character_packet.manager_directive
-

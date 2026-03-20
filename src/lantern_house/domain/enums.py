@@ -40,4 +40,3 @@ class EventType(StrEnum):
     ROUTINE = "routine"
     CONFLICT = "conflict"
     ALLIANCE = "alliance"
-

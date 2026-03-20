@@ -28,6 +28,7 @@ dependencies = [
 dev = [
   "pytest>=8.3.3",
   "pytest-asyncio>=0.24.0",
+  "ruff>=0.11.0",
 ]
 
 [project.scripts]
@@ -63,4 +64,3 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "UP", "N", "ASYNC", "RUF"]
-

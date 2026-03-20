@@ -207,4 +207,3 @@ class CharacterContextPacket(BaseModel):
     recent_events: list[str] = Field(default_factory=list)
     manager_directive: str
     forbidden_boundaries: list[str] = Field(default_factory=list)
-

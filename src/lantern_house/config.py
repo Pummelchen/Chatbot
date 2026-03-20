@@ -41,6 +41,7 @@ class RuntimeConfig(BaseModel):
     active_character_min: int = 2
     active_character_max: int = 4
     manager_step_interval_messages: int = 2
+    checkpoint_interval_seconds: int = 60
     periodic_flush_messages: int = 1
     degraded_mode_on_model_failure: bool = True
     healthcheck_interval_seconds: int = 60
@@ -137,4 +138,3 @@ def _deep_merge(left: dict[str, Any], right: dict[str, Any]) -> dict[str, Any]:
             continue
         merged[key] = value
     return merged
-

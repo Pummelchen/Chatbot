@@ -45,6 +45,12 @@ The system persists:
 
 This allows recovery without replaying the entire transcript.
 
+Run-state persistence is layered:
+
+- Every turn commits message, events, relationship deltas, and run-state updates transactionally.
+- A checkpoint snapshot is written on a background interval so recovery still has fresh state even if the machine reboots mid-scene.
+- Startup inspects the prior run-state status and emits an unclean-shutdown continuity flag when the last run died in `starting` or `running`.
+
 ## Anti-Drift Controls
 
 Anti-drift is explicit and layered:
@@ -63,4 +69,3 @@ Anti-drift is explicit and layered:
 - Prompt templates are plain editable markdown files instead of deeply embedded strings.
 - A degraded-mode fallback exists to protect continuity during transient model failures.
 - Terminal-first output keeps the MVP narrow while preserving later OBS and YouTube integration paths.
-

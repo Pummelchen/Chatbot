@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from collections import defaultdict
 from datetime import timedelta
 from typing import Any
 
@@ -20,7 +19,7 @@ from lantern_house.domain.contracts import (
     SummaryView,
 )
 from lantern_house.domain.enums import MessageKind, SummaryWindow
-from lantern_house.utils.time import floor_to_hour, utcnow
+from lantern_house.utils.time import floor_to_hour, isoformat, utcnow
 
 
 class StoryRepository:
@@ -33,7 +32,9 @@ class StoryRepository:
 
     def ensure_run_state(self) -> dict[str, Any]:
         with self.session_factory.session_scope() as session:
-            run_state = session.scalar(select(models.RunState).where(models.RunState.runtime_key == "primary"))
+            run_state = session.scalar(
+                select(models.RunState).where(models.RunState.runtime_key == "primary")
+            )
             if run_state is None:
                 run_state = models.RunState(runtime_key="primary", status="idle")
                 session.add(run_state)
@@ -42,17 +43,48 @@ class StoryRepository:
 
     def get_run_state(self) -> dict[str, Any]:
         with self.session_factory.session_scope() as session:
-            run_state = session.scalar(select(models.RunState).where(models.RunState.runtime_key == "primary"))
+            run_state = session.scalar(
+                select(models.RunState).where(models.RunState.runtime_key == "primary")
+            )
             if run_state is None:
                 raise RuntimeError("run_state is missing; seed or bootstrap first")
             return self._run_state_dict(run_state)
 
-    def set_runtime_status(self, status: str, *, degraded_mode: bool | None = None) -> None:
+    def mark_runtime_starting(self, *, now=None) -> dict[str, Any]:
+        now = now or utcnow()
+        with self.session_factory.session_scope() as session:
+            run_state = self._get_run_state_model(session)
+            previous = self._run_state_dict(run_state)
+            metadata = dict(run_state.metadata_json)
+            metadata["runtime_phase"] = "startup"
+            metadata["last_start_at"] = isoformat(now)
+            run_state.status = "starting"
+            run_state.last_checkpoint_at = now
+            run_state.metadata_json = metadata
+            return previous
+
+    def set_runtime_status(
+        self,
+        status: str,
+        *,
+        degraded_mode: bool | None = None,
+        phase: str | None = None,
+        extra_metadata: dict[str, Any] | None = None,
+        now=None,
+    ) -> None:
+        now = now or utcnow()
         with self.session_factory.session_scope() as session:
             run_state = self._get_run_state_model(session)
             run_state.status = status
             if degraded_mode is not None:
                 run_state.degraded_mode = degraded_mode
+            metadata = dict(run_state.metadata_json)
+            metadata["last_status_change_at"] = isoformat(now)
+            if phase is not None:
+                metadata["runtime_phase"] = phase
+            if extra_metadata:
+                metadata.update(extra_metadata)
+            run_state.metadata_json = metadata
 
     def list_missing_recap_hours(self, now=None) -> list:
         now = now or utcnow()
@@ -61,9 +93,16 @@ class StoryRepository:
         last_recap = run_state["last_recap_hour"]
         if last_recap is None:
             last_public = run_state["last_public_message_at"]
-            if last_public is None or floor_to_hour(last_public) >= bucket:
+            if last_public is None:
                 return []
-            return [bucket]
+            current = floor_to_hour(last_public) + timedelta(hours=1)
+            if current > bucket:
+                return []
+            hours = []
+            while current <= bucket:
+                hours.append(current)
+                current += timedelta(hours=1)
+            return hours
 
         hours = []
         current = floor_to_hour(last_recap) + timedelta(hours=1)
@@ -79,7 +118,9 @@ class StoryRepository:
 
     def list_characters(self) -> list[dict[str, Any]]:
         with self.session_factory.session_scope() as session:
-            characters = session.scalars(select(models.Character).order_by(models.Character.id)).all()
+            characters = session.scalars(
+                select(models.Character).order_by(models.Character.id)
+            ).all()
             return [
                 {
                     "slug": row.slug,
@@ -98,8 +139,14 @@ class StoryRepository:
     def list_character_states(self) -> list[dict[str, Any]]:
         with self.session_factory.session_scope() as session:
             stmt = (
-                select(models.Character.slug, models.CharacterState.last_spoke_at, models.CharacterState.silence_streak)
-                .join(models.CharacterState, models.Character.id == models.CharacterState.character_id)
+                select(
+                    models.Character.slug,
+                    models.CharacterState.last_spoke_at,
+                    models.CharacterState.silence_streak,
+                )
+                .join(
+                    models.CharacterState, models.Character.id == models.CharacterState.character_id
+                )
                 .order_by(models.Character.id)
             )
             return [
@@ -111,8 +158,14 @@ class StoryRepository:
         with self.session_factory.session_scope() as session:
             stmt = (
                 select(models.Character, models.CharacterState, models.Location)
-                .join(models.CharacterState, models.Character.id == models.CharacterState.character_id)
-                .join(models.Location, models.Location.id == models.CharacterState.current_location_id, isouter=True)
+                .join(
+                    models.CharacterState, models.Character.id == models.CharacterState.character_id
+                )
+                .join(
+                    models.Location,
+                    models.Location.id == models.CharacterState.current_location_id,
+                    isouter=True,
+                )
                 .where(models.Character.slug == slug)
             )
             row = session.execute(stmt).one_or_none()
@@ -137,7 +190,9 @@ class StoryRepository:
 
     def list_relationship_snapshots(self, slug: str) -> list[RelationshipSnapshot]:
         with self.session_factory.session_scope() as session:
-            character = session.scalar(select(models.Character).where(models.Character.slug == slug))
+            character = session.scalar(
+                select(models.Character).where(models.Character.slug == slug)
+            )
             if character is None:
                 raise KeyError(slug)
             stmt = (
@@ -176,7 +231,9 @@ class StoryRepository:
                 )
             return result
 
-    def list_recent_messages(self, *, limit: int = 20, speaker_slugs: list[str] | None = None) -> list[MessageView]:
+    def list_recent_messages(
+        self, *, limit: int = 20, speaker_slugs: list[str] | None = None
+    ) -> list[MessageView]:
         with self.session_factory.session_scope() as session:
             stmt = select(models.Message).order_by(desc(models.Message.created_at)).limit(limit)
             if speaker_slugs:
@@ -227,7 +284,11 @@ class StoryRepository:
         with self.session_factory.session_scope() as session:
             rows = list(
                 reversed(
-                    session.scalars(select(models.Summary).order_by(desc(models.Summary.created_at)).limit(limit)).all()
+                    session.scalars(
+                        select(models.Summary)
+                        .order_by(desc(models.Summary.created_at))
+                        .limit(limit)
+                    ).all()
                 )
             )
             return [
@@ -299,7 +360,11 @@ class StoryRepository:
         with self.session_factory.session_scope() as session:
             stmt = (
                 select(models.SceneState, models.Location.name)
-                .join(models.Location, models.Location.id == models.SceneState.location_id, isouter=True)
+                .join(
+                    models.Location,
+                    models.Location.id == models.SceneState.location_id,
+                    isouter=True,
+                )
                 .where(models.SceneState.status == "active")
                 .order_by(desc(models.SceneState.started_at))
             )
@@ -322,7 +387,9 @@ class StoryRepository:
 
     def get_latest_manager_directive(self) -> dict[str, Any] | None:
         with self.session_factory.session_scope() as session:
-            row = session.scalar(select(models.ManagerDirective).order_by(desc(models.ManagerDirective.created_at)))
+            row = session.scalar(
+                select(models.ManagerDirective).order_by(desc(models.ManagerDirective.created_at))
+            )
             if row is None:
                 return None
             return self._directive_dict(row)
@@ -346,7 +413,9 @@ class StoryRepository:
 
     def get_forbidden_boundaries(self, *, character_slug: str, limit: int = 6) -> list[str]:
         with self.session_factory.session_scope() as session:
-            character = session.scalar(select(models.Character).where(models.Character.slug == character_slug))
+            character = session.scalar(
+                select(models.Character).where(models.Character.slug == character_slug)
+            )
             if character is None:
                 return []
             rows = session.scalars(
@@ -363,11 +432,15 @@ class StoryRepository:
             ).all()
             return [row.reveal_guardrail for row in rows]
 
-    def record_manager_directive(self, plan: ManagerDirectivePlan, *, tick_no: int, now=None) -> dict[str, Any]:
+    def record_manager_directive(
+        self, plan: ManagerDirectivePlan, *, tick_no: int, now=None
+    ) -> dict[str, Any]:
         now = now or utcnow()
         with self.session_factory.session_scope() as session:
             scene = session.scalar(
-                select(models.SceneState).where(models.SceneState.status == "active").order_by(desc(models.SceneState.id))
+                select(models.SceneState)
+                .where(models.SceneState.status == "active")
+                .order_by(desc(models.SceneState.id))
             )
             row = models.ManagerDirective(
                 scene_id=scene.id if scene else None,
@@ -378,7 +451,9 @@ class StoryRepository:
                 emotional_temperature=plan.emotional_temperature,
                 active_character_slugs=plan.active_character_slugs,
                 speaker_weights=plan.speaker_weights,
-                per_character={slug: goal.model_dump() for slug, goal in plan.per_character.items()},
+                per_character={
+                    slug: goal.model_dump() for slug, goal in plan.per_character.items()
+                },
                 thought_pulse=plan.thought_pulse.model_dump(),
                 pacing_actions=plan.pacing_actions,
                 continuity_watch=plan.continuity_watch,
@@ -387,6 +462,7 @@ class StoryRepository:
                 created_at=now,
             )
             session.add(row)
+            session.flush()
             if scene is not None:
                 scene.objective = plan.objective
                 scene.emotional_temperature = plan.emotional_temperature
@@ -401,6 +477,10 @@ class StoryRepository:
 
             run_state = self._get_run_state_model(session)
             run_state.last_manager_run_at = now
+            metadata = dict(run_state.metadata_json)
+            metadata["runtime_phase"] = "manager-planned"
+            metadata["latest_directive_id"] = row.id
+            run_state.metadata_json = metadata
             session.flush()
             return self._directive_dict(row)
 
@@ -424,9 +504,13 @@ class StoryRepository:
             run_state.degraded_mode = degraded_mode
             next_tick = run_state.last_tick_no + 1
 
-            speaker = session.scalar(select(models.Character).where(models.Character.slug == speaker_slug))
+            speaker = session.scalar(
+                select(models.Character).where(models.Character.slug == speaker_slug)
+            )
             scene = session.scalar(
-                select(models.SceneState).where(models.SceneState.status == "active").order_by(desc(models.SceneState.id))
+                select(models.SceneState)
+                .where(models.SceneState.status == "active")
+                .order_by(desc(models.SceneState.id))
             )
             if speaker is None:
                 raise KeyError(f"Unknown speaker slug: {speaker_slug}")
@@ -451,7 +535,9 @@ class StoryRepository:
             session.flush()
 
             speaker_state = session.scalar(
-                select(models.CharacterState).where(models.CharacterState.character_id == speaker.id)
+                select(models.CharacterState).where(
+                    models.CharacterState.character_id == speaker.id
+                )
             )
             if speaker_state is not None:
                 speaker_state.last_spoke_at = now
@@ -461,7 +547,9 @@ class StoryRepository:
                     emotional_state["current"] = turn.tone
                 emotional_state["last_public_move"] = turn.public_message[:120]
                 speaker_state.emotional_state = emotional_state
-                if any(event.event_type.value in {"conflict", "threat", "reveal"} for event in events):
+                if any(
+                    event.event_type.value in {"conflict", "threat", "reveal"} for event in events
+                ):
                     speaker_state.stress_level = _clamp(speaker_state.stress_level + 1, 0, 10)
                 elif turn.tone in {"warm", "playful"}:
                     speaker_state.stress_level = _clamp(speaker_state.stress_level - 1, 0, 10)
@@ -476,7 +564,9 @@ class StoryRepository:
 
             relationship_lookup = self._relationship_index(session)
             for delta in turn.relationship_updates:
-                counterpart = session.scalar(select(models.Character).where(models.Character.slug == delta.character_slug))
+                counterpart = session.scalar(
+                    select(models.Character).where(models.Character.slug == delta.character_slug)
+                )
                 if counterpart is None:
                     continue
                 pair_key = tuple(sorted((speaker.id, counterpart.id)))
@@ -491,8 +581,12 @@ class StoryRepository:
                     relationship_lookup[pair_key] = relationship
                 relationship.trust_score = _clamp(relationship.trust_score + delta.trust_delta)
                 relationship.desire_score = _clamp(relationship.desire_score + delta.desire_delta)
-                relationship.suspicion_score = _clamp(relationship.suspicion_score + delta.suspicion_delta)
-                relationship.obligation_score = _clamp(relationship.obligation_score + delta.obligation_delta)
+                relationship.suspicion_score = _clamp(
+                    relationship.suspicion_score + delta.suspicion_delta
+                )
+                relationship.obligation_score = _clamp(
+                    relationship.obligation_score + delta.obligation_delta
+                )
                 relationship.summary = delta.summary
                 relationship.last_shift_at = now
 
@@ -509,7 +603,9 @@ class StoryRepository:
                         },
                         significance=event.significance,
                         affects_arc_slug=event.arc_slug,
-                        affects_relationships=[delta.character_slug for delta in turn.relationship_updates],
+                        affects_relationships=[
+                            delta.character_slug for delta in turn.relationship_updates
+                        ],
                         created_at=now,
                     )
                 )
@@ -543,6 +639,11 @@ class StoryRepository:
 
             run_state.last_tick_no = next_tick
             run_state.last_public_message_at = now
+            metadata = dict(run_state.metadata_json)
+            metadata["runtime_phase"] = "post-turn"
+            metadata["active_speaker"] = speaker_slug
+            metadata["latest_message_id"] = message.id
+            run_state.metadata_json = metadata
             session.flush()
 
             return {
@@ -591,7 +692,10 @@ class StoryRepository:
 
             run_state = self._get_run_state_model(session)
             run_state.last_recap_hour = bucket_end_at
-            run_state.last_public_message_at = bucket_end_at
+            metadata = dict(run_state.metadata_json)
+            metadata["runtime_phase"] = "recap-complete"
+            metadata["last_recap_generated_at"] = isoformat(bucket_end_at)
+            run_state.metadata_json = metadata
 
     def load_events_for_window(self, *, bucket_end_at, hours: int) -> list[EventView]:
         start = bucket_end_at - timedelta(hours=hours)
@@ -620,15 +724,21 @@ class StoryRepository:
         with self.session_factory.session_scope() as session:
             characters = {
                 row.id: row.slug
-                for row in session.scalars(select(models.Character).order_by(models.Character.id)).all()
+                for row in session.scalars(
+                    select(models.Character).order_by(models.Character.id)
+                ).all()
             }
-            rows = session.scalars(select(models.Relationship).order_by(desc(models.Relationship.last_shift_at))).all()
+            rows = session.scalars(
+                select(models.Relationship).order_by(desc(models.Relationship.last_shift_at))
+            ).all()
             result = []
             for row in rows:
                 a = characters.get(row.character_a_id, "?")
                 b = characters.get(row.character_b_id, "?")
                 result.append(
-                    f"{a}<->{b}: trust {row.trust_score}, desire {row.desire_score}, suspicion {row.suspicion_score}, obligation {row.obligation_score}. {row.summary}"
+                    f"{a}<->{b}: trust {row.trust_score}, desire {row.desire_score}, "
+                    f"suspicion {row.suspicion_score}, obligation {row.obligation_score}. "
+                    f"{row.summary}"
                 )
             return result
 
@@ -642,19 +752,90 @@ class StoryRepository:
                         severity=flag.severity.value,
                         flag_type=flag.flag_type,
                         description=flag.description,
-                    related_entity=flag.related_entity,
+                        related_entity=flag.related_entity,
                     )
                 )
 
     def count_recent_thought_pulses(self, *, hours: int = 1) -> int:
         threshold = utcnow() - timedelta(hours=hours)
         with self.session_factory.session_scope() as session:
-            return session.scalar(
-                select(func.count(models.ThoughtPulse.id)).where(models.ThoughtPulse.created_at >= threshold)
-            ) or 0
+            return (
+                session.scalar(
+                    select(func.count(models.ThoughtPulse.id)).where(
+                        models.ThoughtPulse.created_at >= threshold
+                    )
+                )
+                or 0
+            )
+
+    def write_checkpoint(
+        self, *, reason: str, phase: str | None = None, now=None
+    ) -> dict[str, Any]:
+        now = now or utcnow()
+        with self.session_factory.session_scope() as session:
+            run_state = self._get_run_state_model(session)
+            world = session.scalar(select(models.WorldState).order_by(desc(models.WorldState.id)))
+            scene = session.scalar(
+                select(models.SceneState)
+                .where(models.SceneState.status == "active")
+                .order_by(desc(models.SceneState.started_at))
+            )
+            latest_directive = session.scalar(
+                select(models.ManagerDirective).order_by(desc(models.ManagerDirective.created_at))
+            )
+            latest_message = session.scalar(
+                select(models.Message).order_by(desc(models.Message.created_at))
+            )
+
+            checkpoint = {
+                "checkpoint_at": isoformat(now),
+                "reason": reason,
+                "phase": phase or dict(run_state.metadata_json).get("runtime_phase", "unknown"),
+                "status": run_state.status,
+                "last_tick_no": run_state.last_tick_no,
+                "last_public_message_at": isoformat(run_state.last_public_message_at)
+                if run_state.last_public_message_at
+                else None,
+                "scene": {
+                    "scene_key": scene.scene_key if scene else None,
+                    "objective": scene.objective[:200] if scene else None,
+                    "active_character_slugs": scene.active_character_slugs if scene else [],
+                    "emotional_temperature": scene.emotional_temperature if scene else None,
+                },
+                "world": {
+                    "title": world.title if world else None,
+                    "active_scene_key": world.active_scene_key if world else None,
+                    "current_story_day": world.current_story_day if world else None,
+                    "unresolved_questions": world.unresolved_questions[:8] if world else [],
+                },
+                "latest_directive": {
+                    "id": latest_directive.id if latest_directive else None,
+                    "tick_no": latest_directive.tick_no if latest_directive else None,
+                    "objective": latest_directive.objective[:200] if latest_directive else None,
+                    "active_character_slugs": latest_directive.active_character_slugs
+                    if latest_directive
+                    else [],
+                },
+                "latest_message": {
+                    "id": latest_message.id if latest_message else None,
+                    "tick_no": latest_message.tick_no if latest_message else None,
+                    "speaker_slug": latest_message.speaker_slug if latest_message else None,
+                    "created_at": isoformat(latest_message.created_at) if latest_message else None,
+                },
+            }
+            metadata = dict(run_state.metadata_json)
+            metadata["checkpoint"] = checkpoint
+            metadata["last_checkpoint_reason"] = reason
+            if phase is not None:
+                metadata["runtime_phase"] = phase
+            run_state.metadata_json = metadata
+            run_state.last_checkpoint_at = now
+            return checkpoint
 
     def _get_run_state_model(self, session) -> models.RunState:
-        run_state = session.scalar(select(models.RunState).where(models.RunState.runtime_key == "primary"))
+        run_state = session.scalar(
+            select(models.RunState).where(models.RunState.runtime_key == "primary")
+        )
         if run_state is None:
             run_state = models.RunState(runtime_key="primary")
             session.add(run_state)
@@ -704,12 +885,13 @@ class StoryRepository:
         return {
             "status": row.status,
             "last_tick_no": row.last_tick_no,
+            "last_checkpoint_at": row.last_checkpoint_at,
             "last_public_message_at": row.last_public_message_at,
             "last_manager_run_at": row.last_manager_run_at,
             "last_recap_hour": row.last_recap_hour,
             "last_thought_pulse_at": row.last_thought_pulse_at,
             "degraded_mode": row.degraded_mode,
-            "metadata": row.metadata_json,
+            "metadata": dict(row.metadata_json),
         }
 
     def _relationship_index(self, session) -> dict[tuple[int, int], models.Relationship]:

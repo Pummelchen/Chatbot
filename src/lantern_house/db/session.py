@@ -1,7 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Iterator
 from contextlib import contextmanager
-from typing import Iterator
 
 from sqlalchemy import Engine, create_engine, text
 from sqlalchemy.orm import Session, sessionmaker
@@ -37,4 +37,3 @@ class SessionFactory:
     def ping(self) -> None:
         with self.session_scope() as session:
             session.execute(text("SELECT 1"))
-

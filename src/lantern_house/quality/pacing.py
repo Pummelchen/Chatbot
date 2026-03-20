@@ -8,7 +8,6 @@ from lantern_house.domain.contracts import (
     CharacterTurn,
     ContinuityFlagDraft,
     EventView,
-    ManagerDirectivePlan,
     MessageView,
     PacingHealthReport,
 )
@@ -16,10 +15,14 @@ from lantern_house.domain.enums import FlagSeverity
 
 
 class PacingHealthEvaluator:
-    def evaluate(self, *, messages: list[MessageView], events: list[EventView]) -> PacingHealthReport:
+    def evaluate(
+        self, *, messages: list[MessageView], events: list[EventView]
+    ) -> PacingHealthReport:
         score = 100
         repetitive = self._is_repetitive(messages)
-        mystery_stalled = not any(event.event_type in {"clue", "question", "reveal", "threat"} for event in events[-8:])
+        mystery_stalled = not any(
+            event.event_type in {"clue", "question", "reveal", "threat"} for event in events[-8:]
+        )
         romance_stalled = not any(event.event_type == "romance" for event in events[-12:])
         low_progression = not any(event.significance >= 6 for event in events[-12:])
         too_agreeable = self._too_agreeable(messages)
@@ -27,10 +30,14 @@ class PacingHealthEvaluator:
         recommendations: list[str] = []
         if repetitive:
             score -= 25
-            recommendations.append("Break the loop with a concrete clue, interruption, or reversal.")
+            recommendations.append(
+                "Break the loop with a concrete clue, interruption, or reversal."
+            )
         if mystery_stalled:
             score -= 20
-            recommendations.append("Push a fresh question, hidden object, or suspicious inconsistency.")
+            recommendations.append(
+                "Push a fresh question, hidden object, or suspicious inconsistency."
+            )
         if romance_stalled:
             score -= 12
             recommendations.append("Use unstable intimacy, jealousy, or interrupted vulnerability.")
@@ -85,7 +92,9 @@ class ContinuityGuard:
                 ContinuityFlagDraft(
                     severity=FlagSeverity.WARNING,
                     flag_type="voice-integrity",
-                    description=f"{packet.character_slug} spoke too long for live chat readability.",
+                    description=(
+                        f"{packet.character_slug} spoke too long for live chat readability."
+                    ),
                     related_entity=packet.character_slug,
                 )
             )
@@ -116,13 +125,20 @@ class ContinuityGuard:
             )
         lowered = turn.public_message.lower()
         for boundary in packet.forbidden_boundaries:
-            keywords = [token for token in re.findall(r"[a-z]{5,}", boundary.lower()) if token not in {"reveal", "without", "until", "should"}]
+            keywords = [
+                token
+                for token in re.findall(r"[a-z]{5,}", boundary.lower())
+                if token not in {"reveal", "without", "until", "should"}
+            ]
             if keywords and sum(token in lowered for token in keywords[:3]) >= 2:
                 flags.append(
                     ContinuityFlagDraft(
                         severity=FlagSeverity.WARNING,
                         flag_type="forbidden-knowledge",
-                        description=f"{packet.character_slug} may be touching restricted knowledge too directly.",
+                        description=(
+                            f"{packet.character_slug} may be touching "
+                            "restricted knowledge too directly."
+                        ),
                         related_entity=packet.character_slug,
                     )
                 )

@@ -1,19 +1,25 @@
 from __future__ import annotations
 
-import json
 import logging
 
-from lantern_house.domain.contracts import CharacterGoal, ManagerContextPacket, ManagerDirectivePlan, ThoughtPulseAuthorization
-from lantern_house.llm.ollama import OllamaClient, OllamaClientError
+from lantern_house.config import RuntimeConfig
+from lantern_house.domain.contracts import (
+    CharacterGoal,
+    ManagerContextPacket,
+    ManagerDirectivePlan,
+    ThoughtPulseAuthorization,
+)
+from lantern_house.llm.ollama import OllamaClient
 from lantern_house.utils.resources import render_template
 
 logger = logging.getLogger(__name__)
 
 
 class StoryManagerService:
-    def __init__(self, llm: OllamaClient, model_name: str) -> None:
+    def __init__(self, llm: OllamaClient, model_name: str, runtime_config: RuntimeConfig) -> None:
         self.llm = llm
         self.model_name = model_name
+        self.runtime_config = runtime_config
 
     async def plan(self, context: ManagerContextPacket, roster: list[str]) -> ManagerDirectivePlan:
         prompt = render_template(
@@ -22,7 +28,9 @@ class StoryManagerService:
             {"MANAGER_CONTEXT": context.model_dump()},
         )
         try:
-            payload, _stats = await self.llm.generate_json(model=self.model_name, prompt=prompt, temperature=0.7)
+            payload, _stats = await self.llm.generate_json(
+                model=self.model_name, prompt=prompt, temperature=0.7
+            )
             plan = ManagerDirectivePlan.model_validate(payload)
         except Exception as exc:
             logger.warning("manager fallback due to model issue: %s", exc)
@@ -32,7 +40,15 @@ class StoryManagerService:
     def _normalize(self, plan: ManagerDirectivePlan, roster: list[str]) -> ManagerDirectivePlan:
         active = [slug for slug in plan.active_character_slugs if slug in roster]
         if not active:
-            active = roster[:3]
+            active = roster[: self.runtime_config.active_character_max]
+        if len(active) < self.runtime_config.active_character_min:
+            for slug in roster:
+                if slug in active:
+                    continue
+                active.append(slug)
+                if len(active) >= self.runtime_config.active_character_min:
+                    break
+        active = active[: self.runtime_config.active_character_max]
         speaker_weights = {slug: float(plan.speaker_weights.get(slug, 1.0)) for slug in active}
         per_character = dict(plan.per_character)
         for slug in active:
@@ -63,8 +79,13 @@ class StoryManagerService:
         )
 
     def _fallback(self, context: ManagerContextPacket, roster: list[str]) -> ManagerDirectivePlan:
-        active = roster[:3]
-        objective = "Disturb the fragile calm with one practical problem and one emotionally loaded question."
+        active = roster[: self.runtime_config.active_character_max]
+        if len(active) < self.runtime_config.active_character_min:
+            active = roster[: self.runtime_config.active_character_min]
+        objective = (
+            "Disturb the fragile calm with one practical problem "
+            "and one emotionally loaded question."
+        )
         desired = [
             "Surface a clue linked to the debt or the sealed wing.",
             "Sharpen an old romantic or loyalty fault line without resolving it.",
@@ -98,5 +119,7 @@ class StoryManagerService:
             pacing_actions=context.pacing_health.recommendations,
             continuity_watch=context.continuity_warnings[:4],
             unresolved_questions_to_push=context.unresolved_questions[:2],
-            recentering_hint="If energy dips, let a practical house problem expose an emotional fault line.",
+            recentering_hint=(
+                "If energy dips, let a practical house problem expose an emotional fault line."
+            ),
         )

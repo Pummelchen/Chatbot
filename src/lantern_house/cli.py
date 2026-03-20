@@ -5,9 +5,9 @@ import os
 from pathlib import Path
 
 import typer
-from alembic import command
 from alembic.config import Config as AlembicConfig
 
+from alembic import command
 from lantern_house.config import AppConfig, load_config
 from lantern_house.context.assembler import ContextAssembler
 from lantern_house.db.repository import StoryRepository
@@ -117,7 +117,7 @@ async def _run_async(config: AppConfig, *, once: bool) -> None:
             config=config,
             repository=repository,
             assembler=assembler,
-            manager_service=StoryManagerService(client, config.models.manager),
+            manager_service=StoryManagerService(client, config.models.manager, config.runtime),
             character_service=CharacterService(client, config.models.character),
             recap_service=RecapService(repository, client, config.models.announcer),
             scheduler=TurnScheduler(

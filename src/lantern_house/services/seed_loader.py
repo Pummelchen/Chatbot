@@ -20,9 +20,12 @@ class StorySeedLoader:
         with self.session_factory.session_scope() as session:
             existing = session.scalar(select(models.Character).limit(1))
             if existing is not None and not force:
+                self._validate_existing_seed(session)
                 return
             if existing is not None and force:
-                raise RuntimeError("Force reseed is not implemented to avoid accidental canon loss.")
+                raise RuntimeError(
+                    "Force reseed is not implemented to avoid accidental canon loss."
+                )
 
             location_map: dict[str, models.Location] = {}
             for item in payload["locations"]:
@@ -189,6 +192,7 @@ class StorySeedLoader:
             else:
                 run_state.status = "idle"
                 run_state.last_tick_no = 0
+                run_state.last_checkpoint_at = None
                 run_state.last_public_message_at = None
                 run_state.last_manager_run_at = None
                 run_state.last_recap_hour = None
@@ -196,4 +200,26 @@ class StorySeedLoader:
                 run_state.degraded_mode = False
                 metadata = dict(run_state.metadata_json)
                 metadata["seed_title"] = payload["title"]
+                metadata.pop("checkpoint", None)
+                metadata.pop("last_checkpoint_reason", None)
+                metadata.pop("last_start_at", None)
+                metadata["runtime_phase"] = "seeded"
                 run_state.metadata_json = metadata
+
+    def _validate_existing_seed(self, session) -> None:
+        required_models = {
+            "world_state": models.WorldState,
+            "scene_state": models.SceneState,
+            "run_state": models.RunState,
+        }
+        missing = [
+            name
+            for name, model in required_models.items()
+            if session.scalar(select(model).limit(1)) is None
+        ]
+        if missing:
+            joined = ", ".join(missing)
+            raise RuntimeError(
+                f"Existing character seed is incomplete; missing required state tables: {joined}. "
+                "Reset the database or repair the seed before continuing."
+            )
