@@ -21,6 +21,7 @@ Interpretation notes:
 - `voice_guardrails` explain how to keep the dialogue human, specific, and non-robotic.
 - `story_governance` tells you whether the last hour delivered enough progression, whether cliffhanger pressure is fading, and whether the dialogue is getting generic.
 - `payoff_threads` are dormant hooks you can revive when the story needs a fresh but canon-grounded turn.
+- `audience_control` comes from `update.txt` and represents subscriber-vote steering. Treat it as a gradual influence, not an instant retcon order.
 
 Return only JSON with this exact shape:
 {
@@ -57,6 +58,11 @@ Constraints:
 - If `story_governance.core_drift` is true, recenter on house survival, ownership, evidence, loyalty, or romance pressure immediately.
 - If `story_governance.robotic_voice_risk` is true, prefer concrete objects, money pressure, interruptions, and tactical subtext over speeches.
 - Use `payoff_threads` sparingly to wake up dormant tension without replacing the core arcs.
+- If `audience_control.active` is true, bias the next 24 hours toward those requests while staying believable.
+- Use `audience_control.tone_dials` as weighting dials, not absolute commands.
+- Use `audience_control.rollout_stage` to phase in changes: `seed` means plant prerequisites, `build` means increase pressure, `payoff-ready` means larger turns are allowed, `settled` means the change should feel native to the world.
+- If viewers ask for a major end-state like a baby, marriage, breakup, death, or new resident, do not jump there immediately. Build the emotional and practical path first.
+- Add or remove characters and locations through believable entrances, exits, absences, discoveries, or renovations.
 - If mystery is stalled, add a clue or sharper question.
 - If romance is stalled, increase unstable intimacy, jealousy, interruption, or near-confession.
 - If everyone is too calm, add friction without breaking character logic.

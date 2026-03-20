@@ -1,0 +1,139 @@
+# Lantern House live audience control file
+# Edit this file while the runtime is running.
+# The manager checks it every 10 minutes and folds changes in gradually.
+# Use YAML syntax. Keep indentation consistent.
+#
+# Important:
+# - Changes should be believable and phased in over roughly 24 hours.
+# - Do not expect instant retcons.
+# - If you want a major end-state like a baby, marriage, betrayal, or exit,
+#   describe the destination and the desired slow-burn path.
+
+schema_version: 1
+enabled: true
+change_id: "youtube-vote-example-001"
+source: "YouTube subscriber vote"
+priority: 8
+
+rollout:
+  full_integration_hours: 24
+  hold_hours: 168
+  max_major_changes_per_24h: 2
+  immediate_retcons: false
+  note: "Seed the change first, then build pressure, then let it feel native."
+
+core_settings:
+  violence: 3
+  erotics: 2
+  thriller_action: 7
+  romance: 8
+  twists: 8
+  bad_language: 2
+  humor: 6
+  mystery: 9
+  warmth: 6
+  jealousy: 7
+  heartbreak: 6
+  family_pressure: 8
+  gossip: 7
+  daily_life: 5
+  danger: 6
+  suspicion: 8
+  new_characters: 3
+  new_locations: 2
+
+character_changes:
+  add:
+    - name: ""
+      slug: ""
+      role: ""
+      function: ""
+      background: ""
+      public_persona: ""
+      hidden_wound: ""
+      long_term_desire: ""
+      private_fear: ""
+      message_style: ""
+      rollout_note: ""
+  remove:
+    - ""
+  spotlight_up:
+    - "Amelia Vale"
+  spotlight_down:
+    - ""
+  protect_from_exit:
+    - ""
+  allow_exit:
+    - ""
+  keep_offscreen_for_hours:
+    - character: ""
+      hours: 0
+      note: ""
+
+location_changes:
+  add:
+    - name: ""
+      slug: ""
+      function: ""
+      mood: ""
+      public_facts:
+        - ""
+  remove:
+    - ""
+  spotlight_up:
+    - ""
+  spotlight_down:
+    - ""
+
+relationship_moves:
+  - pair: ["Amelia Vale", "Rafael Costa"]
+    direction: "raise_romance"
+    intensity_target: 8
+    pace: "slow-burn"
+    start_with: "private vulnerability, mutual protection, interrupted confessions"
+    avoid: "instant confession or instant payoff"
+  - pair: ["Amelia Vale", "Rafael Costa"]
+    direction: "eventual_baby_arc"
+    intensity_target: 9
+    pace: "very slow"
+    start_with: "repair trust, add domestic longing, create future-talk, then deepen intimacy"
+    avoid: "instant pregnancy reveal, instant happily-ever-after"
+  - pair: ["Arjun Mehta", "Lucia Ortega"]
+    direction: "raise_suspicion"
+    intensity_target: 7
+    pace: "medium"
+    start_with: "flirtation mixed with dangerous document leverage"
+    avoid: "flat agreement"
+
+story_requests:
+  must_happen:
+    - "Build a believable path in which Amelia and Rafael could eventually choose to have a baby together."
+    - "Increase comment-war energy around who is actually protecting the house versus using it."
+  avoid_for_now:
+    - "Do not kill any core character."
+    - "Do not solve the Evelyn mystery in one jump."
+  new_conflicts:
+    - "A money problem should collide with romance instead of staying separate."
+  external_pressures:
+    - "Add pressure from neighbors, inspectors, creditors, guests, family, or weather when the chat gets flat."
+  mysteries_to_push:
+    - "Who knew the lantern wing was not really sealed?"
+  add_objects:
+    - "A hidden baby photo that should not exist."
+  remove_objects:
+    - ""
+  recap_watch_for:
+    - "Call out major trust shifts clearly so returning viewers can pick sides fast."
+  freeform_votes:
+    - request: "If a new character is introduced, make them globally readable, suspicious, and instantly shippable."
+      rollout_note: "Bring them in through a practical reason, not random spectacle."
+    - request: "Make the next 24 hours feel more romantic and more dangerous at the same time."
+      rollout_note: "Use interrupted intimacy, debt pressure, and secret information."
+
+manager_notes:
+  keep_gradual: true
+  keep_canon_believable: true
+  no_instant_retcons: true
+  prefer_paths_over_payoffs: true
+  let_recap_reentry_stay_easy: true
+  additional_request: "If subscriber votes conflict, preserve story quality first and integrate the spirit of the vote."

@@ -18,7 +18,7 @@ announcer = "gemma3:4b"
 [runtime]
 active_character_min = 2
 active_character_max = 4
-manager_step_interval_messages = 2
+manager_step_interval_messages = 4
 checkpoint_interval_seconds = 60
 periodic_flush_messages = 1
 degraded_mode_on_model_failure = true
@@ -52,3 +52,7 @@ default_location_slug = "front-desk"
 level = "INFO"
 directory = "logs"
 file_name = "lantern_house.log"
+
+[audience]
+update_file_path = "update.txt"
+check_interval_minutes = 10

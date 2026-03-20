@@ -3,7 +3,13 @@ from __future__ import annotations
 from datetime import timedelta
 
 from lantern_house.context.assembler import ContextAssembler
-from lantern_house.domain.contracts import EventView, MessageView, RelationshipSnapshot, SummaryView
+from lantern_house.domain.contracts import (
+    AudienceControlReport,
+    EventView,
+    MessageView,
+    RelationshipSnapshot,
+    SummaryView,
+)
 from lantern_house.quality.pacing import PacingHealthEvaluator
 from lantern_house.utils.time import utcnow
 
@@ -172,7 +178,13 @@ class FakeRepository:
 
 def test_context_assembler_builds_packets() -> None:
     assembler = ContextAssembler(FakeRepository(), PacingHealthEvaluator())
-    manager_packet = assembler.build_manager_packet()
+    manager_packet = assembler.build_manager_packet(
+        audience_control=AudienceControlReport(
+            active=True,
+            file_status="active",
+            requests=["Build a believable baby path for Amelia and Rafael."],
+        )
+    )
     character_packet = assembler.build_character_packet(
         "amelia",
         {
@@ -191,6 +203,7 @@ def test_context_assembler_builds_packets() -> None:
     assert manager_packet.viewer_value_targets
     assert "Who hid the ledger?" in manager_packet.unresolved_questions
     assert manager_packet.payoff_threads
+    assert manager_packet.audience_control.active is True
     assert character_packet.character_slug == "amelia"
     assert character_packet.voice_guardrails
     assert "control the damage" in character_packet.manager_directive

@@ -12,6 +12,7 @@ from lantern_house.quality.pacing import ContinuityGuard
 from lantern_house.rendering.terminal import TerminalRenderer
 from lantern_house.runtime.recovery import RecoveryService
 from lantern_house.runtime.scheduler import TurnScheduler
+from lantern_house.services.audience import AudienceControlService
 from lantern_house.services.character import CharacterService
 from lantern_house.services.event_extractor import EventExtractor
 from lantern_house.services.manager import StoryManagerService
@@ -29,6 +30,7 @@ class RuntimeOrchestrator:
         config: AppConfig,
         repository: StoryRepository,
         assembler: ContextAssembler,
+        audience_control_service: AudienceControlService,
         manager_service: StoryManagerService,
         character_service: CharacterService,
         recap_service: RecapService,
@@ -42,6 +44,7 @@ class RuntimeOrchestrator:
         self.config = config
         self.repository = repository
         self.assembler = assembler
+        self.audience_control_service = audience_control_service
         self.manager_service = manager_service
         self.character_service = character_service
         self.recap_service = recap_service
@@ -71,6 +74,7 @@ class RuntimeOrchestrator:
             for bucket in recovery["missed_recap_hours"]:
                 await self._emit_recap(bucket)
 
+            self.audience_control_service.refresh_if_due(now=utcnow(), force=True)
             self.repository.set_runtime_status("running", degraded_mode=False, phase="loop-ready")
             checkpoint_task = asyncio.create_task(self._checkpoint_loop())
 
@@ -80,6 +84,7 @@ class RuntimeOrchestrator:
                     for bucket in self.repository.list_missing_recap_hours(now=now):
                         await self._emit_recap(bucket)
 
+                audience_control = self.audience_control_service.refresh_if_due(now=now)
                 directive = self.repository.get_latest_manager_directive()
                 if pending_manager_task is not None and pending_manager_task.done():
                     try:
@@ -95,7 +100,9 @@ class RuntimeOrchestrator:
                         )
                     pending_manager_task = None
 
-                manager_packet = self.assembler.build_manager_packet()
+                manager_packet = self.assembler.build_manager_packet(
+                    audience_control=audience_control
+                )
                 run_state = self.repository.get_run_state()
                 if self.scheduler.should_refresh_manager(
                     run_state=run_state,

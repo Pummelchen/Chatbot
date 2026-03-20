@@ -19,6 +19,7 @@ from lantern_house.rendering.terminal import TerminalRenderer
 from lantern_house.runtime.orchestrator import RuntimeOrchestrator
 from lantern_house.runtime.recovery import RecoveryService
 from lantern_house.runtime.scheduler import TurnScheduler
+from lantern_house.services.audience import AudienceControlService
 from lantern_house.services.character import CharacterService
 from lantern_house.services.event_extractor import EventExtractor
 from lantern_house.services.manager import StoryManagerService
@@ -118,6 +119,7 @@ async def _run_async(config: AppConfig, *, once: bool) -> None:
             config=config,
             repository=repository,
             assembler=assembler,
+            audience_control_service=AudienceControlService(config.audience, repository),
             manager_service=StoryManagerService(client, config.models.manager, config.runtime),
             character_service=CharacterService(client, config.models.character),
             recap_service=RecapService(repository, client, config.models.announcer),

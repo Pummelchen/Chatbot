@@ -7,7 +7,7 @@ Lantern House is split into five major layers:
 1. `db`: SQLAlchemy models, sessions, repositories, migrations
 2. `context`: selective retrieval and prompt-packet assembly
 3. `quality`: pacing and story-governance evaluators, continuity guardrails
-4. `services`: manager, character, progression, recap, event extraction, seeding
+4. `services`: manager, character, audience-control, progression, recap, event extraction, seeding
 5. `runtime`: scheduler, orchestrator, recovery, long-running loop
 6. `rendering`: terminal presentation for public output
 
@@ -17,14 +17,15 @@ Each loop iteration follows the same pattern:
 
 1. Recover or refresh run-state data.
 2. Check whether full-clock-hour recaps are due.
-3. Evaluate pacing and continuity health.
-4. Refresh the manager directive when required, blocking only for the first directive and otherwise allowing background refresh.
-5. Select the next speaker based on scene state, weights, recency, and burst/lull logic.
-6. Build a selective character context packet.
-7. Generate a structured turn from Ollama.
-8. Extract events, advance arc state, apply relationship deltas, persist the result, and optionally emit a thought pulse.
-9. Render the public message to the terminal.
-10. Sleep for a variable delay before the next turn.
+3. Refresh the audience-control file state when its poll interval is due.
+4. Evaluate pacing and continuity health.
+5. Refresh the manager directive when required, blocking only for the first directive and otherwise allowing background refresh.
+6. Select the next speaker based on scene state, weights, recency, and burst/lull logic.
+7. Build a selective character context packet.
+8. Generate a structured turn from Ollama.
+9. Extract events, advance arc state, apply relationship deltas, persist the result, and optionally emit a thought pulse.
+10. Render the public message to the terminal.
+11. Sleep for a variable delay before the next turn.
 
 ## Persistence Strategy
 
@@ -62,6 +63,7 @@ Anti-drift is explicit and layered:
 - Arc pressure and active beats advance from structured event hits, not only from prompt text.
 - The manager is given pacing health and continuity warnings.
 - The manager is also given a story-governance report covering hourly progression, core-tension drift, cliffhanger pressure, and robotic-voice risk.
+- The manager also receives a normalized audience-control report built from `update.txt`, including tone dials, vote requests, and rollout stage.
 - Repetition, romance stalls, mystery stalls, and low-progression windows are scored.
 - Unresolved-question memory is bounded and overflow is pushed into dormant payoff threads.
 - Forbidden-knowledge boundaries are injected into character packets.

@@ -91,6 +91,13 @@ class LoggingConfig(BaseModel):
     file_name: str = "lantern_house.log"
 
 
+class AudienceConfig(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    update_file_path: str = "update.txt"
+    check_interval_minutes: int = 10
+
+
 class AppConfig(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
@@ -103,6 +110,7 @@ class AppConfig(BaseModel):
     recaps: RecapConfig = Field(default_factory=RecapConfig)
     story: StoryConfig = Field(default_factory=StoryConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
+    audience: AudienceConfig = Field(default_factory=AudienceConfig)
 
 
 def load_config(config_path: str | Path | None = None) -> AppConfig:

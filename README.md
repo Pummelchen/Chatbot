@@ -10,6 +10,7 @@ The project targets macOS Apple Silicon with Python 3.12+, MySQL 8.4, and Ollama
 - MySQL schema and Alembic migration
 - A production-minded orchestrator with recovery, pacing checks, recap scheduling, and context retrieval
 - Prompt templates for manager, characters, and recap generation
+- A live-editable `update.txt` control file for subscriber-vote steering
 - A detailed story bible with cast, secrets, hooks, recap examples, and early arc plans
 - Terminal rendering via Rich
 - Tests for key engine behavior
@@ -36,6 +37,18 @@ The runtime now includes a dedicated story-governance layer in addition to pacin
 - It advances persistent story-arc pressure and reveal stages from structured events, so long-form continuity lives in state, not only in transcript momentum.
 
 The seeded `story_engine` defines the permanent north star for the drama, so the manager is not improvising the project’s value proposition from scratch every few turns.
+
+## Live Update Control
+
+The repo root now includes [update.txt](/Users/andreborchert/Library/CloudStorage/Dropbox/Chatbot/update.txt), a YAML-style control file with comments that you can edit during a live run.
+
+- The runtime checks it every 10 minutes.
+- The manager treats it as subscriber-vote steering, not instant retcon authority.
+- Tone dials let you bias the stream live: romance, thriller action, twists, violence, bad language, new characters, new locations, gossip, jealousy, and more.
+- Relationship votes can define paths like enemies, attraction, alliance, estrangement, or long-form outcomes such as a baby arc.
+- Cast, location, conflict, mystery, recap, and freeform vote sections are all supported.
+
+Major requests are phased in gradually over the configured rollout window, which defaults to 24 hours. If viewers vote for something large like "A and B should have a baby," the manager is expected to build the emotional and practical path first instead of jumping straight to the end-state.
 
 ## Seeded Ensemble
 
@@ -94,6 +107,8 @@ lantern-house seed
 lantern-house run
 ```
 
+9. Edit `update.txt` whenever you want to steer the live story. The manager will absorb the changes on its next 10-minute audience-control check.
+
 ## CLI Commands
 
 - `lantern-house migrate`: apply Alembic migrations
@@ -111,6 +126,7 @@ lantern-house run
 - Default recovery protection includes per-turn checkpoint snapshots plus a 60-second heartbeat.
 - Recovery logic resumes from persisted run state after restart and flags unclean shutdowns for the manager.
 - After the first directive, manager refreshes can happen off the hot path so steady-state chat flow does not stop every time the planner updates.
+- The manager also carries a persisted `audience_control` block sourced from `update.txt`, including tone dials, vote requests, rollout stage, and the last successful parse.
 - Degraded mode can keep the simulation alive when a model request fails, but it does so conservatively.
 - Recap prompts are compacted into bounded event digests so 12h and 24h summaries stay stable during true 24/7 operation.
 - Low-quality unresolved-question fragments are filtered before they enter canon memory.

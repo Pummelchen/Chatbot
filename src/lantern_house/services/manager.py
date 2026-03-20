@@ -86,10 +86,16 @@ class StoryManagerService:
         if len(active) < self.runtime_config.active_character_min:
             active = roster[: self.runtime_config.active_character_min]
         governance = context.story_governance
+        audience = context.audience_control
         objective = (
             "Disturb the fragile calm with one practical problem "
             "and one emotionally loaded question."
         )
+        if audience.active and audience.requests:
+            objective = (
+                "Seed the leading audience-voted change in a believable way without "
+                "forcing instant payoff."
+            )
         if not governance.hourly_progression_met:
             objective = (
                 "Force one irreversible shift this hour in trust, evidence, money pressure, "
@@ -104,6 +110,8 @@ class StoryManagerService:
             "Surface a clue linked to the debt or the sealed lantern wing.",
             "Sharpen an old romantic or loyalty fault line without resolving it.",
         ]
+        if audience.active and audience.requests:
+            desired[0] = f"Begin gradual integration of: {audience.requests[0]}"
         if context.payoff_threads:
             desired[0] = (
                 f"Revive this dormant hook in a grounded way: {context.payoff_threads[0]}"
@@ -120,6 +128,8 @@ class StoryManagerService:
                 "End the exchange on an interruption, dangerous question, "
                 "or emotionally loaded threat."
             )
+        if audience.active and audience.tone_dials.get("romance", 0) >= 7:
+            desired[1] = "Push slow-burn attraction, jealousy, or private domestic longing."
         per_character = {
             slug: CharacterGoal(
                 goal=(
@@ -148,7 +158,9 @@ class StoryManagerService:
             per_character=per_character,
             thought_pulse=thought,
             pacing_actions=(
-                context.pacing_health.recommendations + governance.recommendations
+                context.pacing_health.recommendations
+                + governance.recommendations
+                + audience.directives[:2]
             )[:4],
             continuity_watch=context.continuity_warnings[:4],
             unresolved_questions_to_push=context.unresolved_questions[:2],

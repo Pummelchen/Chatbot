@@ -91,6 +91,16 @@ class StoryRepository:
                 metadata.update(extra_metadata)
             run_state.metadata_json = metadata
 
+    def merge_runtime_metadata(self, payload: dict[str, Any], *, now=None) -> dict[str, Any]:
+        now = now or utcnow()
+        with self.session_factory.session_scope() as session:
+            run_state = self._get_run_state_model(session)
+            metadata = dict(run_state.metadata_json)
+            metadata = _deep_merge_dicts(metadata, payload)
+            run_state.metadata_json = metadata
+            run_state.updated_at = now
+            return metadata
+
     def list_missing_recap_hours(self, now=None) -> list:
         now = now or utcnow()
         bucket = floor_to_hour(now)
@@ -1004,4 +1014,14 @@ def _merge_memory_lists(existing: list[str], additions: list[str], *, limit: int
         seen.add(normalized)
     if len(merged) > limit:
         merged = merged[-limit:]
+    return merged
+
+
+def _deep_merge_dicts(left: dict[str, Any], right: dict[str, Any]) -> dict[str, Any]:
+    merged = dict(left)
+    for key, value in right.items():
+        if isinstance(value, dict) and isinstance(merged.get(key), dict):
+            merged[key] = _deep_merge_dicts(merged[key], value)
+            continue
+        merged[key] = value
     return merged

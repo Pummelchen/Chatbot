@@ -19,6 +19,13 @@ lantern-house run
 
 If you are moving from an older story bible to the current globally optimized cast, reseed into a fresh database so the new character-context fields and seed canon are consistent.
 
+## Live Steering
+
+- Edit [update.txt](/Users/andreborchert/Library/CloudStorage/Dropbox/Chatbot/update.txt) to steer the live story from subscriber votes.
+- The runtime checks the file every 10 minutes by default.
+- The manager interprets those changes gradually over the configured rollout window, which defaults to 24 hours.
+- Use the file for tone dials, cast additions/removals, location changes, relationship votes, freeform requests, and "must happen" or "avoid for now" guidance.
+
 ## Operational Behavior
 
 - The runtime keeps a persistent `run_state` row with the last tick, message, recap hour, and degraded-mode markers.
@@ -27,6 +34,7 @@ If you are moving from an older story bible to the current globally optimized ca
 - Recovery checks for missed recap windows and produces them on the next start.
 - Recovery marks an `unclean-shutdown` continuity flag if the prior process died while `run_state.status` was `starting` or `running`.
 - Manager refreshes are interval-based with health-triggered overrides, and after the first directive they can complete in the background instead of blocking every visible turn.
+- Audience-control state from `update.txt` is persisted in `run_state.metadata.audience_control`, so the last good live-vote interpretation survives the next manager step and can survive malformed file edits.
 - The manager also receives a story-governance report that checks hourly progression, core-story drift, cliffhanger pressure, and robotic-voice risk.
 - Arc progression is persisted from structured event hits, and unresolved-question memory is capped so long unattended runs do not inflate prompts.
 - Recap generation uses compact event digests rather than replaying every event in the raw 12h or 24h window.

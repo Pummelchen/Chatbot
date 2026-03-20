@@ -4,6 +4,7 @@ from datetime import timedelta
 
 from lantern_house.config import RuntimeConfig
 from lantern_house.domain.contracts import (
+    AudienceControlReport,
     CharacterContextPacket,
     CharacterTurn,
     EventCandidate,
@@ -207,6 +208,35 @@ def test_manager_normalize_respects_active_character_bounds() -> None:
     )
     assert 2 <= len(normalized.active_character_slugs) <= 3
     assert "amelia" in normalized.active_character_slugs
+
+
+def test_manager_fallback_uses_audience_control_requests() -> None:
+    service = StoryManagerService(
+        llm=None,
+        model_name="gemma3:4b",
+        runtime_config=RuntimeConfig(active_character_min=2, active_character_max=3),
+    )
+    context = ManagerContextPacket(
+        title="Lantern House",
+        scene_objective="Hold the line.",
+        scene_location="Front Desk",
+        emotional_temperature=6,
+        cast_guidance=["amelia / Amelia Vale: Anglo anchor. Family pressure: legacy."],
+        pacing_health=PacingHealthReport(score=70),
+        audience_control=AudienceControlReport(
+            active=True,
+            file_status="active",
+            requests=["Build a believable baby path for Amelia and Rafael."],
+            tone_dials={"romance": 9},
+            directives=["Roll out gradually over 24 hours."],
+        ),
+    )
+    plan = service._fallback(
+        context=context,
+        roster=["amelia", "rafael", "arjun"],
+    )
+    assert "audience-voted change" in plan.objective.lower()
+    assert "baby path" in plan.desired_developments[0].lower()
 
 
 def test_story_governance_detects_hourly_progression_gap_and_voice_risk() -> None:

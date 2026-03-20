@@ -197,6 +197,25 @@ class StoryGovernanceReport(BaseModel):
     recommendations: list[str] = Field(default_factory=list)
 
 
+class AudienceControlReport(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    active: bool = False
+    file_status: str = "missing"
+    change_id: str | None = None
+    source: str | None = None
+    fingerprint: str | None = None
+    priority: int = Field(default=5, ge=1, le=10)
+    activated_at: str | None = None
+    last_checked_at: str | None = None
+    full_integration_hours: int = Field(default=24, ge=1, le=168)
+    rollout_stage: str = "inactive"
+    tone_dials: dict[str, int] = Field(default_factory=dict)
+    requests: list[str] = Field(default_factory=list)
+    directives: list[str] = Field(default_factory=list)
+    parse_error: str | None = None
+
+
 class ContinuityFlagDraft(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
@@ -227,6 +246,7 @@ class ManagerContextPacket(BaseModel):
     continuity_warnings: list[str] = Field(default_factory=list)
     pacing_health: PacingHealthReport
     story_governance: StoryGovernanceReport = Field(default_factory=StoryGovernanceReport)
+    audience_control: AudienceControlReport = Field(default_factory=AudienceControlReport)
 
 
 class CharacterContextPacket(BaseModel):

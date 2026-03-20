@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from lantern_house.db.repository import StoryRepository
 from lantern_house.domain.contracts import (
+    AudienceControlReport,
     CharacterContextPacket,
     ManagerContextPacket,
 )
@@ -21,7 +22,11 @@ class ContextAssembler:
         self.pacing_evaluator = pacing_evaluator
         self.governance_evaluator = governance_evaluator or StoryGovernanceEvaluator()
 
-    def build_manager_packet(self) -> ManagerContextPacket:
+    def build_manager_packet(
+        self,
+        *,
+        audience_control: AudienceControlReport | None = None,
+    ) -> ManagerContextPacket:
         world = self.repository.get_world_state_snapshot()
         scene = self.repository.get_scene_snapshot()
         characters = self.repository.list_characters()
@@ -116,6 +121,7 @@ class ContextAssembler:
             ],
             pacing_health=pacing_health,
             story_governance=story_governance,
+            audience_control=audience_control or AudienceControlReport(),
         )
 
     def build_character_packet(
