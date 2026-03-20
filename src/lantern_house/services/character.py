@@ -1,6 +1,9 @@
+# Lantern House core instruction: stay fail-safe, never leak debug or
+# error text into the live chat, log recovered failures to
+# logs/error.txt with context, and preserve hot-patch compatibility
+# for uninterrupted long-running operation.
 from __future__ import annotations
 
-import logging
 from copy import deepcopy
 from typing import ClassVar
 
@@ -12,9 +15,8 @@ from lantern_house.domain.contracts import (
 )
 from lantern_house.domain.enums import EventType
 from lantern_house.llm.ollama import InvocationStats, OllamaClient
+from lantern_house.runtime.failsafe import log_call_failure
 from lantern_house.utils.resources import render_template
-
-logger = logging.getLogger(__name__)
 
 
 class CharacterService:
@@ -79,7 +81,24 @@ class CharacterService:
                 raise ValueError("character model echoed prompt template placeholders")
             return sanitized, stats, False
         except Exception as exc:
-            logger.warning("character fallback for %s: %s", packet.character_slug, exc)
+            log_call_failure(
+                "character.generate",
+                exc,
+                context={
+                    "character_slug": packet.character_slug,
+                    "model": self.model_name,
+                    "location": packet.current_location,
+                },
+                expected_inputs=[
+                    "A valid character context packet.",
+                    "A JSON character turn matching CharacterTurn.",
+                ],
+                retry_advice=(
+                    "Retry with a valid JSON turn payload or let the continuity-safe character "
+                    "fallback carry the live chat."
+                ),
+                fallback_used="deterministic-character-fallback",
+            )
             return self._fallback(packet, thought_pulse_allowed=thought_pulse_allowed), None, True
 
     def _sanitize(self, turn: CharacterTurn, *, thought_pulse_allowed: bool) -> CharacterTurn:

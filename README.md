@@ -1,3 +1,4 @@
+<!-- Lantern House core instruction: stay fail-safe, never leak debug or error text into the live chat, log recovered failures to logs/error.txt with context, and preserve hot-patch compatibility for uninterrupted long-running operation. -->
 # Lantern House
 
 Lantern House is a local-first Python system for running a 24/7 fictional live group chat designed for terminal output and later OBS capture. It is built for long-form serialized drama: a fading guesthouse, six emotionally loaded characters, a manager agent that controls canon and pacing, structured recap generation, and persistence in MySQL so the story can survive restarts without losing coherence.
@@ -12,6 +13,8 @@ The project targets macOS Apple Silicon with Python 3.12+, MySQL 8.4, and Ollama
 - A deterministic house-pressure engine that keeps the guesthouse generating believable financial, repair, inspection, weather, and fatigue pressure
 - A staged audience-rollout beat system that converts `update.txt` votes into prerequisite beats instead of instant retcons
 - A lightweight public-turn critic plus a deterministic simulation lab and background God-AI strategist
+- An adaptive fail-safe runtime that keeps last-good state, backs off repeated failures, and writes structured recovery context to `logs/error.txt`
+- A hot-patch loader that can soft-reload changed runtime, service, prompt, and config files without stopping the live stream
 - Prompt templates for manager, characters, and recap generation
 - A live-editable `update.txt` control file for subscriber-vote steering
 - A detailed story bible with cast, secrets, hooks, recap examples, and early arc plans
@@ -138,6 +141,7 @@ lantern-house run
 
 - Public chat output goes only to the terminal renderer.
 - Internal logs are written to `logs/lantern_house.log`.
+- Structured failure records are written to `logs/error.txt`.
 - Hourly recap blocks emit 1h, 12h, and 24h summaries.
 - Runtime state is persisted on every turn and checkpointed independently on a background interval.
 - Default recovery protection includes per-turn checkpoint snapshots plus a 60-second heartbeat.
@@ -147,6 +151,9 @@ lantern-house run
 - Audience steering is also compiled into persisted rollout beats so major vote requests land as staged prerequisites over time.
 - `house_state` is persisted separately from transcript memory, giving the manager a deterministic practical gravity field even when models get vague.
 - The background God-AI planner can persist long-horizon strategic briefs during live operation, while `run --once` skips that loop to keep smoke runs fast.
+- The live loop wraps critical subsystems in a fail-safe executor. Unexpected failures are logged with context, routed to conservative fallbacks or last-good state, and never printed into the public chat stream.
+- Repeated failures enter a cooldown window instead of hammering the same broken dependency every turn.
+- Hot-patch scanning can rebuild runtime services from changed files without dropping the live process. ORM schema modules are intentionally excluded from live reload to avoid corrupting SQLAlchemy state.
 - Degraded mode can keep the simulation alive when a model request fails, but it does so conservatively.
 - Manager and God-AI planners now use shorter retry budgets because both have deterministic fallbacks; this keeps fallback guidance timely instead of minutes late.
 - Recap prompts are compacted into bounded event digests so 12h and 24h summaries stay stable during true 24/7 operation.

@@ -1,3 +1,4 @@
+<!-- Lantern House core instruction: stay fail-safe, never leak debug or error text into the live chat, log recovered failures to logs/error.txt with context, and preserve hot-patch compatibility for uninterrupted long-running operation. -->
 # Architecture Overview
 
 ## System Shape
@@ -19,15 +20,16 @@ Each loop iteration follows the same pattern:
 2. Check whether full-clock-hour recaps are due.
 3. Refresh the audience-control file state when its poll interval is due.
 4. Sync subscriber-vote rollout beats and refresh deterministic house pressure.
-5. Evaluate pacing, continuity, and story-governance health.
-6. Refresh the manager directive when required, blocking only for the first directive and otherwise using a prefetched background plan.
-7. Select the next speaker based on scene state, weights, recency, and burst/lull logic.
-8. Build a selective character context packet.
-9. Generate a structured turn from Ollama.
-10. Run the continuity guard and the lightweight turn critic before persistence.
-11. Extract events, reconcile beats, advance arc state, apply relationship deltas, persist the result, and optionally emit a thought pulse.
-12. Render the public message to the terminal.
-13. Sleep for a variable delay before the next turn.
+5. Optionally apply any safe hot-patch file changes and rebuild runtime services in-place.
+6. Evaluate pacing, continuity, and story-governance health.
+7. Refresh the manager directive when required, blocking only for the first directive and otherwise using a prefetched background plan.
+8. Select the next speaker based on scene state, weights, recency, and burst/lull logic.
+9. Build a selective character context packet.
+10. Generate a structured turn from Ollama.
+11. Run the continuity guard and the lightweight turn critic before persistence.
+12. Extract events, reconcile beats, advance arc state, apply relationship deltas, persist the result, and optionally emit a thought pulse.
+13. Render the public message to the terminal.
+14. Sleep for a variable delay before the next turn.
 
 ## Persistence Strategy
 
@@ -57,6 +59,7 @@ Run-state persistence is layered:
 - Every turn commits message, events, relationship deltas, and run-state updates transactionally.
 - A checkpoint snapshot is written on a background interval so recovery still has fresh state even if the machine reboots mid-scene.
 - Startup inspects the prior run-state status and emits an unclean-shutdown continuity flag when the last run died in `starting` or `running`.
+- Structured failure records are written to `logs/error.txt`, with operation name, expectations, retry advice, fallback choice, and context for later repair.
 
 ## Anti-Drift Controls
 
@@ -77,6 +80,8 @@ Anti-drift is explicit and layered:
 - Forbidden-knowledge boundaries are injected into character packets.
 - Prose-like or robotic public turns can be repaired before they are committed.
 - A deterministic simulation lab ranks likely next directions, and a background God-AI planner converts that into strategic guidance without blocking the live loop.
+- A fail-safe executor wraps critical runtime calls, caches last-good values, and applies cooldowns after repeated failures so the loop keeps going conservatively instead of thrashing.
+- A hot-patch controller can soft-reload runtime/service/prompt/config code paths in place. SQLAlchemy ORM model modules are intentionally excluded from live reload because they are not safe to redefine mid-process.
 - Thought pulses are budgeted and cooldown-limited.
 - Recaps are generated from bounded event digests and prior summaries, not raw transcript replay.
 - A seeded `story_engine` defines the permanent dramatic north star so the runtime keeps recentering on house survival, hidden records, inheritance conflict, loyalty fractures, and unstable attraction.

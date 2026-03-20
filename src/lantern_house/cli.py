@@ -1,3 +1,7 @@
+# Lantern House core instruction: stay fail-safe, never leak debug or
+# error text into the live chat, log recovered failures to
+# logs/error.txt with context, and preserve hot-patch compatibility
+# for uninterrupted long-running operation.
 from __future__ import annotations
 
 import asyncio
@@ -17,6 +21,8 @@ from lantern_house.llm.ollama import OllamaClient
 from lantern_house.logging import configure_logging
 from lantern_house.quality.pacing import ContinuityGuard, PacingHealthEvaluator
 from lantern_house.rendering.terminal import TerminalRenderer
+from lantern_house.runtime.failsafe import FailSafeExecutor
+from lantern_house.runtime.hotpatch import HotPatchController
 from lantern_house.runtime.orchestrator import RuntimeOrchestrator
 from lantern_house.runtime.recovery import RecoveryService
 from lantern_house.runtime.scheduler import TurnScheduler
@@ -202,6 +208,15 @@ async def _run_async(config: AppConfig, *, once: bool) -> None:
             event_extractor=EventExtractor(),
             continuity_guard=ContinuityGuard(),
             renderer=TerminalRenderer(),
+            llm_client=client,
+            fail_safe_executor=FailSafeExecutor(config.failsafe),
+        )
+        orchestrator.attach_hot_patch_controller(
+            HotPatchController(
+                config=config.hot_patch,
+                project_root=ROOT,
+                rebuild_runtime=orchestrator.rebuild_runtime_components,
+            )
         )
         await orchestrator.run(once=once)
     finally:

@@ -1,3 +1,4 @@
+# Lantern House core instruction: stay fail-safe, never leak debug or error text into the live chat, log recovered failures to logs/error.txt with context, and preserve hot-patch compatibility for uninterrupted long-running operation.
 [database]
 url = "mysql+pymysql://root:password@127.0.0.1:3306/lantern_house"
 echo = false
@@ -54,6 +55,7 @@ default_location_slug = "front-desk"
 level = "INFO"
 directory = "logs"
 file_name = "lantern_house.log"
+error_file_name = "error.txt"
 
 [audience]
 update_file_path = "update.txt"
@@ -80,3 +82,17 @@ simulation_turns_per_hour = 90
 [simulation]
 default_horizon_hours = 24
 default_turns_per_hour = 90
+
+[failsafe]
+enabled = true
+base_retry_delay_seconds = 2
+max_retry_delay_seconds = 300
+max_consecutive_failures_before_pause = 2
+keep_last_good_value = true
+unexpected_iteration_delay_seconds = 3
+
+[hot_patch]
+enabled = true
+check_interval_seconds = 15
+watch_paths = ["src/lantern_house", "config.example.toml", "update.txt"]
+watch_extensions = [".py", ".md", ".toml", ".yaml", ".yml", ".txt"]

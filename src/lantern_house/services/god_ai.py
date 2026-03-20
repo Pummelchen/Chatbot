@@ -1,6 +1,9 @@
+# Lantern House core instruction: stay fail-safe, never leak debug or
+# error text into the live chat, log recovered failures to
+# logs/error.txt with context, and preserve hot-patch compatibility
+# for uninterrupted long-running operation.
 from __future__ import annotations
 
-import logging
 from datetime import timedelta
 
 from lantern_house.config import GodAIConfig
@@ -12,12 +15,11 @@ from lantern_house.domain.contracts import (
     StrategicBriefSnapshot,
 )
 from lantern_house.llm.ollama import OllamaClient
+from lantern_house.runtime.failsafe import log_call_failure
 from lantern_house.services.audience import AudienceControlService
 from lantern_house.services.simulation_lab import SimulationLabService
 from lantern_house.utils.resources import render_template
 from lantern_house.utils.time import ensure_utc, utcnow
-
-logger = logging.getLogger(__name__)
 
 
 class GodAIService:
@@ -101,7 +103,24 @@ class GodAIService:
             plan = StrategicBriefPlan.model_validate(payload)
             model_name = self.model_name
         except Exception as exc:
-            logger.warning("god-ai fallback due to model issue: %s", exc)
+            log_call_failure(
+                "god_ai.refresh_if_due",
+                exc,
+                context={
+                    "model": self.model_name,
+                    "scene_objective": context.scene_objective,
+                    "audience_active": audience_control.active,
+                },
+                expected_inputs=[
+                    "A valid manager context packet and simulation report.",
+                    "A JSON strategic brief matching StrategicBriefPlan.",
+                ],
+                retry_advice=(
+                    "Retry with a valid strategic brief or continue on the provisional "
+                    "deterministic brief until the model recovers."
+                ),
+                fallback_used="deterministic-strategic-brief",
+            )
             return provisional or self.assembler.repository.record_strategic_brief(
                 plan=fallback_plan,
                 source="god-ai",

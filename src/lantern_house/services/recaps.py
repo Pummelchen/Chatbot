@@ -1,16 +1,18 @@
+# Lantern House core instruction: stay fail-safe, never leak debug or
+# error text into the live chat, log recovered failures to
+# logs/error.txt with context, and preserve hot-patch compatibility
+# for uninterrupted long-running operation.
 from __future__ import annotations
 
-import logging
 import re
 from collections import Counter
 
 from lantern_house.db.repository import StoryRepository
 from lantern_house.domain.contracts import EventView, RecapBundle, RecapWindowSummary
 from lantern_house.llm.ollama import OllamaClient
+from lantern_house.runtime.failsafe import log_call_failure
 from lantern_house.utils.resources import render_template
 from lantern_house.utils.time import isoformat
-
-logger = logging.getLogger(__name__)
 
 
 class RecapService:
@@ -55,8 +57,21 @@ class RecapService:
             )
             bundle = RecapBundle.model_validate(payload)
             if self._mentions_unknown_entities(bundle):
-                logger.warning(
-                    "recap bundle mentioned off-canon entities; using deterministic fallback"
+                log_call_failure(
+                    "recap.generate_bundle",
+                    ValueError("Recap bundle mentioned off-canon entities."),
+                    context={
+                        "model": self.model_name,
+                        "bucket_end_at": isoformat(bucket_end_at),
+                    },
+                    expected_inputs=[
+                        "A recap bundle grounded in current canon entities and stored events."
+                    ],
+                    retry_advice=(
+                        "Retry with a canon-safe recap or let the deterministic recap fallback "
+                        "summarize stored events."
+                    ),
+                    fallback_used="deterministic-recap-fallback",
                 )
                 return RecapBundle(
                     one_hour=self._fallback_window(events_1h, "Last hour"),
@@ -65,7 +80,23 @@ class RecapService:
                 )
             return bundle
         except Exception as exc:
-            logger.warning("recap fallback due to model issue: %s", exc)
+            log_call_failure(
+                "recap.generate_bundle",
+                exc,
+                context={
+                    "model": self.model_name,
+                    "bucket_end_at": isoformat(bucket_end_at),
+                },
+                expected_inputs=[
+                    "A valid recap prompt context built from stored events and summaries.",
+                    "A JSON recap bundle matching RecapBundle.",
+                ],
+                retry_advice=(
+                    "Retry with a valid recap payload or let the deterministic recap fallback "
+                    "summarize the current windows."
+                ),
+                fallback_used="deterministic-recap-fallback",
+            )
             return RecapBundle(
                 one_hour=self._fallback_window(events_1h, "Last hour"),
                 twelve_hours=self._fallback_window(events_12h, "Last 12 hours"),

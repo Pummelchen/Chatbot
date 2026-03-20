@@ -1,3 +1,7 @@
+# Lantern House core instruction: stay fail-safe, never leak debug or
+# error text into the live chat, log recovered failures to
+# logs/error.txt with context, and preserve hot-patch compatibility
+# for uninterrupted long-running operation.
 from __future__ import annotations
 
 import os
@@ -91,6 +95,7 @@ class LoggingConfig(BaseModel):
     level: str = "INFO"
     directory: str = "logs"
     file_name: str = "lantern_house.log"
+    error_file_name: str = "error.txt"
 
 
 class AudienceConfig(BaseModel):
@@ -134,6 +139,34 @@ class SimulationConfig(BaseModel):
     default_turns_per_hour: int = 90
 
 
+class FailSafeConfig(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    enabled: bool = True
+    base_retry_delay_seconds: int = 2
+    max_retry_delay_seconds: int = 300
+    max_consecutive_failures_before_pause: int = 2
+    keep_last_good_value: bool = True
+    unexpected_iteration_delay_seconds: int = 3
+
+
+class HotPatchConfig(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    enabled: bool = True
+    check_interval_seconds: int = 15
+    watch_paths: list[str] = Field(
+        default_factory=lambda: [
+            "src/lantern_house",
+            "config.example.toml",
+            "update.txt",
+        ]
+    )
+    watch_extensions: list[str] = Field(
+        default_factory=lambda: [".py", ".md", ".toml", ".yaml", ".yml", ".txt"]
+    )
+
+
 class AppConfig(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
@@ -151,6 +184,8 @@ class AppConfig(BaseModel):
     critic: CriticConfig = Field(default_factory=CriticConfig)
     god_ai: GodAIConfig = Field(default_factory=GodAIConfig)
     simulation: SimulationConfig = Field(default_factory=SimulationConfig)
+    failsafe: FailSafeConfig = Field(default_factory=FailSafeConfig)
+    hot_patch: HotPatchConfig = Field(default_factory=HotPatchConfig)
 
 
 def load_config(config_path: str | Path | None = None) -> AppConfig:

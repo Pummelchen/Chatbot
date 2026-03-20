@@ -1,6 +1,8 @@
+# Lantern House core instruction: stay fail-safe, never leak debug or
+# error text into the live chat, log recovered failures to
+# logs/error.txt with context, and preserve hot-patch compatibility
+# for uninterrupted long-running operation.
 from __future__ import annotations
-
-import logging
 
 from lantern_house.config import RuntimeConfig
 from lantern_house.domain.contracts import (
@@ -10,9 +12,8 @@ from lantern_house.domain.contracts import (
     ThoughtPulseAuthorization,
 )
 from lantern_house.llm.ollama import OllamaClient
+from lantern_house.runtime.failsafe import log_call_failure
 from lantern_house.utils.resources import render_template
-
-logger = logging.getLogger(__name__)
 
 
 class StoryManagerService:
@@ -37,9 +38,34 @@ class StoryManagerService:
             )
             plan = ManagerDirectivePlan.model_validate(payload)
         except Exception as exc:
-            logger.warning("manager fallback due to model issue: %s", exc)
+            log_call_failure(
+                "manager.plan",
+                exc,
+                context={
+                    "model": self.model_name,
+                    "scene_objective": context.scene_objective,
+                    "scene_location": context.scene_location,
+                    "roster": roster,
+                },
+                expected_inputs=[
+                    "A valid manager context packet.",
+                    "A JSON manager plan matching ManagerDirectivePlan.",
+                ],
+                retry_advice=(
+                    "Retry with a valid JSON planning response or allow the manager fallback "
+                    "to steer the next live turn."
+                ),
+                fallback_used="deterministic-manager-fallback",
+            )
             plan = self._fallback(context, roster)
         return self._normalize(plan, roster)
+
+    def fallback_plan(
+        self,
+        context: ManagerContextPacket,
+        roster: list[str],
+    ) -> ManagerDirectivePlan:
+        return self._normalize(self._fallback(context, roster), roster)
 
     def _normalize(self, plan: ManagerDirectivePlan, roster: list[str]) -> ManagerDirectivePlan:
         active = [slug for slug in plan.active_character_slugs if slug in roster]

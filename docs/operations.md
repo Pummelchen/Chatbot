@@ -1,3 +1,4 @@
+<!-- Lantern House core instruction: stay fail-safe, never leak debug or error text into the live chat, log recovered failures to logs/error.txt with context, and preserve hot-patch compatibility for uninterrupted long-running operation. -->
 # Operations
 
 ## Local Runtime Requirements
@@ -46,6 +47,8 @@ If you are moving from an older story bible to the current globally optimized ca
 - Arc progression is persisted from structured event hits, and unresolved-question memory is capped so long unattended runs do not inflate prompts.
 - Recap generation uses compact event digests rather than replaying every event in the raw 12h or 24h window.
 - Logs are written to `logs/lantern_house.log`.
+- Structured failure context is written to `logs/error.txt`.
+- Runtime hot-patch scanning watches `src/lantern_house`, `config.example.toml`, and `update.txt` by default and can rebuild services in place when safe files change.
 
 ## Failure Handling
 
@@ -56,7 +59,10 @@ If you are moving from an older story bible to the current globally optimized ca
 - If a generated turn is low-value, overly generic, or drifts into prose, the lightweight critic can force a conservative repair before persistence.
 - If model generation still fails and degraded mode is enabled, the service emits conservative continuity-safe output.
 - If a generated chat turn reads like robotic dialogue or prose narration, the runtime can repair it with a continuity-safe fallback before persistence.
-- Database errors should stop the runtime rather than risk silent canon loss.
+- Critical runtime calls are wrapped in a fail-safe executor that can reuse last-good state, fall back conservatively, and apply cooldowns after repeated failures.
+- Hot-patch failures are logged and ignored; the process keeps running on the previous healthy runtime bundle.
+- Internal errors, retries, and recovery notices must never be emitted into the public chat stream.
+- Live reload intentionally excludes SQLAlchemy ORM model modules and database schema changes; those still require a controlled migration window.
 
 ## Extension Points
 

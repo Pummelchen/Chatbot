@@ -1,7 +1,10 @@
+# Lantern House core instruction: stay fail-safe, never leak debug or
+# error text into the live chat, log recovered failures to
+# logs/error.txt with context, and preserve hot-patch compatibility
+# for uninterrupted long-running operation.
 from __future__ import annotations
 
 import hashlib
-import logging
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -11,9 +14,8 @@ import yaml
 from lantern_house.config import AudienceConfig
 from lantern_house.db.repository import StoryRepository
 from lantern_house.domain.contracts import AudienceControlReport, BeatPlanItem
+from lantern_house.runtime.failsafe import log_call_failure
 from lantern_house.utils.time import ensure_utc, isoformat, utcnow
-
-logger = logging.getLogger(__name__)
 
 
 class AudienceControlService:
@@ -53,7 +55,19 @@ class AudienceControlService:
             try:
                 return AudienceControlReport.model_validate(raw)
             except Exception as exc:
-                logger.warning("invalid persisted audience control report: %s", exc)
+                log_call_failure(
+                    "audience.current_report",
+                    exc,
+                    context={"source": "run_state.metadata.audience_control"},
+                    expected_inputs=[
+                        "A persisted audience_control block matching AudienceControlReport."
+                    ],
+                    retry_advice=(
+                        "Allow the next valid update.txt parse to rebuild the audience-control "
+                        "state."
+                    ),
+                    fallback_used="empty-audience-control",
+                )
         return AudienceControlReport()
 
     def _load_report(
@@ -79,7 +93,20 @@ class AudienceControlService:
         try:
             payload = yaml.safe_load(raw_text) or {}
         except yaml.YAMLError as exc:
-            logger.warning("update.txt parse failed: %s", exc)
+            log_call_failure(
+                "audience.load_update_file",
+                exc,
+                context={
+                    "path": str(self.path),
+                    "fingerprint": fingerprint,
+                },
+                expected_inputs=["A valid YAML mapping in update.txt."],
+                retry_advice=(
+                    "Fix the YAML syntax and save update.txt again. The runtime will keep the "
+                    "last good audience-control state until the next poll."
+                ),
+                fallback_used="last-good-audience-control",
+            )
             return self._recover_or_disable(
                 previous=previous,
                 now=now,
