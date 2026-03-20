@@ -87,4 +87,3 @@ lantern-house run
 
 - [Architecture](docs/architecture.md)
 - [Operations](docs/operations.md)
-
