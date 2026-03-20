@@ -29,7 +29,10 @@ class StoryManagerService:
         )
         try:
             payload, _stats = await self.llm.generate_json(
-                model=self.model_name, prompt=prompt, temperature=0.7
+                model=self.model_name,
+                prompt=prompt,
+                temperature=0.7,
+                max_output_tokens=480,
             )
             plan = ManagerDirectivePlan.model_validate(payload)
         except Exception as exc:

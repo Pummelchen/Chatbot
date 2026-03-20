@@ -76,6 +76,7 @@ class OllamaClient:
         prompt: str,
         system: str | None = None,
         temperature: float = 0.8,
+        max_output_tokens: int | None = None,
     ) -> tuple[dict, InvocationStats]:
         last_error: Exception | None = None
         for attempt in range(1, self.config.max_retries + 1):
@@ -92,6 +93,11 @@ class OllamaClient:
                         "keep_alive": self.config.keep_alive,
                         "options": {
                             "temperature": temperature,
+                            **(
+                                {"num_predict": max_output_tokens}
+                                if max_output_tokens is not None
+                                else {}
+                            ),
                         },
                     },
                 )

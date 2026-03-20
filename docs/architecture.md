@@ -18,7 +18,7 @@ Each loop iteration follows the same pattern:
 1. Recover or refresh run-state data.
 2. Check whether full-clock-hour recaps are due.
 3. Evaluate pacing and continuity health.
-4. Refresh the manager directive when required.
+4. Refresh the manager directive when required, blocking only for the first directive and otherwise allowing background refresh.
 5. Select the next speaker based on scene state, weights, recency, and burst/lull logic.
 6. Build a selective character context packet.
 7. Generate a structured turn from Ollama.

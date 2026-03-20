@@ -25,11 +25,11 @@ class ContextAssembler:
         world = self.repository.get_world_state_snapshot()
         scene = self.repository.get_scene_snapshot()
         characters = self.repository.list_characters()
-        messages = self.repository.list_recent_messages(limit=24)
-        events = self.repository.list_recent_events(hours=24, limit=18, minimum_significance=4)
-        summaries = self.repository.list_recent_summaries(limit=6)
-        arcs = self.repository.list_open_arcs(limit=6)
-        continuity_flags = self.repository.list_open_continuity_flags(limit=8)
+        messages = self.repository.list_recent_messages(limit=8)
+        events = self.repository.list_recent_events(hours=24, limit=6, minimum_significance=4)
+        summaries = self.repository.list_recent_summaries(limit=2)
+        arcs = self.repository.list_open_arcs(limit=4)
+        continuity_flags = self.repository.list_open_continuity_flags(limit=4)
 
         pacing_health = self.pacing_evaluator.evaluate(messages=messages, events=events)
         story_engine = world["metadata"].get("story_engine", {})
@@ -56,36 +56,62 @@ class ContextAssembler:
             viewer_value_targets=story_engine.get("viewer_value_targets", []),
             voice_guardrails=story_engine.get("voice_guardrails", []),
             cast_guidance=[
-                (
-                    f"{item['slug']} / {item['full_name']}: {item['cultural_background']}. "
-                    f"Family pressure: {item['family_expectations']} "
-                    f"Conflict style: {item['conflict_style']} "
-                    f"Privacy: {item['privacy_boundaries']} "
-                    f"Values: {item['value_instincts']}"
+                _compact_text(
+                    (
+                        f"{item['slug']} / {item['full_name']}: {item['cultural_background']}. "
+                        f"Family pressure: {item['family_expectations']} "
+                        f"Conflict style: {item['conflict_style']} "
+                        f"Values: {item['value_instincts']}"
+                    ),
+                    limit=150,
                 )
                 for item in characters
             ],
             current_arc_summaries=[
-                (
-                    f"{arc.title} (stage {arc.stage_index}, "
-                    f"pressure {arc.pressure_score}): {arc.summary} "
-                    f"Current beat: {arc.metadata.get('active_beat') or _current_arc_beat(arc)}"
+                _compact_text(
+                    (
+                        f"{arc.title} (stage {arc.stage_index}, "
+                        f"pressure {arc.pressure_score}): {arc.summary} "
+                        f"Current beat: {arc.metadata.get('active_beat') or _current_arc_beat(arc)}"
+                    ),
+                    limit=220,
                 )
                 for arc in arcs
             ],
             unresolved_questions=world["unresolved_questions"],
-            payoff_threads=world["archived_threads"][:8],
-            relationship_map=self.repository.get_relationship_map()[:12],
+            payoff_threads=[
+                _compact_text(item, limit=120) for item in world["archived_threads"][:4]
+            ],
+            relationship_map=[
+                _compact_text(item, limit=140)
+                for item in self.repository.get_relationship_map()[:4]
+            ],
             recent_summaries=[
-                f"{summary.summary_window} @ {isoformat(summary.bucket_end_at)}: {summary.content}"
+                _compact_text(
+                    (
+                        f"{summary.summary_window} @ {isoformat(summary.bucket_end_at)}: "
+                        f"{summary.content}"
+                    ),
+                    limit=220,
+                )
                 for summary in summaries
             ],
             recent_events=[
-                f"{event.event_type.upper()}: {event.title} - {event.details}" for event in events
+                _compact_text(
+                    f"{event.event_type.upper()}: {event.title} - {event.details}",
+                    limit=140,
+                )
+                for event in events
             ],
-            recent_messages=[f"{message.speaker_label}: {message.content}" for message in messages],
+            recent_messages=[
+                _compact_text(f"{message.speaker_label}: {message.content}", limit=120)
+                for message in messages
+            ],
             continuity_warnings=[
-                f"{flag['severity'].upper()} {flag['flag_type']}: {flag['description']}"
+                _compact_text(
+                    f"{flag['severity'].upper()} {flag['flag_type']}: {flag['description']}",
+                    limit=180,
+                )
                 for flag in continuity_flags
             ],
             pacing_health=pacing_health,
@@ -97,16 +123,16 @@ class ContextAssembler:
     ) -> CharacterContextPacket:
         overview = self.repository.get_character_overview(character_slug)
         scene = self.repository.get_scene_snapshot()
-        recent_messages = self.repository.list_recent_messages(limit=12)
+        recent_messages = self.repository.list_recent_messages(limit=5)
         recent_events = self.repository.list_recent_events(
-            hours=6, limit=10, minimum_significance=3
+            hours=6, limit=5, minimum_significance=3
         )
-        relationships = self.repository.list_relationship_snapshots(character_slug)
+        relationships = self.repository.list_relationship_snapshots(character_slug)[:3]
         relevant_facts = self.repository.get_relevant_facts(
-            location_id=scene["location_id"], limit=6
+            location_id=scene["location_id"], limit=3
         )
         boundaries = self.repository.get_forbidden_boundaries(
-            character_slug=character_slug, limit=6
+            character_slug=character_slug, limit=3
         )
         story_engine = self.repository.get_world_state_snapshot()["metadata"].get(
             "story_engine", {}
@@ -141,23 +167,30 @@ class ContextAssembler:
             emotional_state=overview["emotional_state"],
             current_goals=overview["current_goals"],
             relationship_snapshots=[
-                (
-                    f"{item.counterpart_slug}: trust {item.trust_score}, "
-                    f"desire {item.desire_score}, suspicion {item.suspicion_score}, "
-                    f"obligation {item.obligation_score}. {item.summary}"
+                _compact_text(
+                    (
+                        f"{item.counterpart_slug}: trust {item.trust_score}, "
+                        f"desire {item.desire_score}, suspicion {item.suspicion_score}, "
+                        f"obligation {item.obligation_score}. {item.summary}"
+                    ),
+                    limit=140,
                 )
                 for item in relationships
             ],
             recent_messages=[
-                f"{message.speaker_label}: {message.content}" for message in recent_messages
+                _compact_text(f"{message.speaker_label}: {message.content}", limit=110)
+                for message in recent_messages
             ],
-            relevant_facts=relevant_facts,
+            relevant_facts=[_compact_text(fact, limit=100) for fact in relevant_facts],
             recent_events=[
-                f"{event.event_type.upper()}: {event.title} - {event.details}"
+                _compact_text(
+                    f"{event.event_type.upper()}: {event.title} - {event.details}",
+                    limit=130,
+                )
                 for event in recent_events
             ],
-            manager_directive=directive_text,
-            forbidden_boundaries=boundaries,
+            manager_directive=_compact_text(directive_text, limit=220),
+            forbidden_boundaries=[_compact_text(item, limit=100) for item in boundaries],
         )
 
 
@@ -166,3 +199,10 @@ def _current_arc_beat(arc) -> str:
         return "Hold pressure without solving it."
     index = min(arc.stage_index, len(arc.reveal_ladder) - 1)
     return arc.reveal_ladder[index]
+
+
+def _compact_text(value: str, *, limit: int) -> str:
+    text = " ".join(str(value).split())
+    if len(text) <= limit:
+        return text
+    return text[: limit - 3].rstrip() + "..."

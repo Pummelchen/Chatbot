@@ -32,6 +32,11 @@ class CharacterService:
         "did",
     )
     _EMPTY_MARKERS: ClassVar[set[str]] = {"none", "n/a", "na", "nothing", "unknown"}
+    _TEMPLATE_MESSAGE_MARKERS: ClassVar[set[str]] = {
+        "the visible message",
+        "visible message",
+        "the public message",
+    }
 
     def __init__(self, llm: OllamaClient, model_name: str) -> None:
         self.llm = llm
@@ -53,11 +58,15 @@ class CharacterService:
         )
         try:
             payload, stats = await self.llm.generate_json(
-                model=self.model_name, prompt=prompt, temperature=0.9
+                model=self.model_name,
+                prompt=prompt,
+                temperature=0.9,
             )
             payload = self._coerce_payload(payload)
             turn = CharacterTurn.model_validate(payload)
             sanitized = self._sanitize(turn, thought_pulse_allowed=thought_pulse_allowed)
+            if self._looks_like_template_leak(sanitized):
+                raise ValueError("character model echoed prompt template placeholders")
             return sanitized, stats, False
         except Exception as exc:
             logger.warning("character fallback for %s: %s", packet.character_slug, exc)
@@ -273,3 +282,19 @@ class CharacterService:
             if len(cleaned) >= 2:
                 break
         return cleaned
+
+    def _looks_like_template_leak(self, turn: CharacterTurn) -> bool:
+        message = " ".join(turn.public_message.lower().split()).strip("\"'")
+        if message in self._TEMPLATE_MESSAGE_MARKERS:
+            return True
+        if any(
+            candidate.title.lower() == "short event title"
+            for candidate in turn.event_candidates
+        ):
+            return True
+        if any(
+            update.summary.lower() == "why the relationship shifted"
+            for update in turn.relationship_updates
+        ):
+            return True
+        return False

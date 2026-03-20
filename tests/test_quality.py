@@ -177,6 +177,12 @@ def test_character_service_filters_fragment_questions() -> None:
     assert sanitized.answered_questions == ["How much of the debt is real?"]
 
 
+def test_character_service_detects_template_leak() -> None:
+    service = CharacterService.__new__(CharacterService)
+    turn = CharacterTurn(public_message="the visible message")
+    assert service._looks_like_template_leak(turn) is True
+
+
 def test_manager_normalize_respects_active_character_bounds() -> None:
     service = StoryManagerService(
         llm=None,

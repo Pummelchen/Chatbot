@@ -61,6 +61,7 @@ class RuntimeOrchestrator:
         self.renderer.register_characters(self.repository.get_character_color_map())
         self._install_signal_handlers()
         checkpoint_task: asyncio.Task[None] | None = None
+        pending_manager_task: asyncio.Task | None = None
 
         try:
             recovery = self.recovery_service.recover()
@@ -79,27 +80,55 @@ class RuntimeOrchestrator:
                     for bucket in self.repository.list_missing_recap_hours(now=now):
                         await self._emit_recap(bucket)
 
+                directive = self.repository.get_latest_manager_directive()
+                if pending_manager_task is not None and pending_manager_task.done():
+                    try:
+                        directive_plan = pending_manager_task.result()
+                    except Exception as exc:
+                        logger.warning("background manager refresh failed: %s", exc)
+                    else:
+                        run_state = self.repository.get_run_state()
+                        directive = self.repository.record_manager_directive(
+                            directive_plan,
+                            tick_no=run_state["last_tick_no"] + 1,
+                            now=now,
+                        )
+                    pending_manager_task = None
+
                 manager_packet = self.assembler.build_manager_packet()
                 run_state = self.repository.get_run_state()
-                directive = self.repository.get_latest_manager_directive()
                 if self.scheduler.should_refresh_manager(
                     run_state=run_state,
                     directive=directive,
                     health=manager_packet.pacing_health,
                     governance=manager_packet.story_governance,
                 ):
-                    self.repository.set_runtime_status(
-                        "running",
-                        phase="manager-request",
-                        extra_metadata={"manager_requested_at": now.isoformat()},
-                        now=now,
-                    )
-                    directive_plan = await self.manager_service.plan(manager_packet, roster)
-                    directive = self.repository.record_manager_directive(
-                        directive_plan,
-                        tick_no=run_state["last_tick_no"] + 1,
-                        now=now,
-                    )
+                    if directive is None:
+                        self.repository.set_runtime_status(
+                            "running",
+                            phase="manager-request",
+                            extra_metadata={"manager_requested_at": now.isoformat()},
+                            now=now,
+                        )
+                        directive_plan = await self.manager_service.plan(manager_packet, roster)
+                        directive = self.repository.record_manager_directive(
+                            directive_plan,
+                            tick_no=run_state["last_tick_no"] + 1,
+                            now=now,
+                        )
+                    elif pending_manager_task is None:
+                        self.repository.set_runtime_status(
+                            "running",
+                            phase="manager-request",
+                            extra_metadata={"manager_requested_at": now.isoformat()},
+                            now=now,
+                        )
+                        pending_manager_task = asyncio.create_task(
+                            self.manager_service.plan(manager_packet, roster)
+                        )
+
+                if directive is None:
+                    raise RuntimeError("Manager directive unavailable after refresh attempt.")
 
                 character_states = self.repository.list_character_states()
                 speaker_slug = self.scheduler.select_speaker(
@@ -188,6 +217,10 @@ class RuntimeOrchestrator:
                 )
                 await asyncio.sleep(delay)
         finally:
+            if pending_manager_task is not None:
+                pending_manager_task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await pending_manager_task
             if checkpoint_task is not None:
                 checkpoint_task.cancel()
                 with contextlib.suppress(asyncio.CancelledError):

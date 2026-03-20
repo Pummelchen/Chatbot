@@ -110,6 +110,7 @@ lantern-house run
 - Runtime state is persisted on every turn and checkpointed independently on a background interval.
 - Default recovery protection includes per-turn checkpoint snapshots plus a 60-second heartbeat.
 - Recovery logic resumes from persisted run state after restart and flags unclean shutdowns for the manager.
+- After the first directive, manager refreshes can happen off the hot path so steady-state chat flow does not stop every time the planner updates.
 - Degraded mode can keep the simulation alive when a model request fails, but it does so conservatively.
 - Recap prompts are compacted into bounded event digests so 12h and 24h summaries stay stable during true 24/7 operation.
 - Low-quality unresolved-question fragments are filtered before they enter canon memory.

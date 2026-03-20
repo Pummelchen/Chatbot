@@ -48,7 +48,10 @@ class RecapService:
 
         try:
             payload, _stats = await self.llm.generate_json(
-                model=self.model_name, prompt=prompt, temperature=0.5
+                model=self.model_name,
+                prompt=prompt,
+                temperature=0.5,
+                max_output_tokens=520,
             )
             bundle = RecapBundle.model_validate(payload)
             if self._mentions_unknown_entities(bundle):
