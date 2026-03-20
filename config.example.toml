@@ -44,7 +44,7 @@ enabled = true
 windows = ["1h", "12h", "24h"]
 
 [story]
-title = "Saltglass House"
+title = "Lantern House"
 seed_file = "story_bible.yaml"
 default_location_slug = "front-desk"
 

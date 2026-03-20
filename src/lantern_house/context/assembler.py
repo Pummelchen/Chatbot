@@ -19,6 +19,7 @@ class ContextAssembler:
     def build_manager_packet(self) -> ManagerContextPacket:
         world = self.repository.get_world_state_snapshot()
         scene = self.repository.get_scene_snapshot()
+        characters = self.repository.list_characters()
         messages = self.repository.list_recent_messages(limit=24)
         events = self.repository.list_recent_events(hours=24, limit=18, minimum_significance=4)
         summaries = self.repository.list_recent_summaries(limit=6)
@@ -32,6 +33,16 @@ class ContextAssembler:
             scene_objective=scene["objective"],
             scene_location=scene["location_name"],
             emotional_temperature=scene["emotional_temperature"],
+            cast_guidance=[
+                (
+                    f"{item['slug']} / {item['full_name']}: {item['cultural_background']}. "
+                    f"Family pressure: {item['family_expectations']} "
+                    f"Conflict style: {item['conflict_style']} "
+                    f"Privacy: {item['privacy_boundaries']} "
+                    f"Values: {item['value_instincts']}"
+                )
+                for item in characters
+            ],
             current_arc_summaries=[
                 (
                     f"{arc.title} (stage {arc.stage_index}, "
@@ -85,10 +96,16 @@ class ContextAssembler:
         return CharacterContextPacket(
             character_slug=overview["slug"],
             full_name=overview["full_name"],
+            cultural_background=overview["cultural_background"],
             public_persona=overview["public_persona"],
             hidden_wound=overview["hidden_wound"],
             long_term_desire=overview["long_term_desire"],
             private_fear=overview["private_fear"],
+            family_expectations=overview["family_expectations"],
+            conflict_style=overview["conflict_style"],
+            privacy_boundaries=overview["privacy_boundaries"],
+            value_instincts=overview["value_instincts"],
+            emotional_expression=overview["emotional_expression"],
             message_style=overview["message_style"],
             ensemble_role=overview["ensemble_role"],
             current_location=overview["location_name"],

@@ -37,12 +37,18 @@ def test_pacing_health_detects_repetition_and_stall() -> None:
 
 def test_continuity_guard_flags_reveal_budget_and_long_message() -> None:
     packet = CharacterContextPacket(
-        character_slug="mara",
-        full_name="Mara Dela Cruz",
+        character_slug="amelia",
+        full_name="Amelia Vale",
+        cultural_background="Anglo (US/UK family line)",
         public_persona="manager",
         hidden_wound="wound",
         long_term_desire="desire",
         private_fear="fear",
+        family_expectations="Protect the family name and contain scandal.",
+        conflict_style="Calm until forced into blunt clarity.",
+        privacy_boundaries="Avoids public vulnerability.",
+        value_instincts="Duty first, loyalty through action.",
+        emotional_expression="Care through competence and restraint.",
         message_style="Clipped and dry",
         ensemble_role="House Manager",
         current_location="Front Desk",
@@ -108,7 +114,7 @@ def test_character_service_fills_missing_relationship_summary() -> None:
         "public_message": "You know why I'm angry.",
         "relationship_updates": [
             {
-                "character_slug": "mara",
+                "character_slug": "amelia",
                 "trust_delta": "-2",
                 "suspicion_delta": 4,
             }
@@ -116,7 +122,7 @@ def test_character_service_fills_missing_relationship_summary() -> None:
     }
     coerced = service._coerce_payload(payload)
     update = coerced["relationship_updates"][0]
-    assert update["summary"] == "Tension shifted around mara."
+    assert update["summary"] == "Tension shifted around amelia."
     assert update["trust_delta"] == -2
     assert update["suspicion_delta"] == 3
 
@@ -128,19 +134,20 @@ def test_manager_normalize_respects_active_character_bounds() -> None:
         runtime_config=RuntimeConfig(active_character_min=2, active_character_max=3),
     )
     context = ManagerContextPacket(
-        title="Saltglass House",
+        title="Lantern House",
         scene_objective="Hold the line.",
         scene_location="Front Desk",
         emotional_temperature=6,
+        cast_guidance=["amelia / Amelia Vale: Anglo anchor. Family pressure: legacy."],
         pacing_health=PacingHealthReport(score=50),
     )
     plan = service._fallback(
         context=context,
-        roster=["mara", "elias", "soren", "nia"],
+        roster=["amelia", "rafael", "arjun", "ayu"],
     )
     normalized = service._normalize(
-        plan.model_copy(update={"active_character_slugs": ["mara"]}),
-        ["mara", "elias", "soren", "nia"],
+        plan.model_copy(update={"active_character_slugs": ["amelia"]}),
+        ["amelia", "rafael", "arjun", "ayu"],
     )
     assert 2 <= len(normalized.active_character_slugs) <= 3
-    assert "mara" in normalized.active_character_slugs
+    assert "amelia" in normalized.active_character_slugs

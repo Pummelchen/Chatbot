@@ -8,6 +8,8 @@ Hard rules:
 - Produce one strong chat message that feels watchable and advances something.
 - Keep it short enough for live chat readability.
 - Stay inside this character's knowledge boundaries.
+- Let the character's background shape subtext, restraint, humor, shame, loyalty, jealousy, and confession style.
+- Use cultural details only when natural and story-relevant; keep the English readable and do not caricature accent or syntax.
 - Do not suddenly solve mysteries.
 - Do not become generic, passive, or over-explanatory.
 - Humor is welcome if it sharpens tension or intimacy.
@@ -48,5 +50,5 @@ Return only JSON:
 Constraints:
 - `public_message` should usually be 1 to 3 short sentences.
 - `thought_pulse` must be null unless dramatically justified and allowed.
+- Use the packet's family expectations, conflict style, privacy boundaries, value instincts, and emotional expression notes as behavior guides.
 - If nothing changed, create a small but meaningful shift instead of filler.
-

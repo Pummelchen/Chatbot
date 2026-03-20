@@ -20,7 +20,7 @@ class StorySeedLoader:
         with self.session_factory.session_scope() as session:
             existing = session.scalar(select(models.Character).limit(1))
             if existing is not None and not force:
-                self._validate_existing_seed(session)
+                self._validate_existing_seed(session, payload)
                 return
             if existing is not None and force:
                 raise RuntimeError(
@@ -44,10 +44,16 @@ class StorySeedLoader:
                 row = models.Character(
                     slug=item["slug"],
                     full_name=item["full_name"],
+                    cultural_background=item["background"],
                     public_persona=item["public_persona"],
                     hidden_wound=item["hidden_wound"],
                     long_term_desire=item["long_term_desire"],
                     private_fear=item["private_fear"],
+                    family_expectations=item["family_expectations"],
+                    conflict_style=item["conflict_style"],
+                    privacy_boundaries=item["privacy_boundaries"],
+                    value_instincts=item["value_instincts"],
+                    emotional_expression=item["emotional_expression"],
                     message_style=item["message_style"],
                     ensemble_role=item["ensemble_role"],
                     secrets_summary=item["secrets_summary"],
@@ -158,6 +164,7 @@ class StorySeedLoader:
                         "first_week_arc_plan": payload["first_week_arc_plan"],
                         "first_24h_drama_plan": payload["first_24h_drama_plan"],
                         "future_plot_hooks": payload["future_plot_hooks"],
+                        "future_recurring_character": payload.get("future_recurring_character"),
                         "recap_examples": payload["recap_examples"],
                     },
                 )
@@ -173,7 +180,9 @@ class StorySeedLoader:
                     romance_pressure=scene["romance_pressure"],
                     comedic_pressure=scene["comedic_pressure"],
                     location_id=location_map[scene["location_slug"]].id,
-                    active_character_slugs=["mara", "elias", "nia"],
+                    active_character_slugs=scene.get(
+                        "active_character_slugs", ["amelia", "rafael", "ayu"]
+                    ),
                     current_hour_bucket=hour_bucket,
                 )
             )
@@ -206,7 +215,7 @@ class StorySeedLoader:
                 metadata["runtime_phase"] = "seeded"
                 run_state.metadata_json = metadata
 
-    def _validate_existing_seed(self, session) -> None:
+    def _validate_existing_seed(self, session, payload: dict) -> None:
         required_models = {
             "world_state": models.WorldState,
             "scene_state": models.SceneState,
@@ -222,4 +231,14 @@ class StorySeedLoader:
             raise RuntimeError(
                 f"Existing character seed is incomplete; missing required state tables: {joined}. "
                 "Reset the database or repair the seed before continuing."
+            )
+        run_state = session.scalar(
+            select(models.RunState).where(models.RunState.runtime_key == "primary")
+        )
+        metadata = dict(run_state.metadata_json) if run_state is not None else {}
+        existing_title = metadata.get("seed_title")
+        if existing_title and existing_title != payload["title"]:
+            raise RuntimeError(
+                "Existing database is seeded with a different story bible title. "
+                "Reset the database and reseed to load the current ensemble and canon."
             )

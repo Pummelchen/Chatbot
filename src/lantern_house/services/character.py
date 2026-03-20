@@ -70,34 +70,35 @@ class CharacterService:
     ) -> CharacterTurn:
         directive_lead = packet.manager_directive.split(".")[0].lower()
         message = f"I can keep pretending this is normal, but {directive_lead} isn't going away."
-        if packet.character_slug == "nia":
+        role = packet.ensemble_role.lower()
+        if "young worker" in role or "reception" in role or "helper" in role:
             message = (
                 "If everyone is going to lie in shifts, "
                 "at least let me schedule the lies "
                 "so the lobby stays charming."
             )
-        elif packet.character_slug == "elias":
+        elif "handyman" in role or "fixer" in role:
             message = (
                 "If we're opening old doors tonight, "
                 "pick one and stop hovering like "
                 "the house owes you courage."
             )
-        elif packet.character_slug == "mara":
+        elif "manager" in role:
             message = (
                 "No one is tearing this place open on adrenaline. "
                 "Say what you actually want, then we decide."
             )
-        elif packet.character_slug == "sora":
+        elif "observer" in role or "guest" in role:
             message = (
                 "Interesting how every answer in this house arrives wearing a different disguise."
             )
-        elif packet.character_slug == "julian":
+        elif "heir" in role or "claimant" in role or "relative" in role:
             message = (
                 "I would love to be treated like the problem "
                 "after someone shows me a document "
                 "that isn't already lying."
             )
-        elif packet.character_slug == "luca":
+        elif "returning" in role or "past" in role:
             message = (
                 "Funny thing about old houses: they remember who ran when the storm got personal."
             )

@@ -42,5 +42,5 @@ Return only JSON:
 Constraints:
 - Keep recaps concise and audience-friendly.
 - Focus on changes, tensions, clues, and what matters next.
+- Mention family pressure, shame, loyalty, or cross-cultural misunderstandings only when they materially changed the scene.
 - Keep the central mystery open.
-

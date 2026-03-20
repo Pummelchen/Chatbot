@@ -87,11 +87,14 @@ class StoryManagerService:
             "and one emotionally loaded question."
         )
         desired = [
-            "Surface a clue linked to the debt or the sealed wing.",
+            "Surface a clue linked to the debt or the sealed lantern wing.",
             "Sharpen an old romantic or loyalty fault line without resolving it.",
         ]
         if context.pacing_health.mystery_stalled:
-            desired[0] = "Force a more specific question about Celeste, the ledger, or the tunnel."
+            desired[0] = (
+                "Force a more specific question about the vanished owner, "
+                "the missing records, or the hidden route through the house."
+            )
         if context.pacing_health.romance_stalled:
             desired[1] = "Push interrupted intimacy, jealousy, or an almost-confession."
         per_character = {

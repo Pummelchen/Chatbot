@@ -31,6 +31,7 @@ The system persists:
 
 - Canon facts and location/object state
 - Character identity and current state
+- Character cultural background, family pressure, conflict style, privacy boundaries, value instincts, and emotional expression cues
 - Relationship tension values
 - Secrets and reveal stages
 - Arc state and reveal ladders

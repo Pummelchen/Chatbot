@@ -24,6 +24,20 @@ The system avoids shoving the entire transcript into every prompt. Instead it pe
 
 The manager operates in micro-steps. It sets the scene objective, controls reveal pace, assigns soft goals, tracks pacing health, and authorizes rare thought pulses.
 
+## Seeded Ensemble
+
+The default story bible is now built around a globally legible but story-first cast:
+
+- Amelia Vale: Anglo house manager and emotional center
+- Arjun Mehta: Indian long-term guest and careful observer
+- Rafael Costa: Brazilian night fixer and volatile romantic fault line
+- Ayu Pranata: Indonesian reception insider and audience bridge
+- Lucía Ortega: Mexican family claimant with inheritance pressure
+- Hana Seo: Korean returning figure tied to the old betrayal
+- Ren Akiyama: reserved as a later-stage archive-and-history expander
+
+These backgrounds are not cosmetic. They are persisted as structured character context so prompts can use family pressure, conflict style, privacy boundaries, value instincts, and emotional expression patterns without collapsing into caricature.
+
 ## Quick Start
 
 1. Install Python 3.12+ and MySQL 8.4.

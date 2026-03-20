@@ -115,26 +115,16 @@ class RecapService:
         )
 
     def _mentions_unknown_entities(self, bundle: RecapBundle) -> bool:
+        world_title = self.repository.get_world_state_snapshot()["title"]
         known = {
-            "Saltglass",
+            *re.findall(r"\b[A-Z][A-Za-zÀ-ÿ'-]{2,}\b", world_title),
             "House",
-            "Mara",
-            "Dela",
-            "Cruz",
-            "Elias",
-            "Roan",
-            "Sora",
-            "Lin",
-            "Julian",
-            "Vale",
-            "Nia",
-            "Mercado",
-            "Luca",
-            "Serrano",
-            "Celeste",
             "Blackwake",
-            "Hana",
+            "Evelyn",
+            "Ren",
         }
+        for character in self.repository.list_characters():
+            known.update(re.findall(r"\b[A-Z][A-Za-zÀ-ÿ'-]{2,}\b", character["full_name"]))
         neutral = {
             "Last",
             "Trust",
@@ -177,6 +167,6 @@ class RecapService:
                 bundle.twenty_four_hours.watch_next,
             ]
         )
-        tokens = re.findall(r"\b[A-Z][a-z]{2,}\b", text)
+        tokens = re.findall(r"\b[A-Z][A-Za-zÀ-ÿ'-]{2,}\b", text)
         unknown = [token for token in tokens if token not in known and token not in neutral]
         return len(set(unknown)) >= 3

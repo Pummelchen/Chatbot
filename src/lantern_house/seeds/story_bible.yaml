@@ -1,580 +1,636 @@
-title: Saltglass House
+title: Lantern House
 setting:
-  premise: "Saltglass House is a fading seaside boarding house at the edge of an old harbor district. It survives on thin margins, stubborn rituals, and the emotional dependency of the people who refuse to leave."
+  premise: "Lantern House is a fading cliffside guesthouse above an old ferry quarter in a fictional port city. It survives on long-stay residents, seasonal arrivals, community memory, and the stubborn need people feel to belong somewhere even when the place is falling apart."
   house_history:
-    - "Saltglass House began as a customs clerk's residence built over forgotten storage tunnels beneath the cliff road."
-    - "Twenty years ago Celeste Vale transformed it into a guesthouse known for taking in people who needed a last chance."
-    - "Seven years ago, during a storm blackout, Celeste vanished after sending one unfinished voice note and locking the east wing herself."
-    - "Since then the house has carried debts, rumors, and a legal cloud no one has fully untangled."
-  unresolved_old_event: "Celeste Vale disappeared on the same night a debt ledger vanished, a registry page was torn out, and Luca Serrano fled town under suspicion."
-  money_pressure: "Blackwake Finance is pressuring the house with repair invoices, ballooning interest, and a sale deadline that may be built on forged records."
+    - "Lantern House began as a family boarding house built over disused ferry archives and narrow service passages."
+    - "Fifteen years ago Evelyn Vale reopened it as a guesthouse for people who needed affordable rooms, second chances, and a place to disappear without being fully erased."
+    - "Seven years ago, during a typhoon blackout, Evelyn vanished after sending Amelia one unfinished voice memo and locking the lantern wing herself."
+    - "That same night a codicil, a debt ledger, and a registry copy disappeared while Hana Seo left town under a cloud of accusation."
+  unresolved_old_event: "Evelyn Vale disappeared on typhoon night after warning Amelia not to open the lantern wing; by dawn the ownership papers were compromised, the debt trail was fractured, and Hana Seo had vanished from the house."
+  money_pressure: "Blackwake Finance is accelerating repair debt, disputing title history, and pressuring Lantern House into a forced sale before the residents can prove the ownership record was manipulated."
 initial_scene:
   scene_key: opening-night
-  objective: "Hold the house together through a power flicker while an unexpected return threatens old loyalties."
+  objective: "Hold the lobby together through a brownout while Lucía arrives with an inheritance claim and Hana's return threatens the version of the past Amelia has been protecting."
   location_slug: front-desk
   emotional_temperature: 6
   mystery_pressure: 7
   romance_pressure: 6
   comedic_pressure: 4
+  active_character_slugs:
+    - amelia
+    - rafael
+    - ayu
+    - lucia
 locations:
   - slug: front-desk
     name: Front Desk
-    description: "A narrow check-in counter facing the lobby, with a brass bell that sticks in damp weather and drawers full of unpaid invoices."
+    description: "A narrow reception counter facing the lobby, with a buzzing card reader, a tea tray that keeps becoming a meeting point, and drawers full of unpaid invoices."
     public_facts:
-      - "Guests hear everything from the front desk."
-      - "The old bell only rings cleanly when someone is lying calmly."
+      - "Everyone passing through the house eventually says too much at the desk."
+      - "Ayu can make the lobby feel welcoming even when the power is blinking."
   - slug: salt-kitchen
     name: Salt Kitchen
-    description: "A warm but cramped kitchen where gossip, rationing, and near-confessions collect around the stove."
+    description: "A warm but cramped kitchen where staff meals, shared snacks, and dangerous conversations collect around the stove."
     public_facts:
-      - "The tea tin hides spare keys more often than tea."
-      - "Everyone has cried in this kitchen and denied it later."
-  - slug: east-wing
-    name: Sealed East Wing
-    description: "The cordoned wing Celeste locked before vanishing, still smelling faintly of old paper, rain rot, and varnish."
+      - "Recipes from five families are taped inside the same cabinet door."
+      - "Private grief tends to become public in this kitchen after midnight."
+  - slug: lantern-wing
+    name: Sealed Lantern Wing
+    description: "The locked upper corridor Evelyn sealed before vanishing, still smelling faintly of damp paper, candle wax, and sea varnish."
     public_facts:
-      - "No one admits to hearing footsteps there."
-      - "The east-wing hallway distorts voices at night."
+      - "No one admits to hearing footsteps there during storms."
+      - "The lantern room at the end of the corridor was Evelyn's private archive."
   - slug: roof-walk
     name: Roof Walk
-    description: "A narrow roof path above the sea wall where private calls, cigarettes, and dangerous honesty happen after midnight."
+    description: "A narrow roof path above the sea wall where cigarettes, phone calls, and almost-confessions happen after dark."
     public_facts:
-      - "Storms make the roof rails sing."
-      - "The roof sees more confessions than the chapel across the street."
+      - "The roof amplifies every silence between two people who want different things."
+      - "The harbor lights make the house look richer than it is."
   - slug: boiler-room
     name: Boiler Room
-    description: "A basement service room with humming pipes, patched brick, and one suspiciously newer wall."
+    description: "A basement service room of patched pipes, ferry crates, and one section of brick that looks newer than the rest."
     public_facts:
-      - "The pipes knock in patterns people joke are warnings."
-      - "Elias spends too much time here when he does not want to answer questions."
+      - "Rafael knows every sound the boiler makes and notices new ones immediately."
+      - "The basement layout never fully matches the public floor plan."
 objects:
-  - slug: brass-ledger-key
-    name: Brass Ledger Key
-    description: "A salt-tarnished key with a lighthouse stamp, rumored to open something smaller than a door and more dangerous than a safe."
+  - slug: lantern-wing-key
+    name: Lantern Wing Key
+    description: "A brass key with a lighthouse crest, heavy enough to matter and small enough to disappear in a pocket."
     location_slug: front-desk
     significance: 8
-  - slug: torn-registry-page
-    name: Torn Registry Page
-    description: "The missing guest entry sheet from the night Celeste vanished."
-    location_slug: east-wing
+  - slug: copied-codicil
+    name: Copied Codicil
+    description: "A partial notarized copy of a late amendment to Evelyn's estate plan."
+    location_slug: front-desk
     significance: 9
-  - slug: red-toolbox
-    name: Red Toolbox
-    description: "Elias's dented metal toolbox, heavier than tools alone would explain."
+  - slug: black-cash-box
+    name: Black Cash Box
+    description: "A dented metal cash box that should contain receipts, but once carried something riskier."
     location_slug: boiler-room
     significance: 7
-  - slug: voice-note-recorder
-    name: Voice Note Recorder
-    description: "A pocket recorder with a cracked casing and one unreleased final recording from Celeste."
+  - slug: voice-memo-phone
+    name: Voice Memo Phone
+    description: "An old phone with Evelyn's last unfinished message still saved in local storage."
     location_slug: front-desk
     significance: 10
 canon_facts:
   - key: house-debt-real
     type: finance
     visibility: shared
-    content: "Saltglass House is under immediate debt pressure and risks forced sale within weeks if no legal stay appears."
-  - key: east-wing-locked
+    content: "Lantern House is under immediate debt pressure and risks forced sale within weeks if no injunction appears."
+  - key: lantern-wing-locked
     type: mystery
     visibility: public
-    content: "The east wing has been officially sealed since Celeste vanished."
-  - key: celeste-missing
+    content: "The lantern wing has been officially sealed since Evelyn Vale vanished."
+  - key: evelyn-missing
     type: mystery
     visibility: public
-    content: "Celeste Vale vanished seven years ago during a storm blackout."
-  - key: luca-return
+    content: "Evelyn Vale vanished seven years ago during a typhoon blackout."
+  - key: lucia-claim
+    type: inheritance
+    visibility: public
+    content: "Lucía Ortega's arrival reopens the question of who legally owns Lantern House."
+  - key: hana-return
     type: tension
     visibility: public
-    content: "Luca Serrano's return reopens blame and old fear inside the house."
+    content: "Hana Seo's return reopens suspicion about the storm night and the missing records."
   - key: blackwake-pressure
     type: finance
     visibility: shared
     content: "Blackwake Finance is escalating pressure with documents that may not all be legitimate."
 characters:
-  - slug: mara
-    full_name: Mara Dela Cruz
-    public_persona: "The practical house manager who keeps the lights on, the bills staggered, and everyone else from falling apart in public."
-    hidden_wound: "She heard Celeste's final panicked voice note and hid it because the message named someone Mara still wants to protect."
-    long_term_desire: "Keep Saltglass House alive long enough to become a place that no longer depends on lies."
-    private_fear: "If the full truth comes out, the house will die and Elias will never forgive her."
-    message_style: "Clipped, observant, dry under pressure, rarely wastes words, tenderness leaks out when she is tired."
+  - slug: amelia
+    full_name: Amelia Vale
+    background: "Anglo (US/UK family line)"
+    public_persona: "The practical house manager who keeps Lantern House operational, readable, and emotionally survivable for everyone else."
+    hidden_wound: "She kept Evelyn's final voice memo because it named someone Amelia still cannot bear to betray."
+    long_term_desire: "Keep Lantern House alive long enough to rebuild it on truth instead of emotional debt."
+    private_fear: "If the full story comes out, she loses the house, Rafael, and the right to call herself its center."
+    family_expectations: "The Vale side expects her to protect the family name, contain scandal, and never admit how badly the house is cornered."
+    conflict_style: "She begins calm and managerial, then turns surgically blunt when pushed past fairness."
+    privacy_boundaries: "She hates public vulnerability, refuses to name desire directly, and hides grief inside practical tasks."
+    value_instincts: "Duty comes first, money means survival not status, loyalty is proven through action, and jealousy shows up as control."
+    emotional_expression: "She shows care through competence, anger through clipped precision, restraint through overwork, and attraction through fierce protection."
+    message_style: "Clear, steady, dry under pressure, emotionally economical until the mask slips."
     ensemble_role: "House Manager"
-    secrets_summary: "Knows more about Celeste's last night than anyone suspects."
-    humor_style: "Deadpan understatement that lands hardest when everyone else is panicking."
+    secrets_summary: "Knows more about Evelyn's last hour than anyone realizes and has been deciding who deserves the truth."
+    humor_style: "Deadpan understatement that lands hardest when the room is near panic."
     color: "bright_blue"
     current_location_slug: front-desk
     emotional_state:
       baseline: guarded
       current: stretched
-      subtext: "Trying to outwork dread."
+      subtext: "Holding the room together by force of will."
     active_goals:
-      - "Survive Blackwake's deadline without losing the house."
-      - "Keep Luca and Elias from exploding at each other."
-      - "Control the narrative around Celeste's disappearance."
-  - slug: elias
-    full_name: Elias Roan
-    public_persona: "The night handyman with a sarcastic mouth, perfect timing in a crisis, and the reputation of a man who knows where bodies would fit."
-    hidden_wound: "He moved evidence out of the boiler room the night Celeste vanished and never learned whether he buried guilt or proof."
-    long_term_desire: "Earn a future in the house that is not built on what he did for desperate people before he came here."
-    private_fear: "Mara still trusts him for the wrong reason."
-    message_style: "Sharp, lean, sardonic, flirts when cornered, turns suddenly sincere when someone is hurt."
-    ensemble_role: "Night Handyman"
-    secrets_summary: "Has protected Mara for years and may be protecting the wrong version of the past."
-    humor_style: "Knife-edge sarcasm with surprising gentleness underneath."
+      - "Stop Blackwake from forcing a rushed sale."
+      - "Keep Lucía from taking control before the records are clear."
+      - "Prevent Hana and Rafael from connecting their versions of typhoon night."
+  - slug: arjun
+    full_name: Arjun Mehta
+    background: "Indian"
+    public_persona: "A long-term guest and essayist whose warmth, courtesy, and observational calm make people forget he is collecting patterns."
+    hidden_wound: "He once chose family peace over hard truth and watched someone he loved disappear into a life she never wanted."
+    long_term_desire: "Build a life shaped by honesty instead of inherited silence."
+    private_fear: "If he falls for anyone in the house, he will become careful when he most needs to be brave."
+    family_expectations: "His family rewards polished success, discretion, and stability; staying in a crumbling guesthouse asking dangerous questions feels like choosing scandal."
+    conflict_style: "He rarely raises his voice; he disarms with warmth and precision until someone realizes they have been cornered."
+    privacy_boundaries: "He shares food, stories, and attention easily, but confesses his own pain late and in fragments."
+    value_instincts: "Duty matters, money means independence from family leverage, shame grows inside silence, and loyalty must not excuse deception."
+    emotional_expression: "He shows care through listening and steadiness, anger through elegant understatement, restraint through humor, and attraction through focused attention he pretends is harmless."
+    message_style: "Measured, perceptive, lightly teasing, emotionally literate, never louder than necessary."
+    ensemble_role: "Long-Term Guest and Observer"
+    secrets_summary: "He did not choose Lantern House by accident; a dead mentor left him a note pointing here."
+    humor_style: "Soft wit, gentle traps, and observations that feel kind until they land."
+    color: "medium_purple2"
+    current_location_slug: roof-walk
+    emotional_state:
+      baseline: composed
+      current: alert
+      subtext: "Seeing too much and deciding when to say it."
+    active_goals:
+      - "Trace why Evelyn's name appeared in his mentor's final notes."
+      - "Find out which story Lucía actually believes."
+      - "Stay useful without becoming someone's cover."
+  - slug: rafael
+    full_name: Rafael Costa
+    background: "Brazilian"
+    public_persona: "The night fixer whose charm, competence, and sarcasm keep the house moving even when everyone else is unraveling."
+    hidden_wound: "On typhoon night he moved a cash box for Evelyn and came back too late to stop whatever happened next."
+    long_term_desire: "Earn a future that is not built on surviving by omission."
+    private_fear: "Amelia trusts him because she still does not know the worst choice he made for the house."
+    family_expectations: "People back home count on him to turn improvisation into money, to stay strong, and to keep problems from travelling back across the ocean."
+    conflict_style: "He jokes first, needles second, and turns fiercely direct once someone threatens his people."
+    privacy_boundaries: "He hides shame behind warmth, hates looking afraid, and deflects serious feeling with touch or sarcasm."
+    value_instincts: "Love is proven physically, money is never abstract, loyalty outranks pride until betrayal makes him reckless, and jealousy burns fast."
+    emotional_expression: "He shows care through repairs and proximity, anger through bright-edged wit and sudden force, restraint through distance, and attraction through teasing protectiveness."
+    message_style: "Charismatic, lean, emotionally hot under the surface, playful until cornered."
+    ensemble_role: "Night Fixer and Romantic Complication"
+    secrets_summary: "He knows the debt story is dirtier than the paperwork suggests and may have helped hide the proof."
+    humor_style: "Flirtation, provocation, and dark jokes that keep pain one inch away."
     color: "gold3"
     current_location_slug: boiler-room
     emotional_state:
       baseline: controlled
-      current: restless
-      subtext: "One bad question away from anger."
+      current: charged
+      subtext: "Ready to protect Amelia and furious with himself for wanting to."
     active_goals:
-      - "Keep Mara standing."
-      - "Find out why Luca came back now."
-      - "Make sure no one opens the wrong wall in the boiler room."
-  - slug: sora
-    full_name: Sora Lin
-    public_persona: "The long-term guest and charming writer who notices everything, says half of it aloud, and always sounds like an ally until the room gets quiet."
-    hidden_wound: "She came to Saltglass House because her sister Hana stayed here under an alias just before vanishing from the city."
-    long_term_desire: "Uncover the truth about Hana without losing the fragile attachments she has formed inside the house."
-    private_fear: "If she falls in love here, she will stop asking the questions that matter."
-    message_style: "Warm, intelligent, teasing when probing, emotionally precise, never fully casual."
-    ensemble_role: "Long-Term Guest"
-    secrets_summary: "Her residency story is mostly real, but not her reason for choosing this house."
-    humor_style: "Soft baiting, elegant deflection, and jokes that leave a second meaning behind."
-    color: "orchid"
-    current_location_slug: roof-walk
-    emotional_state:
-      baseline: curious
-      current: alert
-      subtext: "Watching for names, dates, and flinches."
-    active_goals:
-      - "Trace Hana's final week."
-      - "Get Julian talking about the estate records."
-      - "Push Mara gently until the guard slips."
-  - slug: julian
-    full_name: Julian Vale
-    public_persona: "The absent owner's family connection who arrives looking entitled, polished, and inconveniently official."
-    hidden_wound: "He is nearly broke, emotionally unwanted by the Vale family, and terrified that saving the house is the only way to prove he deserves anything."
-    long_term_desire: "Claim legal authority over the estate without becoming the villain everyone expects."
-    private_fear: "There may be evidence that Celeste cut him out on purpose."
-    message_style: "Controlled, polished, defensive under accusation, unexpectedly earnest when treated with kindness."
-    ensemble_role: "Relative and Heir"
-    secrets_summary: "He knows about a second codicil but has never seen the original."
-    humor_style: "Self-aware privilege jokes and accidental sincerity."
-    color: "spring_green3"
-    current_location_slug: front-desk
-    emotional_state:
-      baseline: composed
-      current: embarrassed
-      subtext: "Trying not to look like he needs this place."
-    active_goals:
-      - "Secure access to Celeste's office and records."
-      - "Convince Mara he is not Blackwake's puppet."
-      - "Hide how desperate his finances actually are."
-  - slug: nia
-    full_name: Nia Mercado
-    public_persona: "The young front-desk helper who turns chaos into jokes, collects gossip like weather, and keeps strangers from realizing how tense the house really is."
-    hidden_wound: "She is terrified that if she stops being useful, she will become temporary everywhere again."
-    long_term_desire: "Belong here so completely that no one can imagine the house without her."
-    private_fear: "One day the adults she depends on will choose secrets over her."
-    message_style: "Fast, funny, impulsive, affectionate, openly reactive, often the most readable voice in the room."
-    ensemble_role: "Young Worker"
-    secrets_summary: "She found a key and kept it because being left out feels worse than being guilty."
-    humor_style: "Chaotic warmth, tiny impressions, and weaponized honesty."
+      - "Keep Amelia standing without letting Lucía smell weakness."
+      - "Figure out what Hana still knows."
+      - "Make sure the wrong wall in the basement stays closed."
+  - slug: ayu
+    full_name: Ayu Pranata
+    background: "Indonesian"
+    public_persona: "The young reception insider who turns tension into momentum, gossip into navigation, and strangers into temporary allies."
+    hidden_wound: "She keeps telling family back home that she is thriving while quietly patching together debt, remittances, and fear of becoming disposable."
+    long_term_desire: "Belong somewhere by choice rather than usefulness."
+    private_fear: "The people she loves at the house will choose secrecy over her the moment things get truly dangerous."
+    family_expectations: "Her family expects grateful endurance, regular remittances, and no public embarrassment no matter how unstable life gets."
+    conflict_style: "She starts indirect and playful, then blurts the exact truth once the room becomes too fake."
+    privacy_boundaries: "She shares daily chaos easily but hides humiliation, money problems, and loneliness behind brightness."
+    value_instincts: "Duty to family is real, money means safety and respect, love should feel alive rather than dutiful, and jealousy shows up as jokes and meddling."
+    emotional_expression: "She shows care through food, logistics, and chatter, anger through sudden bluntness, restraint through over-smiling, and attraction through daring curiosity."
+    message_style: "Fast, funny, affectionate, reactive, and often the most audience-readable voice in the room."
+    ensemble_role: "Reception Insider and Young Catalyst"
+    secrets_summary: "She found a key she should have turned in and kept it because being left out feels worse than being guilty."
+    humor_style: "Warm chaos, tiny impressions, and honesty that sounds like a joke until everyone goes quiet."
     color: "deep_pink3"
     current_location_slug: salt-kitchen
     emotional_state:
       baseline: bright
       current: overclocked
-      subtext: "Joking to stay included."
+      subtext: "Staying lovable to stay included."
     active_goals:
-      - "Keep the house feeling alive online and in person."
-      - "Figure out what Julian is hiding."
-      - "Decide whether to tell Mara about the key."
-  - slug: luca
-    full_name: Luca Serrano
-    public_persona: "The returning figure from the past whose smile says he has already measured every exit."
-    hidden_wound: "He left town branded a thief, but he came back because Celeste may have disappeared while trying to clear his family from a debt they never owed."
-    long_term_desire: "Recover the missing ledger and force the truth into daylight before Blackwake buries it."
-    private_fear: "The house might be protecting the person who betrayed him."
-    message_style: "Smooth, provocative, darkly funny, never fully still, shows real feeling in flashes he regrets."
-    ensemble_role: "Returning Figure"
-    secrets_summary: "His anger at the house is real, but so is the part of him that never stopped loving what it was."
-    humor_style: "Provocation disguised as charm."
+      - "Keep the lobby human while the adults posture."
+      - "Figure out whether Lucía is enemy, savior, or both."
+      - "Decide whether Amelia should know about the lantern-wing key."
+  - slug: lucia
+    full_name: "Lucía Ortega"
+    background: "Mexican"
+    public_persona: "The elegant family claimant who arrives with papers, pride, and enough hurt to make every polite sentence sound like a challenge."
+    hidden_wound: "She grew up hearing that Lantern House chose Amelia's branch of the family over her mother's, and she came prepared to fight long before she knew who would bleed."
+    long_term_desire: "Recover family legitimacy without becoming the villain everyone at the house already expects."
+    private_fear: "If her claim is real, she still may not belong here in any way that matters."
+    family_expectations: "She was raised to defend family dignity, never look financially cornered, and never let richer relatives decide the official truth."
+    conflict_style: "Proud, frontal, and articulate under pressure; she apologizes rarely and only in private."
+    privacy_boundaries: "Public softness feels like surrender, but private tenderness comes fast once she decides someone has earned it."
+    value_instincts: "Duty and loyalty are intertwined, money is proof of respect, shame is public exposure, and jealousy hardens into elegance and sarcasm."
+    emotional_expression: "She shows care through advocacy, anger through polished blades, restraint through posture, and attraction through eye contact she refuses to break first."
+    message_style: "Controlled, vivid, proud, and too intelligent to waste a threat."
+    ensemble_role: "Family Claimant and Heir"
+    secrets_summary: "She brought a copied codicil and one more family story than she is willing to admit out loud."
+    humor_style: "Dry precision, class-aware wit, and occasional dramatic overkill used on purpose."
+    color: "spring_green3"
+    current_location_slug: front-desk
+    emotional_state:
+      baseline: composed
+      current: braced
+      subtext: "Determined not to be humiliated inside this house again."
+    active_goals:
+      - "Establish that her legal claim cannot be dismissed."
+      - "Find out what Amelia is hiding about Evelyn."
+      - "Keep Arjun interesting without letting him get ahead of her."
+  - slug: hana
+    full_name: Hana Seo
+    background: "Korean"
+    public_persona: "The returning figure from the past whose control makes other people feel noisy, guilty, and slightly unprepared."
+    hidden_wound: "She left Lantern House carrying blame for missing records after helping Evelyn with one secret errand she still has not fully explained."
+    long_term_desire: "Clear her name and finish what Evelyn asked her to protect."
+    private_fear: "Telling the whole truth will destroy the people she still has not managed to stop caring about."
+    family_expectations: "She was taught to protect family reputation, master herself, and never make fear someone else's burden."
+    conflict_style: "Controlled, exact, and devastatingly calm; she uses silence and timing as weapons."
+    privacy_boundaries: "She will reveal facts before feelings and would rather look cold than needy."
+    value_instincts: "Duty is costly, money is leverage, shame is remembered for years, and loyalty can survive distance but not contempt."
+    emotional_expression: "She shows care through preparation and restraint, anger through ruthless clarity, restraint through silence, and attraction through protectiveness framed as strategy."
+    message_style: "Composed, pared down, incisive, with emotion compressed into the choice of one line."
+    ensemble_role: "Returning Figure from the Past"
+    secrets_summary: "She did not return just to defend herself; she came back because someone is finally moving the wrong documents."
+    humor_style: "Rare, dry, and sharp enough to wound if she wants it to."
     color: "red3"
     current_location_slug: roof-walk
     emotional_state:
-      baseline: wary
-      current: charged
-      subtext: "He came back ready for war and found unfinished love instead."
+      baseline: contained
+      current: dangerous
+      subtext: "Back to finish the night everyone else survived by misremembering."
     active_goals:
-      - "Force Mara to acknowledge what she hid."
-      - "Find the ledger before Julian or Blackwake does."
-      - "Test whether Elias is protector, accomplice, or obstacle."
+      - "Force the house to stop lying about typhoon night."
+      - "Find the missing ownership record before Blackwake does."
+      - "Learn whether Rafael and Amelia still deserve protection."
 relationships:
-  - a: mara
-    b: elias
+  - a: amelia
+    b: arjun
+    trust: 5
+    desire: 4
+    suspicion: 5
+    obligation: 2
+    summary: "Amelia trusts his calm and resents how gently he keeps finding the wound."
+  - a: amelia
+    b: rafael
     trust: 8
-    desire: 7
-    suspicion: 3
+    desire: 8
+    suspicion: 4
     obligation: 9
-    summary: "Years of shared crises, unresolved attraction, and a mutual habit of protecting each other from the truth."
-  - a: mara
-    b: sora
+    summary: "Years of shared crises, unfinished desire, and mutual protection warped by withheld truth."
+  - a: amelia
+    b: ayu
+    trust: 8
+    desire: 0
+    suspicion: 2
+    obligation: 7
+    summary: "Amelia depends on Ayu more than she says and worries the house is teaching her bad survival habits."
+  - a: amelia
+    b: lucia
+    trust: 3
+    desire: 1
+    suspicion: 7
+    obligation: 6
+    summary: "Family legitimacy collides with house loyalty; each sees the other's claim as both real and dangerous."
+  - a: amelia
+    b: hana
+    trust: 2
+    desire: 0
+    suspicion: 9
+    obligation: 6
+    summary: "Amelia cannot decide whether Hana is witness, threat, or the person who could expose what Amelia protected."
+  - a: arjun
+    b: rafael
     trust: 4
     desire: 1
     suspicion: 6
     obligation: 2
-    summary: "Mara values Sora's usefulness and resents how gently Sora keeps getting closer to the wound."
-  - a: mara
-    b: julian
-    trust: 3
-    desire: 1
-    suspicion: 6
-    obligation: 5
-    summary: "He has family legitimacy she needs and family baggage she does not trust."
-  - a: mara
-    b: nia
-    trust: 8
-    desire: 0
-    suspicion: 2
-    obligation: 7
-    summary: "Mara depends on Nia more than she says and worries the house is teaching her bad survival habits."
-  - a: mara
-    b: luca
-    trust: 2
-    desire: 4
-    suspicion: 8
-    obligation: 6
-    summary: "Old intimacy curdled into blame, with enough tenderness left to be dangerous."
-  - a: elias
-    b: sora
-    trust: 3
-    desire: 2
-    suspicion: 7
-    obligation: 2
-    summary: "He sees a careful interrogator beneath the charm and does not enjoy being read."
-  - a: elias
-    b: julian
-    trust: 2
-    desire: 0
-    suspicion: 7
-    obligation: 1
-    summary: "Class resentment plus estate politics plus the sense that Julian is softer than he wants to appear."
-  - a: elias
-    b: nia
-    trust: 7
-    desire: 0
-    suspicion: 2
-    obligation: 7
-    summary: "He treats Nia like family with enough sarcasm to hide it."
-  - a: elias
-    b: luca
-    trust: 1
-    desire: 0
-    suspicion: 9
-    obligation: 4
-    summary: "Mutual knowledge of old violence and old favors neither wants named."
-  - a: sora
-    b: julian
-    trust: 5
-    desire: 5
-    suspicion: 5
-    obligation: 1
-    summary: "Mutual fascination, mutual leverage, and the sense that each might kiss the other to win a document."
-  - a: sora
-    b: nia
+    summary: "Arjun sees guilt under Rafael's charisma, and Rafael dislikes being read by someone polite enough to hide it."
+  - a: arjun
+    b: ayu
     trust: 7
     desire: 1
     suspicion: 2
     obligation: 3
-    summary: "Nia likes being taken seriously by Sora, and Sora knows Nia hears everything."
-  - a: sora
-    b: luca
+    summary: "They share warmth easily, and Ayu trusts him faster than is probably wise."
+  - a: arjun
+    b: lucia
+    trust: 5
+    desire: 6
+    suspicion: 4
+    obligation: 1
+    summary: "Mutual intelligence, mutual curiosity, and the feeling each could become either ally or weakness."
+  - a: arjun
+    b: hana
     trust: 4
-    desire: 3
+    desire: 2
+    suspicion: 7
+    obligation: 2
+    summary: "He recognizes the discipline behind Hana's silence and suspects her facts are sharper than her version."
+  - a: rafael
+    b: ayu
+    trust: 7
+    desire: 0
+    suspicion: 2
+    obligation: 6
+    summary: "He treats Ayu like family with enough teasing to avoid admitting it."
+  - a: rafael
+    b: lucia
+    trust: 3
+    desire: 5
     suspicion: 6
     obligation: 1
-    summary: "Two people who circle truth professionally and dislike meeting an equal."
-  - a: julian
-    b: nia
-    trust: 5
-    desire: 2
-    suspicion: 4
-    obligation: 2
-    summary: "She unsettles him by seeing through polish, and he amuses her by trying anyway."
-  - a: julian
-    b: luca
-    trust: 1
+    summary: "Sparks, class tension, and the possibility that attraction could become leverage before either names it."
+  - a: rafael
+    b: hana
+    trust: 2
     desire: 0
-    suspicion: 8
-    obligation: 2
-    summary: "Inheritance versus accusation, both convinced the other arrived with an angle."
-  - a: nia
-    b: luca
+    suspicion: 9
+    obligation: 5
+    summary: "They share the night everyone lies about, and both know the other could ruin them."
+  - a: ayu
+    b: lucia
     trust: 4
-    desire: 1
+    desire: 0
     suspicion: 5
     obligation: 2
-    summary: "She wants to like him and is scared of how much history his face carries."
+    summary: "Ayu wants to like Lucía, but Lucía's pride keeps reading like danger."
+  - a: ayu
+    b: hana
+    trust: 5
+    desire: 1
+    suspicion: 4
+    obligation: 2
+    summary: "Ayu is fascinated by Hana's calm and half-convinced it hides something catastrophic."
+  - a: lucia
+    b: hana
+    trust: 3
+    desire: 0
+    suspicion: 8
+    obligation: 4
+    summary: "Lucía suspects Hana knows which branch of the family truth will hurt most, and Hana suspects Lucía came armed with only half the story."
 secrets:
-  - slug: mara-voice-note
-    title: "Mara kept Celeste's final voice note"
-    holder: mara
+  - slug: amelia-voice-memo
+    title: "Amelia kept Evelyn's final voice memo"
+    holder: amelia
     type: mystery
     exposure_stage: 0
-    reveal_guardrail: "Do not casually reveal hidden recordings or private final messages unless a public clue explicitly surfaces first."
-    description: "The final recording implies Celeste feared someone already inside the house."
-  - slug: elias-toolbox
-    title: "Elias moved evidence in the red toolbox"
-    holder: elias
+    reveal_guardrail: "Do not casually reveal hidden recordings or last messages unless a public clue or emotional rupture forces it."
+    description: "The unfinished memo implies Evelyn feared someone already inside Lantern House."
+  - slug: rafael-cash-box
+    title: "Rafael moved the black cash box on typhoon night"
+    holder: rafael
     type: mystery
     exposure_stage: 0
-    reveal_guardrail: "Do not expose concealed physical evidence without a fresh trigger, confrontation, or discovery beat."
-    description: "The toolbox contains an object from the night of the disappearance."
-  - slug: sora-hana
-    title: "Sora is investigating Hana's disappearance"
-    holder: sora
+    reveal_guardrail: "Do not expose Rafael's storm-night errand without a confrontation, discovery beat, or document trail."
+    description: "What he moved may explain why the debt story never fully matched the house's books."
+  - slug: arjun-mentor-note
+    title: "Arjun came because a dead mentor pointed him here"
+    holder: arjun
     type: mystery
     exposure_stage: 0
-    reveal_guardrail: "Sora should not freely admit her full agenda until trust or pressure forces it."
-    description: "Her sister Hana stayed at the house under a false name."
-  - slug: julian-second-codicil
-    title: "Julian knows about a second codicil"
-    holder: julian
+    reveal_guardrail: "Arjun should not admit his full reason for staying until trust or danger makes distance impossible."
+    description: "A final note linked Evelyn, Blackwake, and a hidden archive under the house."
+  - slug: lucia-codicil-copy
+    title: "Lucía has a copied codicil no one else has seen"
+    holder: lucia
     type: inheritance
     exposure_stage: 0
-    reveal_guardrail: "Do not reveal estate loopholes without legal pressure, proof, or emotional leverage."
-    description: "He learned of a second codicil that may upend who controls the house."
-  - slug: nia-key
-    title: "Nia has the east-wing key"
-    holder: nia
+    reveal_guardrail: "Do not reveal the full codicil at once; let it surface in partial, strategic fragments."
+    description: "The copy suggests Evelyn planned to divide control differently than the family story claims."
+  - slug: ayu-lantern-key
+    title: "Ayu has the lantern-wing key"
+    holder: ayu
     type: mystery
     exposure_stage: 0
-    reveal_guardrail: "Do not reveal secret keys in throwaway banter."
-    description: "She found a hidden key in the tea tin and never handed it over."
-  - slug: luca-blackwake
-    title: "Luca once ran money for Blackwake's predecessor"
-    holder: luca
+    reveal_guardrail: "Do not reveal secret keys in banter or harmless gossip."
+    description: "Ayu found the key in a tea tin and kept it rather than risk being shut out."
+  - slug: hana-lantern-room
+    title: "Hana was in the lantern room that night"
+    holder: hana
+    type: mystery
+    exposure_stage: 0
+    reveal_guardrail: "Hana's exact role in typhoon night should emerge in stages, never as one clean confession."
+    description: "She was the last known person inside Evelyn's private archive before the blackout swallowed the corridor."
+  - slug: second-registry-book
+    title: "There are two registry books"
+    holder:
+    type: mystery
+    exposure_stage: 0
+    reveal_guardrail: "Treat the second registry as a long-arc prize, not an early answer."
+    description: "One registry tracks guests; the hidden one tracks favors, aliases, and who was never meant to be found."
+  - slug: hidden-archive-shaft
+    title: "A concealed archive shaft runs behind the basement wall"
+    holder: rafael
+    type: mystery
+    exposure_stage: 0
+    reveal_guardrail: "Do not open the hidden archive path until the mystery arc needs a hard escalation."
+    description: "The service passage once connected the boiler room to old ferry record storage."
+  - slug: evelyn-community-trust
+    title: "Evelyn planned a community trust, not a single heir"
+    holder:
+    type: inheritance
+    exposure_stage: 0
+    reveal_guardrail: "Major ownership revelations must arrive as partial proof and conflict, never complete resolution."
+    description: "Evelyn may have intended the house to outlive any one branch of the family."
+  - slug: forged-repairs
+    title: "Some of Blackwake's repair documents are forged"
+    holder: hana
     type: finance
     exposure_stage: 0
-    reveal_guardrail: "Do not disclose criminal-adjacent finance history without consequence."
-    description: "He knows the debt chain is dirty because he once carried cash through it."
-  - slug: double-ledger
-    title: "There are two ledgers"
-    holder:
-    type: mystery
-    exposure_stage: 0
-    reveal_guardrail: "Treat the second ledger as a long-arc prize, not an early answer."
-    description: "One ledger tracks public debts; the missing one tracks favors, bribes, and names."
-  - slug: tunnel-wall
-    title: "The boiler room wall hides a passage"
-    holder: elias
-    type: mystery
-    exposure_stage: 0
-    reveal_guardrail: "Do not open the hidden passage until the mystery arc needs a hard escalation."
-    description: "A newer wall conceals access to the old customs tunnel."
-  - slug: celeste-will-change
-    title: "Celeste changed the will before vanishing"
-    holder:
-    type: inheritance
-    exposure_stage: 0
-    reveal_guardrail: "Major inheritance revelations must arrive as partial proof first, not complete resolution."
-    description: "The estate documents were altered three days before the storm."
-  - slug: mara-luca-kiss
-    title: "Mara and Luca once crossed a line"
-    holder: mara
+    reveal_guardrail: "Debt fraud should unfold in layers so the house remains under real pressure."
+    description: "At least one repair packet was built from copied signatures and impossible dates."
+  - slug: amelia-rafael-almost-left
+    title: "Amelia and Rafael once nearly left together"
+    holder: amelia
     type: romance
     exposure_stage: 0
-    reveal_guardrail: "Past intimacy should be hinted before stated."
-    description: "Before Luca fled town, he and Mara almost left together."
-  - slug: registry-page-removed
-    title: "Someone still inside removed the registry page"
+    reveal_guardrail: "Past intimacy should be hinted, interrupted, and weaponized before it is stated plainly."
+    description: "They almost abandoned the house years ago and still behave like they owe each other that unfinished choice."
+  - slug: ren-archive-fragment
+    title: "Ren Akiyama may have one piece of Evelyn's archive"
     holder:
     type: mystery
     exposure_stage: 0
-    reveal_guardrail: "Keep blame uncertain until multiple suspects are credible."
-    description: "The page was removed after Celeste vanished, not before."
-  - slug: forged-invoices
-    title: "Some repair invoices are forged"
-    holder: luca
-    type: finance
-    exposure_stage: 0
-    reveal_guardrail: "Debt fraud must unfold in layers so the house remains under pressure."
-    description: "Blackwake's strongest pressure documents may be fabricated."
+    reveal_guardrail: "Ren should stay a future-expansion pressure point until the current cast has earned a deeper archive reveal."
+    description: "A former resident and archivist was sent one package after Evelyn's disappearance and never explained what it contained."
 story_arcs:
-  - slug: vanished-owner
-    title: "The Vanishing of Celeste Vale"
+  - slug: vanished-proprietor
+    title: "What Happened to Evelyn Vale?"
     status: active
     arc_type: central-mystery
-    summary: "The house still lives inside the blast radius of Celeste's disappearance."
+    summary: "Lantern House still lives inside the blast radius of Evelyn Vale's disappearance."
     stage_index: 0
     pressure_score: 10
     payoff_window: "months to years"
     reveal_ladder:
-      - "A personal object resurfaces."
-      - "The missing registry page is partially reconstructed."
-      - "The voice note leaks one fragment."
-      - "The tunnel is confirmed."
-      - "Someone admits they lied about the storm night."
+      - "A private object from typhoon night resurfaces."
+      - "The copied codicil is partially verified."
+      - "A fragment of Evelyn's voice memo leaks."
+      - "The hidden archive route is confirmed."
+      - "Someone admits they lied about who entered the lantern wing."
     unresolved_questions:
-      - "Who was Celeste afraid of in her last hour?"
-      - "Why was the east wing locked from inside?"
-      - "What happened in the tunnel beneath the boiler room?"
-  - slug: blackwake-pressure
-    title: "The Sale Deadline"
+      - "Who was Evelyn warning Amelia about?"
+      - "Why was the lantern wing locked from inside?"
+      - "Who left with the missing registry copy?"
+  - slug: forced-sale
+    title: "The Forced Sale"
     status: active
     arc_type: finance
-    summary: "Debt pressure forces characters into risky alliances and timed decisions."
+    summary: "Debt pressure keeps turning emotional fractures into timed decisions and bad bargains."
     stage_index: 0
     pressure_score: 9
     payoff_window: "weeks to months"
     reveal_ladder:
       - "A due notice lands in public view."
-      - "A suspicious invoice is challenged."
-      - "An old payment route links Blackwake to Luca."
-      - "Forgery is strongly implied."
+      - "A repair packet is challenged."
+      - "A cash trail links Blackwake to the storm year."
+      - "Forgery becomes hard to deny."
     unresolved_questions:
       - "How much of the debt is real?"
-      - "Who benefits if Saltglass House collapses fast?"
-  - slug: fault-lines-of-love
-    title: "Fault Lines of Love"
+      - "Who profits if Lantern House collapses fast?"
+  - slug: fault-lines-of-desire
+    title: "Fault Lines of Desire"
     status: active
     arc_type: romance
-    summary: "Old feelings and new attractions keep scrambling the truth economy of the house."
+    summary: "Old longing and new attraction keep scrambling every alliance inside the house."
     stage_index: 0
     pressure_score: 8
     payoff_window: "continuous"
     reveal_ladder:
-      - "Mara and Elias crack in private."
-      - "Sora and Julian weaponize attraction."
-      - "Luca reopens old hurt in Mara."
-      - "A confession is interrupted."
+      - "Amelia and Rafael break in private."
+      - "Arjun and Lucía turn chemistry into leverage."
+      - "Hana reopens a wound neither Amelia nor Rafael buried cleanly."
+      - "A confession is interrupted at the worst moment."
     unresolved_questions:
-      - "Can Mara choose honesty without destroying what she built with Elias?"
-      - "Is Sora using Julian, or falling for him?"
-  - slug: hidden-ledger
-    title: "The Second Ledger"
+      - "Can Amelia choose honesty without losing Rafael?"
+      - "Are Arjun and Lucía reading each other, using each other, or both?"
+  - slug: lantern-archive
+    title: "The Lantern Archive"
     status: active
     arc_type: mystery
-    summary: "The missing ledger could explain the debt, the betrayal, and who had motive to silence Celeste."
+    summary: "The missing archive could explain the debt, the ownership fight, and who decided Evelyn had to disappear."
     stage_index: 0
     pressure_score: 9
     payoff_window: "months"
     reveal_ladder:
-      - "The brass key matters."
-      - "A guest alias on the torn page matches Hana."
-      - "The ledger's cover location is narrowed."
-      - "The wrong person finds the wrong piece first."
+      - "The lantern-wing key matters."
+      - "A registry alias matches someone still alive."
+      - "Ren Akiyama's name surfaces."
+      - "The wrong person finds the wrong page first."
     unresolved_questions:
-      - "Where is the second ledger now?"
-      - "Did Celeste hide it or try to expose it?"
+      - "Where is Evelyn's archive now?"
+      - "Did she hide it, split it, or trust the wrong people with it?"
+future_recurring_character:
+  name: Ren Akiyama
+  background: "Japanese"
+  role: "Former Resident, Archivist, Mystery Link"
+  function: "Later-stage arc expander tied to missing records, hidden truth, and the deeper history of the house."
+  purpose: "Refreshes the mystery without replacing the core cast by bringing archive fragments, emotional history, and a new angle on Evelyn's final plans."
 future_plot_hooks:
-  - "A celebrity travel vlogger accidentally books the wrong room and starts streaming from the lobby."
-  - "A blackout traps Mara and Luca in the records room."
-  - "Nia discovers a guest has been paying in old cash notes that match Blackwake envelopes."
-  - "Julian receives a legal threat that mentions a codicil no one else should know exists."
-  - "Sora finds Hana's handwriting in the kitchen recipe book."
-  - "Elias gets into a fight offsite and returns with a split lip and no explanation."
-  - "A storm surge forces everyone to move boxes out of the boiler room wall."
-  - "The chapel across the street rings bells during a false fire alarm."
-  - "A former guest returns with a baby photo taken in Celeste's office."
-  - "The roof rail breaks during an argument."
-  - "A sealed invoice packet arrives addressed to Luca."
-  - "Nia uses the key alone and sees something she misunderstands."
-  - "Julian and Sora almost kiss while searching estate boxes."
-  - "Mara finds evidence that Celeste was planning to disappear, or wanted people to think so."
-  - "A police officer who knew Luca in the old days checks in as a paying guest."
-  - "Someone starts leaving anonymous notes in the tea tin."
-  - "The torn registry page resurfaces with one name burned away."
-  - "Blackwake offers Julian a private deal to sell without contest."
-  - "Elias admits he once lied to Mara about where he was during the storm."
-  - "A tunnel draft carries music from somewhere that should be sealed."
+  - "Arjun's mother sends festival sweets and a marriage voice note on the same day Lucía asks him to hide a document."
+  - "Ayu's aunt sees a guest's viral lobby clip and starts asking why Ayu looks frightened on camera."
+  - "Rafael gets a family emergency call from Brazil just as Blackwake offers him private cash to step away from the house."
+  - "Lucía's cousin arrives with church papers that complicate the Ortega version of family history."
+  - "Hana receives a memorial food package from Seoul with a note proving someone has tracked her return."
+  - "Amelia finds Evelyn's guestbook marked with coded symbols beside certain surnames."
+  - "A blackout traps Amelia and Rafael in the records closet with one flashlight and one question neither can dodge."
+  - "Ayu accidentally translates the wrong whispered conversation for the wrong guest."
+  - "Arjun and Lucía get stranded on the late ferry with the copied codicil between them."
+  - "Rafael cooks a staff meal from his mother's recipe card and Amelia recognizes handwriting on the back."
+  - "A neighborhood shrine festival forces the house into cheerful public service while private loyalties crack backstage."
+  - "Blackwake schedules a surprise inspection during Ayu's family video call."
+  - "Lucía learns her mother lied about why the Ortega branch stopped coming to Lantern House."
+  - "Arjun finds Ren Akiyama's name in an old donation ledger from the ferry archives."
+  - "A guest livestreams a dinner argument and comment sections start picking sides between Amelia and Lucía."
+  - "Rafael's old bandmate appears with a claim on the black cash box."
+  - "Ayu gets offered a better-paying hotel job and tells no one for two days."
+  - "Hana discovers Evelyn once paid for a surgery connected to her family through a shell account."
+  - "Amelia and Rafael nearly kiss during storm prep in front of a still-recording security camera."
+  - "Arjun is recognized by a family friend who can report his entire life back home."
+  - "Lucía uncovers an immigration support letter that reveals a much softer side of Evelyn's choices."
+  - "A typhoon anniversary memorial brings former residents back with conflicting memories of the same night."
+  - "Ren Akiyama mails one annotated floor plan to the house, and one corner has been deliberately cut away."
+  - "Blackwake offers Hana a silence agreement she once would have signed without blinking."
 initial_trust_map:
-  - "Mara trusts Elias most and Luca least."
-  - "Nia trusts Mara, Elias, and Sora more than Julian or Luca."
-  - "Julian wants Mara's approval and Sora's attention, but trusts neither fully."
-  - "Sora is drawn to Julian yet suspects nearly everyone."
-  - "Luca trusts almost no one, but reads Mara more softly than he wants to."
+  - "Amelia trusts Rafael and Ayu most in practice, but trusts Arjun's judgment more than she wants to admit."
+  - "Rafael trusts Amelia emotionally, Ayu instinctively, and almost no one else."
+  - "Arjun trusts nobody fully, but he feels safest with Ayu and most intrigued by Lucía."
+  - "Lucía wants Amelia's cooperation, Arjun's attention, and proof that Hana is lying."
+  - "Hana trusts almost no one, though she still reacts to Rafael and Amelia like unfinished history."
 initial_romantic_tensions:
-  - "Mara and Elias carry a years-long near-love held together by emergency and avoidance."
-  - "Mara and Luca have unfinished heat tangled with betrayal."
-  - "Sora and Julian are in a flirtation built from curiosity, leverage, and real chemistry."
-  - "Nia occasionally stirs romantic trouble just to see what people deny."
+  - "Amelia and Rafael carry years of unfinished devotion, resentment, and near-confessions."
+  - "Arjun and Lucía are pulled toward each other by intelligence, friction, and mutual danger."
+  - "Rafael and Lucía have spark-heavy antagonism that could turn strategic or reckless."
+  - "Hana's return destabilizes Amelia and Rafael because both once chose the house over telling her the truth."
+  - "Ayu notices everyone else's romantic bad decisions early and occasionally makes them worse."
 first_week_arc_plan:
   - day: 1
-    beat: "Luca returns, Blackwake pressure sharpens, and Nia nearly reveals the key."
+    beat: "Lucía arrives with the copied codicil, Hana returns, and Ayu nearly reveals the lantern-wing key."
   - day: 2
-    beat: "Sora confirms Hana's alias on a partial registry fragment."
+    beat: "Arjun confirms his mentor's note links Evelyn to the ferry archives and starts probing Lucía more openly."
   - day: 3
-    beat: "Julian produces paperwork that helps the house and makes Mara mistrust him more."
+    beat: "A Blackwake repair packet is challenged in public, forcing Rafael and Hana into the same conversation."
   - day: 4
-    beat: "A boiler-room incident suggests Elias is hiding access to something structural."
+    beat: "A basement incident suggests the public floor plan is false and Amelia loses control for one dangerous minute."
   - day: 5
-    beat: "Mara and Elias nearly confess what they remember about the storm, but Luca interrupts."
+    beat: "Amelia and Rafael nearly confess what they each did on typhoon night, then Hana interrupts with one brutal fact."
   - day: 6
-    beat: "Nia opens the east wing alone and misreads what she sees."
+    beat: "Ayu opens the lantern wing alone and misreads what she finds as proof against the wrong person."
   - day: 7
-    beat: "The voice note leaks one sentence that changes the suspect list."
+    beat: "One fragment of Evelyn's voice memo leaks and the house's suspect map changes overnight."
 first_24h_drama_plan:
   - hour_block: "00-01"
-    focus: "Luca's return and the house's immediate emotional shock."
+    focus: "Lucía's arrival and the immediate legitimacy shock to Amelia's control."
   - hour_block: "01-06"
-    focus: "Sniping, testing loyalties, and the first Blackwake pressure point."
+    focus: "Rafael and Hana circle each other while Ayu keeps the house socially afloat."
   - hour_block: "06-12"
-    focus: "Kitchen humor and gossip give way to Sora probing Julian."
+    focus: "Arjun quietly sharpens lines between curiosity, attraction, and suspicion."
   - hour_block: "12-18"
-    focus: "A small clue around the brass key shifts suspicion."
+    focus: "A practical debt threat makes the inheritance fight feel real and expensive."
   - hour_block: "18-24"
-    focus: "A near-confession between Mara and Elias ends with a new unresolved question."
+    focus: "A small clue around the lantern-wing key turns emotional tension into a mystery escalation."
 recap_examples:
   - window: 1h
-    headline: "Luca's return cracks the surface calm."
+    headline: "Lucía's claim turned the lobby into a fault line."
     what_changed:
-      - "Luca walked back into Saltglass House and immediately forced Mara and Elias into defensive positions."
-      - "Julian discovered Blackwake's pressure is faster and uglier than he expected."
+      - "Lucía walked into Lantern House with a copied codicil and forced Amelia to defend authority instead of just managing it."
+      - "Rafael stopped treating Hana's name like old weather and started reacting like the storm had returned."
     emotional_shifts:
-      - "Mara moved from strained control to visible alarm."
-      - "Elias shifted from sarcasm to territorial protection."
+      - "Amelia moved from functional control to visible strain."
+      - "Ayu's cheerful energy started covering fear instead of just chaos."
     clues:
-      - "Talk of the red toolbox resurfaced."
-      - "Nia reacted too strongly when keys came up."
+      - "The lantern-wing key suddenly mattered to more than one person."
+      - "Hana's return made typhoon night feel active instead of historic."
     unresolved_questions:
-      - "Why did Luca choose tonight to return?"
-      - "What is Nia hiding about the east wing?"
-    loyalty_status: "Mara and Elias are aligned but brittle; Sora is floating between camps."
-    romance_status: "Old heat between Mara and Luca reopened the room; Mara and Elias got even less honest."
-    watch_next: "Watch whether Julian sides with Mara or uses the chaos to push into Celeste's records."
+      - "Is Lucía's codicil real?"
+      - "Why did Hana choose tonight to come back?"
+    loyalty_status: "Amelia and Rafael are aligned but brittle; Lucía is already pulling the room toward a legitimacy fight."
+    romance_status: "Old heat between Amelia and Rafael sharpened, while Lucía and Arjun started watching each other too closely."
+    watch_next: "Watch whether Amelia protects the house by lying harder or by letting one truth escape."
   - window: 12h
-    headline: "Charm, debt, and suspicion all deepened."
+    headline: "Debt pressure made every personal crack more expensive."
     what_changed:
-      - "Sora and Julian built dangerous chemistry while circling estate secrets."
-      - "Blackwake's paperwork became the practical threat beneath every emotional fight."
+      - "Blackwake's paperwork moved from background threat to practical deadline."
+      - "Arjun and Lucía built dangerous chemistry while circling the same missing record."
     emotional_shifts:
-      - "Nia's comic energy turned into fear of exclusion."
-      - "Luca stopped performing detachment every time Mara looked at him too long."
+      - "Rafael's sarcasm started sounding like guilt."
+      - "Hana stopped feeling like a ghost and started feeling like a witness."
     clues:
-      - "A reference to Hana's alias appeared."
-      - "The brass ledger key became more than a rumor."
+      - "The copied codicil and the missing registry copy may be parts of one ownership puzzle."
+      - "The basement layout no longer feels trustworthy."
     unresolved_questions:
-      - "How much of the debt is fake?"
-      - "Who removed the registry page after Celeste vanished?"
-    loyalty_status: "No stable camp exists; the house is operating on temporary pairings."
-    romance_status: "Sora and Julian are heating up while Mara's old triangle turns corrosive."
-    watch_next: "Watch for the first concrete document that links Blackwake to the storm night."
+      - "How much of Blackwake's leverage is fabricated?"
+      - "What exactly did Evelyn ask Hana to protect?"
+    loyalty_status: "No stable camp exists; the house is operating on temporary pairings and tactical trust."
+    romance_status: "Amelia and Rafael are one interruption away from honesty, and Arjun and Lucía are halfway to trouble already."
+    watch_next: "Watch for a document challenge, a midnight search, or a confession that arrives one sentence too late."
   - window: 24h
-    headline: "The house survived the day, not the illusion."
+    headline: "Lantern House survived the day, not the illusion."
     what_changed:
-      - "Saltglass House is now openly in crisis rather than privately in denial."
-      - "Multiple characters now understand that Celeste's disappearance and the debt are one story."
+      - "The ownership fight, the debt story, and Evelyn's disappearance are now openly understood as the same wound."
+      - "Hana's return shifted the house from nostalgia into accountability."
     emotional_shifts:
-      - "Mara's authority held, but at higher emotional cost."
-      - "Elias and Luca moved closer to open collision."
+      - "Amelia's authority held, but at a higher emotional cost."
+      - "Rafael and Hana moved closer to open collision while still protecting pieces of each other."
     clues:
-      - "The missing ledger and the sealed tunnel are now linked in conversation."
-      - "Julian's knowledge of estate irregularities is no longer entirely hidden."
+      - "The lantern wing, the hidden archive route, and the copied codicil are now linked in conversation."
+      - "Ren Akiyama's name surfaced as a possible future key to the deeper record trail."
     unresolved_questions:
-      - "What did Celeste try to hide in the east wing?"
       - "Who inside the house is still protecting the oldest lie?"
-    loyalty_status: "Trust is splintering into personal loyalties instead of house loyalty."
-    romance_status: "No confession landed cleanly; every attraction now carries strategic risk."
-    watch_next: "Watch for a midnight search, a document leak, or a betrayal framed as protection."
+      - "Did Evelyn plan succession, disappearance, or both?"
+    loyalty_status: "Trust is splintering into personal loyalties instead of house loyalty, and every alliance now has a private cost."
+    romance_status: "No confession landed cleanly; every attraction now carries inheritance, guilt, or strategic risk."
+    watch_next: "Watch for a late-night archive search, a family message that changes someone's priorities, or a betrayal framed as protection."

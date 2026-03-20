@@ -78,7 +78,7 @@ class RecapConfig(BaseModel):
 class StoryConfig(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
-    title: str = "Saltglass House"
+    title: str = "Lantern House"
     seed_file: str = "story_bible.yaml"
     default_location_slug: str = "front-desk"
 

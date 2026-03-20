@@ -9,9 +9,30 @@ from lantern_house.utils.time import utcnow
 
 
 class FakeRepository:
+    def list_characters(self):
+        return [
+            {
+                "slug": "amelia",
+                "full_name": "Amelia Vale",
+                "cultural_background": "Anglo (US/UK family line)",
+                "family_expectations": "Protect the family name and contain scandal.",
+                "conflict_style": "Calm until forced into blunt clarity.",
+                "privacy_boundaries": "Avoids public vulnerability.",
+                "value_instincts": "Duty first, loyalty through action.",
+                "emotional_expression": "Care through competence and restraint.",
+                "public_persona": "manager",
+                "hidden_wound": "wound",
+                "long_term_desire": "desire",
+                "private_fear": "fear",
+                "message_style": "steady",
+                "ensemble_role": "House Manager",
+                "color": "bright_blue",
+            }
+        ]
+
     def get_world_state_snapshot(self):
         return {
-            "title": "Saltglass House",
+            "title": "Lantern House",
             "active_scene_key": "opening-night",
             "current_story_day": 1,
             "emotional_temperature": 6,
@@ -32,20 +53,20 @@ class FakeRepository:
             "mystery_pressure": 7,
             "romance_pressure": 6,
             "comedic_pressure": 4,
-            "active_character_slugs": ["mara", "nia", "luca"],
+            "active_character_slugs": ["amelia", "ayu", "lucia"],
         }
 
     def list_recent_messages(self, limit=20):
         now = utcnow()
         return [
             MessageView(
-                speaker_label="Mara",
+                speaker_label="Amelia",
                 content="Stay focused.",
                 kind="chat",
                 created_at=now - timedelta(minutes=5),
             ),
             MessageView(
-                speaker_label="Luca",
+                speaker_label="Lucía",
                 content="On what, exactly?",
                 kind="chat",
                 created_at=now - timedelta(minutes=4),
@@ -58,7 +79,7 @@ class FakeRepository:
             EventView(
                 event_type="clue",
                 title="The brass key matters",
-                details="A key was mentioned with unusual urgency.",
+                details="The lantern-wing key was mentioned with unusual urgency.",
                 significance=7,
                 payload={},
                 created_at=now - timedelta(minutes=4),
@@ -70,7 +91,7 @@ class FakeRepository:
         return [
             SummaryView(
                 summary_window="1h",
-                content="Luca's return destabilized the room.",
+                content="Lucía's arrival destabilized the room.",
                 structured_highlights={},
                 bucket_end_at=now - timedelta(hours=1),
             )
@@ -82,10 +103,10 @@ class FakeRepository:
         return [
             StoryArcSnapshot(
                 slug="vanished-owner",
-                title="The Vanishing of Celeste Vale",
+                title="What Happened to Evelyn Vale?",
                 summary="The central mystery remains open.",
                 stage_index=0,
-                unresolved_questions=["Who was Celeste afraid of?"],
+                unresolved_questions=["Who was Evelyn warning Amelia about?"],
                 reveal_ladder=["A clue appears."],
                 pressure_score=10,
             )
@@ -101,16 +122,22 @@ class FakeRepository:
         ]
 
     def get_relationship_map(self):
-        return ["mara<->elias: trust 8, desire 7, suspicion 3, obligation 9."]
+        return ["amelia<->rafael: trust 8, desire 8, suspicion 4, obligation 9."]
 
     def get_character_overview(self, slug):
         return {
-            "slug": "mara",
-            "full_name": "Mara Dela Cruz",
+            "slug": "amelia",
+            "full_name": "Amelia Vale",
+            "cultural_background": "Anglo (US/UK family line)",
             "public_persona": "manager",
             "hidden_wound": "wound",
             "long_term_desire": "desire",
             "private_fear": "fear",
+            "family_expectations": "Protect the family name and contain scandal.",
+            "conflict_style": "Calm until forced into blunt clarity.",
+            "privacy_boundaries": "Avoids public vulnerability.",
+            "value_instincts": "Duty first, loyalty through action.",
+            "emotional_expression": "Care through competence and restraint.",
             "message_style": "clipped",
             "ensemble_role": "manager",
             "location_name": "Front Desk",
@@ -121,10 +148,10 @@ class FakeRepository:
     def list_relationship_snapshots(self, slug):
         return [
             RelationshipSnapshot(
-                counterpart_slug="elias",
+                counterpart_slug="rafael",
                 trust_score=8,
-                desire_score=7,
-                suspicion_score=3,
+                desire_score=8,
+                suspicion_score=4,
                 obligation_score=9,
                 summary="Complicated history.",
             )
@@ -141,15 +168,19 @@ def test_context_assembler_builds_packets() -> None:
     assembler = ContextAssembler(FakeRepository(), PacingHealthEvaluator())
     manager_packet = assembler.build_manager_packet()
     character_packet = assembler.build_character_packet(
-        "mara",
+        "amelia",
         {
             "objective": "Push the scene toward a sharper question.",
             "per_character": {
-                "mara": {"goal": "control the damage", "pressure_point": "Luca is back"}
+                "amelia": {
+                    "goal": "control the damage",
+                    "pressure_point": "Hana is back",
+                }
             },
         },
     )
-    assert manager_packet.title == "Saltglass House"
+    assert manager_packet.title == "Lantern House"
+    assert "Amelia Vale" in manager_packet.cast_guidance[0]
     assert "Who hid the ledger?" in manager_packet.unresolved_questions
-    assert character_packet.character_slug == "mara"
+    assert character_packet.character_slug == "amelia"
     assert "control the damage" in character_packet.manager_directive

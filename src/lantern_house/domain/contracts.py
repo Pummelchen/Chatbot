@@ -177,6 +177,7 @@ class ManagerContextPacket(BaseModel):
     scene_objective: str
     scene_location: str
     emotional_temperature: int
+    cast_guidance: list[str] = Field(default_factory=list)
     current_arc_summaries: list[str] = Field(default_factory=list)
     unresolved_questions: list[str] = Field(default_factory=list)
     relationship_map: list[str] = Field(default_factory=list)
@@ -192,10 +193,16 @@ class CharacterContextPacket(BaseModel):
 
     character_slug: str
     full_name: str
+    cultural_background: str
     public_persona: str
     hidden_wound: str
     long_term_desire: str
     private_fear: str
+    family_expectations: str
+    conflict_style: str
+    privacy_boundaries: str
+    value_instincts: str
+    emotional_expression: str
     message_style: str
     ensemble_role: str
     current_location: str

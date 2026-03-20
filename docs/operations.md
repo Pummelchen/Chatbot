@@ -17,6 +17,8 @@ lantern-house seed
 lantern-house run
 ```
 
+If you are moving from an older story bible to the current globally optimized cast, reseed into a fresh database so the new character-context fields and seed canon are consistent.
+
 ## Operational Behavior
 
 - The runtime keeps a persistent `run_state` row with the last tick, message, recap hour, and degraded-mode markers.
