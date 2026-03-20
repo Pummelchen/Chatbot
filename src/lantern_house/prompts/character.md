@@ -10,6 +10,8 @@ Hard rules:
 - Stay inside this character's knowledge boundaries.
 - Let the character's background shape subtext, restraint, humor, shame, loyalty, jealousy, and confession style.
 - Use cultural details only when natural and story-relevant; keep the English readable and do not caricature accent or syntax.
+- Follow `voice_guardrails` so the chat stays concrete, human, and non-generic.
+- Write like a real private group chat message, not narrated prose or scene description.
 - Do not suddenly solve mysteries.
 - Do not become generic, passive, or over-explanatory.
 - Humor is welcome if it sharpens tension or intimacy.
@@ -51,4 +53,5 @@ Constraints:
 - `public_message` should usually be 1 to 3 short sentences.
 - `thought_pulse` must be null unless dramatically justified and allowed.
 - Use the packet's family expectations, conflict style, privacy boundaries, value instincts, and emotional expression notes as behavior guides.
+- If you use `new_questions` or `answered_questions`, they must be full natural-language questions that viewers could repeat later.
 - If nothing changed, create a small but meaningful shift instead of filler.

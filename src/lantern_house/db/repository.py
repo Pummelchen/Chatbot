@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from datetime import timedelta
 from typing import Any
 
@@ -16,10 +17,14 @@ from lantern_house.domain.contracts import (
     MessageView,
     RelationshipSnapshot,
     StoryArcSnapshot,
+    StoryProgressionPlan,
     SummaryView,
 )
 from lantern_house.domain.enums import MessageKind, SummaryWindow
 from lantern_house.utils.time import floor_to_hour, isoformat, utcnow
+
+_MAX_UNRESOLVED_QUESTIONS = 12
+_MAX_ARCHIVED_THREADS = 24
 
 
 class StoryRepository:
@@ -325,11 +330,15 @@ class StoryRepository:
                 StoryArcSnapshot(
                     slug=row.slug,
                     title=row.title,
+                    status=row.status,
+                    arc_type=row.arc_type,
                     summary=row.summary,
                     stage_index=row.stage_index,
                     unresolved_questions=row.unresolved_questions,
                     reveal_ladder=row.reveal_ladder,
+                    payoff_window=row.payoff_window,
                     pressure_score=row.pressure_score,
+                    metadata=row.metadata_json,
                 )
                 for row in rows
             ]
@@ -665,6 +674,42 @@ class StoryRepository:
                 "thought_pulse": pulse_content,
             }
 
+    def apply_story_progression(
+        self, plan: StoryProgressionPlan, *, now=None
+    ) -> StoryProgressionPlan:
+        if not plan.arc_updates and not plan.surfaced_questions and not plan.archived_threads:
+            return plan
+        now = now or utcnow()
+        with self.session_factory.session_scope() as session:
+            arcs = {
+                row.slug: row
+                for row in session.scalars(
+                    select(models.StoryArc).where(models.StoryArc.status != "resolved")
+                ).all()
+            }
+            surfaced_questions = list(plan.surfaced_questions)
+            archived_threads = list(plan.archived_threads)
+            for update in plan.arc_updates:
+                arc = arcs.get(update.slug)
+                if arc is None:
+                    continue
+                arc.stage_index = update.stage_index
+                arc.pressure_score = update.pressure_score
+                metadata = dict(arc.metadata_json)
+                metadata.update(update.metadata)
+                metadata["last_progress_checkpoint_at"] = isoformat(now)
+                arc.metadata_json = metadata
+                surfaced_questions.extend(update.surfaced_questions)
+                archived_threads.extend(update.archived_threads)
+
+            self._update_unresolved_questions(
+                session,
+                surfaced_questions,
+                [],
+                archived_threads=archived_threads,
+            )
+        return plan
+
     def save_recap_bundle(self, *, bucket_end_at, bundle, generated_by: str = "announcer") -> None:
         with self.session_factory.session_scope() as session:
             for window, summary in {
@@ -859,20 +904,45 @@ class StoryRepository:
         session,
         new_questions: list[str],
         answered_questions: list[str],
+        *,
+        archived_threads: list[str] | None = None,
     ) -> None:
-        if not new_questions and not answered_questions:
+        if not new_questions and not answered_questions and not archived_threads:
             return
         world = session.scalar(select(models.WorldState).order_by(desc(models.WorldState.id)))
         if world is None:
             return
-        existing = list(world.unresolved_questions)
+        existing = list(world.unresolved_questions or [])
+        archive = list(world.archived_threads or [])
+        existing_index = {_normalize_memory_item(item): item for item in existing}
+
         for question in new_questions:
-            if question not in existing:
-                existing.append(question)
-        for question in answered_questions:
-            if question in existing:
-                existing.remove(question)
+            normalized = _normalize_memory_item(question)
+            if not normalized or normalized in existing_index:
+                continue
+            existing.append(question)
+            existing_index[normalized] = question
+
+        answered = {_normalize_memory_item(item) for item in answered_questions}
+        if answered:
+            existing = [
+                question
+                for question in existing
+                if _normalize_memory_item(question) not in answered
+            ]
+
+        if len(existing) > _MAX_UNRESOLVED_QUESTIONS:
+            overflow = existing[:-_MAX_UNRESOLVED_QUESTIONS]
+            archive = _merge_memory_lists(archive, overflow, limit=_MAX_ARCHIVED_THREADS)
+            existing = existing[-_MAX_UNRESOLVED_QUESTIONS :]
+
+        archive = _merge_memory_lists(
+            archive,
+            archived_threads or [],
+            limit=_MAX_ARCHIVED_THREADS,
+        )
         world.unresolved_questions = existing
+        world.archived_threads = archive
 
     def _directive_dict(self, row: models.ManagerDirective) -> dict[str, Any]:
         return {
@@ -916,3 +986,22 @@ class StoryRepository:
 
 def _clamp(value: int, minimum: int = -10, maximum: int = 10) -> int:
     return max(minimum, min(maximum, value))
+
+
+def _normalize_memory_item(value: str) -> str:
+    normalized = re.sub(r"[^a-z0-9 ]+", " ", value.lower())
+    return " ".join(normalized.split())
+
+
+def _merge_memory_lists(existing: list[str], additions: list[str], *, limit: int) -> list[str]:
+    merged = list(existing)
+    seen = {_normalize_memory_item(item) for item in merged}
+    for item in additions:
+        normalized = _normalize_memory_item(item)
+        if not normalized or normalized in seen:
+            continue
+        merged.append(item)
+        seen.add(normalized)
+    if len(merged) > limit:
+        merged = merged[-limit:]
+    return merged

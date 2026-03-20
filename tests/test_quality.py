@@ -7,11 +7,13 @@ from lantern_house.domain.contracts import (
     CharacterContextPacket,
     CharacterTurn,
     EventCandidate,
+    EventView,
     ManagerContextPacket,
     MessageView,
     PacingHealthReport,
 )
 from lantern_house.domain.enums import EventType
+from lantern_house.quality.governance import StoryGovernanceEvaluator
 from lantern_house.quality.pacing import ContinuityGuard, PacingHealthEvaluator
 from lantern_house.services.character import CharacterService
 from lantern_house.services.manager import StoryManagerService
@@ -88,6 +90,38 @@ def test_continuity_guard_flags_reveal_budget_and_long_message() -> None:
     assert "reveal-budget" in flag_types
 
 
+def test_continuity_guard_flags_robotic_voice() -> None:
+    packet = CharacterContextPacket(
+        character_slug="amelia",
+        full_name="Amelia Vale",
+        cultural_background="Anglo (US/UK family line)",
+        public_persona="manager",
+        hidden_wound="wound",
+        long_term_desire="desire",
+        private_fear="fear",
+        family_expectations="Protect the family name and contain scandal.",
+        conflict_style="Calm until forced into blunt clarity.",
+        privacy_boundaries="Avoids public vulnerability.",
+        value_instincts="Duty first, loyalty through action.",
+        emotional_expression="Care through competence and restraint.",
+        message_style="Clipped and dry",
+        ensemble_role="House Manager",
+        current_location="Front Desk",
+        voice_guardrails=["Prefer concrete details over speeches."],
+        emotional_state={"current": "guarded"},
+        current_goals=["protect the house"],
+        relationship_snapshots=[],
+        recent_messages=[],
+        relevant_facts=["Invoices are stacked under the desk."],
+        recent_events=[],
+        manager_directive="Objective: keep the scene moving.",
+        forbidden_boundaries=[],
+    )
+    turn = CharacterTurn(public_message="The truth is we both know this changes everything.")
+    flags = ContinuityGuard().review_turn(packet=packet, directive={"reveal_budget": 1}, turn=turn)
+    assert "robotic-voice" in {flag.flag_type for flag in flags}
+
+
 def test_character_service_coerces_broken_event_type_hint() -> None:
     service = CharacterService.__new__(CharacterService)
     payload = {
@@ -127,6 +161,22 @@ def test_character_service_fills_missing_relationship_summary() -> None:
     assert update["suspicion_delta"] == 3
 
 
+def test_character_service_filters_fragment_questions() -> None:
+    service = CharacterService.__new__(CharacterService)
+    turn = CharacterTurn(
+        public_message="Watch the desk, not me.",
+        new_questions=[
+            "the exact nature of the mystery",
+            "Where did the copied codicil go",
+            "none",
+        ],
+        answered_questions=["none", "How much of the debt is real"],
+    )
+    sanitized = service._sanitize(turn, thought_pulse_allowed=False)
+    assert sanitized.new_questions == ["Where did the copied codicil go?"]
+    assert sanitized.answered_questions == ["How much of the debt is real?"]
+
+
 def test_manager_normalize_respects_active_character_bounds() -> None:
     service = StoryManagerService(
         llm=None,
@@ -151,3 +201,97 @@ def test_manager_normalize_respects_active_character_bounds() -> None:
     )
     assert 2 <= len(normalized.active_character_slugs) <= 3
     assert "amelia" in normalized.active_character_slugs
+
+
+def test_story_governance_detects_hourly_progression_gap_and_voice_risk() -> None:
+    now = utcnow()
+    messages = [
+        MessageView(
+            speaker_label="Amelia",
+            content="The truth is we both know this changes everything.",
+            kind="chat",
+            created_at=now - timedelta(minutes=4),
+        ),
+        MessageView(
+            speaker_label="Rafael",
+            content="The truth is we both know this changes everything.",
+            kind="chat",
+            created_at=now - timedelta(minutes=3),
+        ),
+        MessageView(
+            speaker_label="Lucía",
+            content="The truth is we both know this changes everything.",
+            kind="chat",
+            created_at=now - timedelta(minutes=2),
+        ),
+        MessageView(
+            speaker_label="Arjun",
+            content="The truth is we both know this changes everything.",
+            kind="chat",
+            created_at=now - timedelta(minutes=1),
+        ),
+    ]
+    events = [
+        EventView(
+            event_type="routine",
+            title="Tea was served",
+            details="The kitchen stayed calm.",
+            significance=3,
+            payload={},
+            created_at=now - timedelta(minutes=20),
+        )
+    ]
+    report = StoryGovernanceEvaluator().evaluate(
+        messages=messages,
+        events=events,
+        world_metadata={
+            "story_engine": {
+                "core_tensions": [
+                    {"key": "house-survival", "keywords": ["debt", "sale"]},
+                    {"key": "hidden-records", "keywords": ["ledger", "archive"]},
+                ]
+            }
+        },
+        unresolved_questions=["Who moved the archive?"],
+    )
+    assert report.hourly_progression_met is False
+    assert report.robotic_voice_risk is True
+    assert report.core_drift is True
+    assert report.viewer_value_score < 70
+
+
+def test_continuity_guard_flags_chat_register_drift() -> None:
+    packet = CharacterContextPacket(
+        character_slug="arjun",
+        full_name="Arjun Mehta",
+        cultural_background="Indian",
+        public_persona="observer",
+        hidden_wound="wound",
+        long_term_desire="desire",
+        private_fear="fear",
+        family_expectations="Be respectable and measured.",
+        conflict_style="Quietly incisive.",
+        privacy_boundaries="Deflects direct exposure.",
+        value_instincts="Protect dignity before spectacle.",
+        emotional_expression="Controlled warmth and sharp observation.",
+        message_style="Measured and dry",
+        ensemble_role="Long-Term Guest / Observer",
+        current_location="Front Desk",
+        voice_guardrails=["Keep it chatty, not literary."],
+        emotional_state={"current": "watchful"},
+        current_goals=["push the scene"],
+        relationship_snapshots=[],
+        recent_messages=[],
+        relevant_facts=[],
+        recent_events=[],
+        manager_directive="Objective: keep pressure up.",
+        forbidden_boundaries=[],
+    )
+    turn = CharacterTurn(
+        public_message=(
+            "The reception counter's card reader is buzzing like a trapped beetle. "
+            "It's a pattern I've observed for weeks, a subtle rhythm of hurried departures."
+        )
+    )
+    flags = ContinuityGuard().review_turn(packet=packet, directive={"reveal_budget": 1}, turn=turn)
+    assert "chat-register" in {flag.flag_type for flag in flags}

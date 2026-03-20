@@ -46,3 +46,24 @@ async def test_recap_service_fallback_uses_structured_events() -> None:
     assert "Brass key resurfaces" in bundle.one_hour.headline
     assert bundle.one_hour.clues
     assert bundle.twelve_hours.headline.startswith("Last 12 hours")
+
+
+def test_recap_service_window_digest_stays_bounded() -> None:
+    now = utcnow()
+    service = RecapService(FakeRepository(), BrokenLLM(), "gemma3:4b")
+    events = [
+        EventView(
+            event_type="clue" if index % 2 == 0 else "question",
+            title=f"Event {index}",
+            details=f"Detail {index}",
+            significance=(index % 10) + 1,
+            payload={},
+            created_at=now - timedelta(minutes=index),
+        )
+        for index in range(40)
+    ]
+    digest = service._window_digest(events)
+    assert digest["event_count"] == 40
+    assert len(digest["top_events"]) == 8
+    assert len(digest["latest_events"]) == 5
+    assert len(digest["open_questions"]) <= 5

@@ -15,6 +15,7 @@ from lantern_house.runtime.scheduler import TurnScheduler
 from lantern_house.services.character import CharacterService
 from lantern_house.services.event_extractor import EventExtractor
 from lantern_house.services.manager import StoryManagerService
+from lantern_house.services.progression import StoryProgressionService
 from lantern_house.services.recaps import RecapService
 from lantern_house.utils.time import utcnow
 
@@ -31,6 +32,7 @@ class RuntimeOrchestrator:
         manager_service: StoryManagerService,
         character_service: CharacterService,
         recap_service: RecapService,
+        progression_service: StoryProgressionService,
         scheduler: TurnScheduler,
         recovery_service: RecoveryService,
         event_extractor: EventExtractor,
@@ -43,6 +45,7 @@ class RuntimeOrchestrator:
         self.manager_service = manager_service
         self.character_service = character_service
         self.recap_service = recap_service
+        self.progression_service = progression_service
         self.scheduler = scheduler
         self.recovery_service = recovery_service
         self.event_extractor = event_extractor
@@ -83,6 +86,7 @@ class RuntimeOrchestrator:
                     run_state=run_state,
                     directive=directive,
                     health=manager_packet.pacing_health,
+                    governance=manager_packet.story_governance,
                 ):
                     self.repository.set_runtime_status(
                         "running",
@@ -125,6 +129,18 @@ class RuntimeOrchestrator:
                     directive=directive,
                     turn=turn,
                 )
+                if self._should_repair_turn(flags):
+                    degraded_mode = True
+                    turn = self.character_service.repair(
+                        packet=packet,
+                        thought_pulse_allowed=thought_pulse_allowed,
+                    )
+                    events = self.event_extractor.extract(speaker_slug=speaker_slug, turn=turn)
+                    flags = self.continuity_guard.review_turn(
+                        packet=packet,
+                        directive=directive,
+                        turn=turn,
+                    )
 
                 persisted = self.repository.record_turn(
                     speaker_slug=speaker_slug,
@@ -137,6 +153,12 @@ class RuntimeOrchestrator:
                     latency_ms=stats.latency_ms if stats else None,
                     now=now,
                 )
+                progression = self.progression_service.plan(
+                    arcs=self.repository.list_open_arcs(limit=12),
+                    events=events,
+                    now=now,
+                )
+                self.repository.apply_story_progression(progression, now=now)
 
                 self.renderer.render_message(
                     when=persisted["created_at"],
@@ -194,6 +216,10 @@ class RuntimeOrchestrator:
 
     def stop(self) -> None:
         self._stop_event.set()
+
+    def _should_repair_turn(self, flags) -> bool:
+        repairable = {"robotic-voice", "chat-register", "reveal-budget", "forbidden-knowledge"}
+        return any(flag.flag_type in repairable for flag in flags)
 
     def _install_signal_handlers(self) -> None:
         loop = asyncio.get_running_loop()

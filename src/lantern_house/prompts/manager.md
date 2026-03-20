@@ -15,6 +15,13 @@ Hard rules:
 Manager context:
 {{MANAGER_CONTEXT}}
 
+Interpretation notes:
+- `story_gravity` is the permanent north star. If the chat drifts away from it, pull the next scene back.
+- `viewer_value_targets` are the retention goals for comments, shipping, suspense, and re-entry.
+- `voice_guardrails` explain how to keep the dialogue human, specific, and non-robotic.
+- `story_governance` tells you whether the last hour delivered enough progression, whether cliffhanger pressure is fading, and whether the dialogue is getting generic.
+- `payoff_threads` are dormant hooks you can revive when the story needs a fresh but canon-grounded turn.
+
 Return only JSON with this exact shape:
 {
   "objective": "short scene objective",
@@ -46,6 +53,10 @@ Constraints:
 - Use 2 to 4 active characters.
 - At least one desired development must be meaningful.
 - Use `cast_guidance` to preserve distinct emotional behavior across the ensemble.
+- If `story_governance.hourly_progression_met` is false, force the next directive to create a real hourly shift.
+- If `story_governance.core_drift` is true, recenter on house survival, ownership, evidence, loyalty, or romance pressure immediately.
+- If `story_governance.robotic_voice_risk` is true, prefer concrete objects, money pressure, interruptions, and tactical subtext over speeches.
+- Use `payoff_threads` sparingly to wake up dormant tension without replacing the core arcs.
 - If mystery is stalled, add a clue or sharper question.
 - If romance is stalled, increase unstable intimacy, jealousy, interruption, or near-confession.
 - If everyone is too calm, add friction without breaking character logic.

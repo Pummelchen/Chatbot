@@ -27,6 +27,9 @@ If you are moving from an older story bible to the current globally optimized ca
 - Recovery checks for missed recap windows and produces them on the next start.
 - Recovery marks an `unclean-shutdown` continuity flag if the prior process died while `run_state.status` was `starting` or `running`.
 - Manager refreshes are interval-based with health-triggered overrides.
+- The manager also receives a story-governance report that checks hourly progression, core-story drift, cliffhanger pressure, and robotic-voice risk.
+- Arc progression is persisted from structured event hits, and unresolved-question memory is capped so long unattended runs do not inflate prompts.
+- Recap generation uses compact event digests rather than replaying every event in the raw 12h or 24h window.
 - Logs are written to `logs/lantern_house.log`.
 
 ## Failure Handling
@@ -35,6 +38,7 @@ If you are moving from an older story bible to the current globally optimized ca
 - If the model response is malformed, the client attempts JSON extraction before falling back.
 - If a character payload omits optional-but-expected relationship details, the coercion layer fills safe defaults instead of crashing the turn.
 - If model generation still fails and degraded mode is enabled, the service emits conservative continuity-safe output.
+- If a generated chat turn reads like robotic dialogue or prose narration, the runtime can repair it with a continuity-safe fallback before persistence.
 - Database errors should stop the runtime rather than risk silent canon loss.
 
 ## Extension Points

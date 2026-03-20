@@ -78,6 +78,22 @@ class PacingHealthEvaluator:
 
 
 class ContinuityGuard:
+    _GENERIC_DIALOGUE_MARKERS = (
+        "the truth is",
+        "this changes everything",
+        "we both know",
+        "i can't keep doing this",
+        "it's not that simple",
+    )
+    _NARRATIVE_MARKERS = (
+        "i've observed",
+        "it's a pattern",
+        "a subtle rhythm",
+        "it felt like",
+        "the room was",
+        "the air was",
+    )
+
     def review_turn(
         self,
         *,
@@ -143,7 +159,59 @@ class ContinuityGuard:
                     )
                 )
                 break
+        if self._robotic_voice_risk(packet=packet, message=turn.public_message):
+            flags.append(
+                ContinuityFlagDraft(
+                    severity=FlagSeverity.INFO,
+                    flag_type="robotic-voice",
+                    description=(
+                        f"{packet.character_slug} slipped toward generic dialogue instead of "
+                        "scene-specific speech."
+                    ),
+                    related_entity=packet.character_slug,
+                )
+            )
+        if self._chat_register_drift(message=turn.public_message):
+            flags.append(
+                ContinuityFlagDraft(
+                    severity=FlagSeverity.INFO,
+                    flag_type="chat-register",
+                    description=(
+                        f"{packet.character_slug} sounded too much like prose narration "
+                        "instead of a live group chat message."
+                    ),
+                    related_entity=packet.character_slug,
+                )
+            )
         return flags
+
+    def _robotic_voice_risk(self, *, packet: CharacterContextPacket, message: str) -> bool:
+        lowered = message.lower()
+        if not any(marker in lowered for marker in self._GENERIC_DIALOGUE_MARKERS):
+            return False
+
+        concrete_terms = {
+            *re.findall(r"[a-z]{4,}", packet.current_location.lower()),
+            *(
+                token
+                for fact in packet.relevant_facts[:3]
+                for token in re.findall(r"[a-z]{4,}", fact.lower())
+            ),
+            *(
+                snapshot.split(":", 1)[0].strip().lower()
+                for snapshot in packet.relationship_snapshots[:3]
+                if ":" in snapshot
+            ),
+        }
+        return not any(term in lowered for term in concrete_terms)
+
+    def _chat_register_drift(self, *, message: str) -> bool:
+        lowered = message.lower()
+        if "?" in lowered:
+            return False
+        if not any(marker in lowered for marker in self._NARRATIVE_MARKERS):
+            return False
+        return len(message.split()) >= 14
 
 
 def summarize_event_types(events: list[EventView]) -> Counter:

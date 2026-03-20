@@ -38,9 +38,9 @@ class RecapService:
             {
                 "RECAP_CONTEXT": {
                     "bucket_end_at": isoformat(bucket_end_at),
-                    "events_1h": [event.model_dump() for event in events_1h],
-                    "events_12h": [event.model_dump() for event in events_12h],
-                    "events_24h": [event.model_dump() for event in events_24h],
+                    "events_1h": self._window_digest(events_1h),
+                    "events_12h": self._window_digest(events_12h),
+                    "events_24h": self._window_digest(events_24h),
                     "recent_summaries": [summary.model_dump() for summary in recent_summaries],
                 }
             },
@@ -113,6 +113,18 @@ class RecapService:
             romance_status=romance,
             watch_next="Watch the next pair of characters who think they can talk privately.",
         )
+
+    def _window_digest(self, events: list[EventView]) -> dict:
+        top_events = sorted(events, key=lambda item: item.significance, reverse=True)[:8]
+        latest_events = events[-5:]
+        questions = [event.details for event in events if event.event_type == "question"][:5]
+        return {
+            "event_count": len(events),
+            "type_counts": dict(Counter(event.event_type for event in events)),
+            "top_events": [event.model_dump() for event in top_events],
+            "latest_events": [event.model_dump() for event in latest_events],
+            "open_questions": questions,
+        }
 
     def _mentions_unknown_entities(self, bundle: RecapBundle) -> bool:
         world_title = self.repository.get_world_state_snapshot()["title"]

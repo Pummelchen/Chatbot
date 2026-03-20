@@ -142,11 +142,34 @@ class StoryArcSnapshot(BaseModel):
 
     slug: str
     title: str
+    status: str = "active"
+    arc_type: str = "mystery"
     summary: str
     stage_index: int
     unresolved_questions: list[str] = Field(default_factory=list)
     reveal_ladder: list[str] = Field(default_factory=list)
+    payoff_window: str = "weeks"
     pressure_score: int
+    metadata: dict = Field(default_factory=dict)
+
+
+class StoryArcProgressUpdate(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    slug: str
+    stage_index: int
+    pressure_score: int
+    metadata: dict = Field(default_factory=dict)
+    surfaced_questions: list[str] = Field(default_factory=list)
+    archived_threads: list[str] = Field(default_factory=list)
+
+
+class StoryProgressionPlan(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    arc_updates: list[StoryArcProgressUpdate] = Field(default_factory=list)
+    surfaced_questions: list[str] = Field(default_factory=list)
+    archived_threads: list[str] = Field(default_factory=list)
 
 
 class PacingHealthReport(BaseModel):
@@ -158,6 +181,19 @@ class PacingHealthReport(BaseModel):
     romance_stalled: bool = False
     low_progression: bool = False
     too_agreeable: bool = False
+    recommendations: list[str] = Field(default_factory=list)
+
+
+class StoryGovernanceReport(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    viewer_value_score: int = Field(default=100, ge=0, le=100)
+    hourly_progression_met: bool = True
+    meaningful_progressions_last_hour: int = 0
+    core_drift: bool = False
+    robotic_voice_risk: bool = False
+    cliffhanger_pressure_low: bool = False
+    active_gravity_axes: list[str] = Field(default_factory=list)
     recommendations: list[str] = Field(default_factory=list)
 
 
@@ -177,15 +213,20 @@ class ManagerContextPacket(BaseModel):
     scene_objective: str
     scene_location: str
     emotional_temperature: int
+    story_gravity: list[str] = Field(default_factory=list)
+    viewer_value_targets: list[str] = Field(default_factory=list)
+    voice_guardrails: list[str] = Field(default_factory=list)
     cast_guidance: list[str] = Field(default_factory=list)
     current_arc_summaries: list[str] = Field(default_factory=list)
     unresolved_questions: list[str] = Field(default_factory=list)
+    payoff_threads: list[str] = Field(default_factory=list)
     relationship_map: list[str] = Field(default_factory=list)
     recent_summaries: list[str] = Field(default_factory=list)
     recent_events: list[str] = Field(default_factory=list)
     recent_messages: list[str] = Field(default_factory=list)
     continuity_warnings: list[str] = Field(default_factory=list)
     pacing_health: PacingHealthReport
+    story_governance: StoryGovernanceReport = Field(default_factory=StoryGovernanceReport)
 
 
 class CharacterContextPacket(BaseModel):
@@ -206,6 +247,7 @@ class CharacterContextPacket(BaseModel):
     message_style: str
     ensemble_role: str
     current_location: str
+    voice_guardrails: list[str] = Field(default_factory=list)
     emotional_state: dict = Field(default_factory=dict)
     current_goals: list[str] = Field(default_factory=list)
     relationship_snapshots: list[str] = Field(default_factory=list)

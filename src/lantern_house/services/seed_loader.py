@@ -18,7 +18,7 @@ class StorySeedLoader:
     def seed_database(self, *, force: bool = False) -> None:
         payload = self.load_seed_payload()
         with self.session_factory.session_scope() as session:
-            existing = session.scalar(select(models.Character).limit(1))
+            existing = session.scalar(select(models.Character.id).limit(1))
             if existing is not None and not force:
                 self._validate_existing_seed(session, payload)
                 return
@@ -164,6 +164,7 @@ class StorySeedLoader:
                         "first_week_arc_plan": payload["first_week_arc_plan"],
                         "first_24h_drama_plan": payload["first_24h_drama_plan"],
                         "future_plot_hooks": payload["future_plot_hooks"],
+                        "story_engine": payload.get("story_engine", {}),
                         "future_recurring_character": payload.get("future_recurring_character"),
                         "recap_examples": payload["recap_examples"],
                     },
@@ -224,7 +225,7 @@ class StorySeedLoader:
         missing = [
             name
             for name, model in required_models.items()
-            if session.scalar(select(model).limit(1)) is None
+            if session.scalar(select(model.id).limit(1)) is None
         ]
         if missing:
             joined = ", ".join(missing)

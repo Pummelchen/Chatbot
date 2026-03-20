@@ -82,14 +82,29 @@ class StoryManagerService:
         active = roster[: self.runtime_config.active_character_max]
         if len(active) < self.runtime_config.active_character_min:
             active = roster[: self.runtime_config.active_character_min]
+        governance = context.story_governance
         objective = (
             "Disturb the fragile calm with one practical problem "
             "and one emotionally loaded question."
         )
+        if not governance.hourly_progression_met:
+            objective = (
+                "Force one irreversible shift this hour in trust, evidence, money pressure, "
+                "or romantic risk."
+            )
+        elif governance.core_drift:
+            objective = (
+                "Recenter the house around survival pressure, ownership conflict, "
+                "hidden records, and unstable attraction."
+            )
         desired = [
             "Surface a clue linked to the debt or the sealed lantern wing.",
             "Sharpen an old romantic or loyalty fault line without resolving it.",
         ]
+        if context.payoff_threads:
+            desired[0] = (
+                f"Revive this dormant hook in a grounded way: {context.payoff_threads[0]}"
+            )
         if context.pacing_health.mystery_stalled:
             desired[0] = (
                 "Force a more specific question about the vanished owner, "
@@ -97,10 +112,20 @@ class StoryManagerService:
             )
         if context.pacing_health.romance_stalled:
             desired[1] = "Push interrupted intimacy, jealousy, or an almost-confession."
+        if governance.cliffhanger_pressure_low:
+            desired[1] = (
+                "End the exchange on an interruption, dangerous question, "
+                "or emotionally loaded threat."
+            )
         per_character = {
             slug: CharacterGoal(
-                goal="Push the scene one inch closer to truth.",
-                pressure_point="You want to speak and withhold at the same time.",
+                goal=(
+                    "Push the scene one inch closer to truth using concrete, "
+                    "socially risky language."
+                ),
+                pressure_point=(
+                    "You want to speak and withhold at the same time while staying specific."
+                ),
                 taboo_topics=["Do not solve the central mystery outright."],
             )
             for slug in active
@@ -119,10 +144,13 @@ class StoryManagerService:
             speaker_weights={slug: 1.0 for slug in active},
             per_character=per_character,
             thought_pulse=thought,
-            pacing_actions=context.pacing_health.recommendations,
+            pacing_actions=(
+                context.pacing_health.recommendations + governance.recommendations
+            )[:4],
             continuity_watch=context.continuity_warnings[:4],
             unresolved_questions_to_push=context.unresolved_questions[:2],
             recentering_hint=(
-                "If energy dips, let a practical house problem expose an emotional fault line."
+                "If energy dips, let a practical house problem, dormant payoff thread, or "
+                "document pressure expose an emotional fault line and end on a sharper question."
             ),
         )

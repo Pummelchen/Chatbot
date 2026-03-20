@@ -8,6 +8,34 @@ setting:
     - "That same night a codicil, a debt ledger, and a registry copy disappeared while Hana Seo left town under a cloud of accusation."
   unresolved_old_event: "Evelyn Vale disappeared on typhoon night after warning Amelia not to open the lantern wing; by dawn the ownership papers were compromised, the debt trail was fractured, and Hana Seo had vanished from the house."
   money_pressure: "Blackwake Finance is accelerating repair debt, disputing title history, and pressuring Lantern House into a forced sale before the residents can prove the ownership record was manipulated."
+story_engine:
+  central_force: "Every hour must tighten at least one of the house's permanent engines: survival pressure, missing-owner mystery, inheritance conflict, loyalty fracture, or unstable attraction."
+  core_promises:
+    - "The house itself always matters; practical problems should expose emotional fault lines."
+    - "Mystery advances in fragments, not dumps."
+    - "Romance should complicate decisions, not float outside the plot."
+    - "Viewers should always have someone to suspect, someone to ship, and a new reason to come back."
+  viewer_value_targets:
+    - "Deliver at least one meaningful hourly progression in trust, evidence, money pressure, or desire."
+    - "Maintain pick-a-side tension between at least two active emotional camps."
+    - "Keep re-entry easy through concrete clues, shifting loyalties, and recap-friendly turns."
+    - "Favor memorable specifics over generic speeches so the dialogue stays human."
+  voice_guardrails:
+    - "Prefer concrete objects, rooms, debts, records, weather, food, and social tactics over abstract monologues."
+    - "Use subtext, interruption, implication, and avoidance before confession."
+    - "Let characters sound distinct in rhythm and motive without using caricatured accents."
+    - "Avoid therapy-speak, filler philosophy, and repeated generic confrontation lines."
+  core_tensions:
+    - key: house-survival
+      keywords: ["house", "sale", "debt", "rent", "repair", "blackwake", "guest", "lobby"]
+    - key: hidden-records
+      keywords: ["registry", "archive", "codicil", "ledger", "memo", "record", "wing", "key"]
+    - key: loyalty-fracture
+      keywords: ["trust", "betray", "protect", "choose", "lie", "loyal", "side"]
+    - key: unstable-romance
+      keywords: ["kiss", "want", "jealous", "confess", "touch", "almost", "desire"]
+    - key: inheritance-conflict
+      keywords: ["claim", "family", "owner", "heir", "vale", "ortega", "control"]
 initial_scene:
   scene_key: opening-night
   objective: "Hold the lobby together through a brownout while Lucía arrives with an inheritance claim and Hana's return threatens the version of the past Amelia has been protecting."

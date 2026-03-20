@@ -6,9 +6,10 @@ Lantern House is split into five major layers:
 
 1. `db`: SQLAlchemy models, sessions, repositories, migrations
 2. `context`: selective retrieval and prompt-packet assembly
-3. `services`: manager, character, recap, event extraction, seeding
-4. `runtime`: scheduler, orchestrator, recovery, long-running loop
-5. `rendering`: terminal presentation for public output
+3. `quality`: pacing and story-governance evaluators, continuity guardrails
+4. `services`: manager, character, progression, recap, event extraction, seeding
+5. `runtime`: scheduler, orchestrator, recovery, long-running loop
+6. `rendering`: terminal presentation for public output
 
 ## Runtime Loop
 
@@ -21,7 +22,7 @@ Each loop iteration follows the same pattern:
 5. Select the next speaker based on scene state, weights, recency, and burst/lull logic.
 6. Build a selective character context packet.
 7. Generate a structured turn from Ollama.
-8. Extract events, apply relationship deltas, persist the result, and optionally emit a thought pulse.
+8. Extract events, advance arc state, apply relationship deltas, persist the result, and optionally emit a thought pulse.
 9. Render the public message to the terminal.
 10. Sleep for a variable delay before the next turn.
 
@@ -58,11 +59,16 @@ Anti-drift is explicit and layered:
 
 - Canon facts are stored separately from chat history.
 - Reveal ladders and unresolved questions are tracked at the arc level.
+- Arc pressure and active beats advance from structured event hits, not only from prompt text.
 - The manager is given pacing health and continuity warnings.
+- The manager is also given a story-governance report covering hourly progression, core-tension drift, cliffhanger pressure, and robotic-voice risk.
 - Repetition, romance stalls, mystery stalls, and low-progression windows are scored.
+- Unresolved-question memory is bounded and overflow is pushed into dormant payoff threads.
 - Forbidden-knowledge boundaries are injected into character packets.
+- Prose-like or robotic public turns can be repaired before they are committed.
 - Thought pulses are budgeted and cooldown-limited.
-- Recaps are generated from event memory, not just messages.
+- Recaps are generated from bounded event digests and prior summaries, not raw transcript replay.
+- A seeded `story_engine` defines the permanent dramatic north star so the runtime keeps recentering on house survival, hidden records, inheritance conflict, loyalty fractures, and unstable attraction.
 
 ## Design Tradeoffs
 

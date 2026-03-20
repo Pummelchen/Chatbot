@@ -22,6 +22,7 @@ from lantern_house.runtime.scheduler import TurnScheduler
 from lantern_house.services.character import CharacterService
 from lantern_house.services.event_extractor import EventExtractor
 from lantern_house.services.manager import StoryManagerService
+from lantern_house.services.progression import StoryProgressionService
 from lantern_house.services.recaps import RecapService
 from lantern_house.services.seed_loader import StorySeedLoader
 from lantern_house.utils.time import floor_to_hour, utcnow
@@ -120,6 +121,7 @@ async def _run_async(config: AppConfig, *, once: bool) -> None:
             manager_service=StoryManagerService(client, config.models.manager, config.runtime),
             character_service=CharacterService(client, config.models.character),
             recap_service=RecapService(repository, client, config.models.announcer),
+            progression_service=StoryProgressionService(),
             scheduler=TurnScheduler(
                 runtime_config=config.runtime,
                 timing_config=config.timing,

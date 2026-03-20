@@ -4,7 +4,7 @@ import random
 from datetime import timedelta
 
 from lantern_house.config import RuntimeConfig, ThoughtPulseConfig, TimingConfig
-from lantern_house.domain.contracts import PacingHealthReport
+from lantern_house.domain.contracts import PacingHealthReport, StoryGovernanceReport
 from lantern_house.utils.time import ensure_utc, utcnow
 
 
@@ -28,6 +28,7 @@ class TurnScheduler:
         run_state: dict,
         directive: dict | None,
         health: PacingHealthReport,
+        governance: StoryGovernanceReport | None = None,
     ) -> bool:
         if directive is None:
             return True
@@ -35,6 +36,13 @@ class TurnScheduler:
         if messages_since >= self.runtime_config.manager_step_interval_messages:
             return True
         if health.score < 60:
+            return True
+        if governance and (
+            governance.viewer_value_score < 70
+            or not governance.hourly_progression_met
+            or governance.core_drift
+            or governance.robotic_voice_risk
+        ):
             return True
         created_at = directive["created_at"]
         if created_at is not None and utcnow() - ensure_utc(created_at) > timedelta(minutes=10):

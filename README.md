@@ -19,10 +19,23 @@ The project targets macOS Apple Silicon with Python 3.12+, MySQL 8.4, and Ollama
 The system avoids shoving the entire transcript into every prompt. Instead it persists canon, arcs, relationship state, extracted events, summaries, and run-state data, then builds selective context packets:
 
 - Character turns receive identity, current emotional state, active goals, relevant recent messages, relationship snapshots, location facts, and manager instructions.
-- The manager receives unresolved questions, arc status, recent event highlights, continuity warnings, pacing health, and recent summaries.
+- The manager receives unresolved questions, arc status, dormant payoff threads, recent event highlights, continuity warnings, pacing health, and recent summaries.
 - Recaps are generated from stored events and prior summaries rather than transcript replay.
 
 The manager operates in micro-steps. It sets the scene objective, controls reveal pace, assigns soft goals, tracks pacing health, and authorizes rare thought pulses.
+
+## Story Gravity
+
+The runtime now includes a dedicated story-governance layer in addition to pacing checks. This acts as the project’s long-term central force:
+
+- It checks whether the last hour contained a meaningful progression in trust, evidence, debt pressure, or desire.
+- It detects when the chat is drifting away from the house’s core tensions.
+- It warns when recent dialogue is starting to look generic or repeated.
+- It pressures the manager to restore cliffhanger energy before the stream goes flat.
+- It keeps unresolved-question memory bounded and revives dormant payoff threads instead of letting prompts bloat over time.
+- It advances persistent story-arc pressure and reveal stages from structured events, so long-form continuity lives in state, not only in transcript momentum.
+
+The seeded `story_engine` defines the permanent north star for the drama, so the manager is not improvising the project’s value proposition from scratch every few turns.
 
 ## Seeded Ensemble
 
@@ -98,6 +111,9 @@ lantern-house run
 - Default recovery protection includes per-turn checkpoint snapshots plus a 60-second heartbeat.
 - Recovery logic resumes from persisted run state after restart and flags unclean shutdowns for the manager.
 - Degraded mode can keep the simulation alive when a model request fails, but it does so conservatively.
+- Recap prompts are compacted into bounded event digests so 12h and 24h summaries stay stable during true 24/7 operation.
+- Low-quality unresolved-question fragments are filtered before they enter canon memory.
+- If a model turn drifts into robotic or prose-like register, the runtime repairs it before persisting public output.
 
 ## Quality Checks
 

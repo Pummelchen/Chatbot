@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 from copy import deepcopy
+from typing import ClassVar
 
 from lantern_house.domain.contracts import (
     CharacterContextPacket,
@@ -17,6 +18,21 @@ logger = logging.getLogger(__name__)
 
 
 class CharacterService:
+    _QUESTION_LEADS: ClassVar[tuple[str, ...]] = (
+        "who",
+        "what",
+        "why",
+        "how",
+        "where",
+        "when",
+        "which",
+        "is",
+        "are",
+        "can",
+        "did",
+    )
+    _EMPTY_MARKERS: ClassVar[set[str]] = {"none", "n/a", "na", "nothing", "unknown"}
+
     def __init__(self, llm: OllamaClient, model_name: str) -> None:
         self.llm = llm
         self.model_name = model_name
@@ -59,11 +75,19 @@ class CharacterService:
             thought_pulse=pulse,
             event_candidates=turn.event_candidates[:4],
             relationship_updates=turn.relationship_updates[:3],
-            new_questions=turn.new_questions[:2],
-            answered_questions=turn.answered_questions[:2],
+            new_questions=self._sanitize_questions(turn.new_questions),
+            answered_questions=self._sanitize_questions(turn.answered_questions),
             tone=turn.tone,
             silence=False,
         )
+
+    def repair(
+        self,
+        *,
+        packet: CharacterContextPacket,
+        thought_pulse_allowed: bool,
+    ) -> CharacterTurn:
+        return self._fallback(packet, thought_pulse_allowed=thought_pulse_allowed)
 
     def _fallback(
         self, packet: CharacterContextPacket, *, thought_pulse_allowed: bool
@@ -224,3 +248,28 @@ class CharacterService:
         except (TypeError, ValueError):
             return 0
         return max(-3, min(3, parsed))
+
+    def _sanitize_questions(self, questions: list[str]) -> list[str]:
+        cleaned: list[str] = []
+        seen: set[str] = set()
+        for question in questions:
+            normalized = " ".join(str(question).split())
+            if not normalized:
+                continue
+            lowered = normalized.lower().rstrip(".")
+            if lowered in self._EMPTY_MARKERS:
+                continue
+            if len(normalized.rstrip("?").split()) < 5:
+                continue
+            if not normalized.endswith("?") and not lowered.startswith(self._QUESTION_LEADS):
+                continue
+            if not normalized.endswith("?"):
+                normalized = normalized.rstrip(".") + "?"
+            key = normalized.lower()
+            if key in seen:
+                continue
+            cleaned.append(normalized)
+            seen.add(key)
+            if len(cleaned) >= 2:
+                break
+        return cleaned

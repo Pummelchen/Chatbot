@@ -5,16 +5,21 @@ from lantern_house.domain.contracts import (
     CharacterContextPacket,
     ManagerContextPacket,
 )
+from lantern_house.quality.governance import StoryGovernanceEvaluator
 from lantern_house.quality.pacing import PacingHealthEvaluator
 from lantern_house.utils.time import isoformat
 
 
 class ContextAssembler:
     def __init__(
-        self, repository: StoryRepository, pacing_evaluator: PacingHealthEvaluator
+        self,
+        repository: StoryRepository,
+        pacing_evaluator: PacingHealthEvaluator,
+        governance_evaluator: StoryGovernanceEvaluator | None = None,
     ) -> None:
         self.repository = repository
         self.pacing_evaluator = pacing_evaluator
+        self.governance_evaluator = governance_evaluator or StoryGovernanceEvaluator()
 
     def build_manager_packet(self) -> ManagerContextPacket:
         world = self.repository.get_world_state_snapshot()
@@ -27,12 +32,29 @@ class ContextAssembler:
         continuity_flags = self.repository.list_open_continuity_flags(limit=8)
 
         pacing_health = self.pacing_evaluator.evaluate(messages=messages, events=events)
+        story_engine = world["metadata"].get("story_engine", {})
+        story_governance = self.governance_evaluator.evaluate(
+            messages=messages,
+            events=events,
+            world_metadata=world["metadata"],
+            unresolved_questions=world["unresolved_questions"],
+        )
 
         return ManagerContextPacket(
             title=world["title"],
             scene_objective=scene["objective"],
             scene_location=scene["location_name"],
             emotional_temperature=scene["emotional_temperature"],
+            story_gravity=[
+                item
+                for item in [
+                    story_engine.get("central_force", ""),
+                    *story_engine.get("core_promises", []),
+                ]
+                if item
+            ],
+            viewer_value_targets=story_engine.get("viewer_value_targets", []),
+            voice_guardrails=story_engine.get("voice_guardrails", []),
             cast_guidance=[
                 (
                     f"{item['slug']} / {item['full_name']}: {item['cultural_background']}. "
@@ -46,11 +68,13 @@ class ContextAssembler:
             current_arc_summaries=[
                 (
                     f"{arc.title} (stage {arc.stage_index}, "
-                    f"pressure {arc.pressure_score}): {arc.summary}"
+                    f"pressure {arc.pressure_score}): {arc.summary} "
+                    f"Current beat: {arc.metadata.get('active_beat') or _current_arc_beat(arc)}"
                 )
                 for arc in arcs
             ],
             unresolved_questions=world["unresolved_questions"],
+            payoff_threads=world["archived_threads"][:8],
             relationship_map=self.repository.get_relationship_map()[:12],
             recent_summaries=[
                 f"{summary.summary_window} @ {isoformat(summary.bucket_end_at)}: {summary.content}"
@@ -65,6 +89,7 @@ class ContextAssembler:
                 for flag in continuity_flags
             ],
             pacing_health=pacing_health,
+            story_governance=story_governance,
         )
 
     def build_character_packet(
@@ -82,6 +107,9 @@ class ContextAssembler:
         )
         boundaries = self.repository.get_forbidden_boundaries(
             character_slug=character_slug, limit=6
+        )
+        story_engine = self.repository.get_world_state_snapshot()["metadata"].get(
+            "story_engine", {}
         )
 
         personal_directive = directive.get("per_character", {}).get(character_slug, {})
@@ -109,6 +137,7 @@ class ContextAssembler:
             message_style=overview["message_style"],
             ensemble_role=overview["ensemble_role"],
             current_location=overview["location_name"],
+            voice_guardrails=story_engine.get("voice_guardrails", []),
             emotional_state=overview["emotional_state"],
             current_goals=overview["current_goals"],
             relationship_snapshots=[
@@ -130,3 +159,10 @@ class ContextAssembler:
             manager_directive=directive_text,
             forbidden_boundaries=boundaries,
         )
+
+
+def _current_arc_beat(arc) -> str:
+    if not arc.reveal_ladder:
+        return "Hold pressure without solving it."
+    index = min(arc.stage_index, len(arc.reveal_ladder) - 1)
+    return arc.reveal_ladder[index]

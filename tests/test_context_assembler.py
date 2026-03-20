@@ -38,8 +38,14 @@ class FakeRepository:
             "emotional_temperature": 6,
             "reveal_pressure": 1,
             "unresolved_questions": ["Who hid the ledger?"],
-            "archived_threads": [],
-            "metadata": {},
+            "archived_threads": ["A blackout trapped Amelia and Rafael in the records closet."],
+            "metadata": {
+                "story_engine": {
+                    "central_force": "Every hour must tighten the house's core tensions.",
+                    "viewer_value_targets": ["Deliver one meaningful hourly progression."],
+                    "voice_guardrails": ["Prefer concrete specifics over speeches."],
+                }
+            },
         }
 
     def get_scene_snapshot(self):
@@ -181,6 +187,10 @@ def test_context_assembler_builds_packets() -> None:
     )
     assert manager_packet.title == "Lantern House"
     assert "Amelia Vale" in manager_packet.cast_guidance[0]
+    assert manager_packet.story_gravity
+    assert manager_packet.viewer_value_targets
     assert "Who hid the ledger?" in manager_packet.unresolved_questions
+    assert manager_packet.payoff_threads
     assert character_packet.character_slug == "amelia"
+    assert character_packet.voice_guardrails
     assert "control the damage" in character_packet.manager_directive

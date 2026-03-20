@@ -4,6 +4,7 @@ import random
 from datetime import timedelta
 
 from lantern_house.config import RuntimeConfig, ThoughtPulseConfig, TimingConfig
+from lantern_house.domain.contracts import PacingHealthReport, StoryGovernanceReport
 from lantern_house.runtime.scheduler import TurnScheduler
 from lantern_house.utils.time import ensure_utc, floor_to_hour, utcnow
 
@@ -59,3 +60,22 @@ def test_time_helpers_treat_naive_mysql_timestamps_as_utc() -> None:
     naive = utcnow().replace(tzinfo=None, minute=27, second=12, microsecond=0)
     assert ensure_utc(naive).tzinfo is not None
     assert floor_to_hour(naive).minute == 0
+
+
+def test_scheduler_refreshes_manager_on_governance_drop() -> None:
+    scheduler = TurnScheduler(
+        runtime_config=RuntimeConfig(manager_step_interval_messages=10),
+        timing_config=TimingConfig(),
+        thought_pulse_config=ThoughtPulseConfig(),
+        rng=random.Random(2),
+    )
+    should_refresh = scheduler.should_refresh_manager(
+        run_state={"last_tick_no": 3},
+        directive={"tick_no": 1, "created_at": utcnow()},
+        health=PacingHealthReport(score=82),
+        governance=StoryGovernanceReport(
+            viewer_value_score=58,
+            hourly_progression_met=False,
+        ),
+    )
+    assert should_refresh is True
