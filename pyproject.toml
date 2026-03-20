@@ -1,0 +1,66 @@
+[build-system]
+requires = ["hatchling>=1.25.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "lantern-house"
+version = "0.1.0"
+description = "Local-first long-running serialized group-chat drama engine for terminal output."
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "MIT" }
+authors = [
+  { name = "OpenAI Codex" }
+]
+dependencies = [
+  "alembic>=1.13.2",
+  "httpx>=0.27.0",
+  "pydantic>=2.8.2",
+  "PyMySQL>=1.1.1",
+  "python-dotenv>=1.0.1",
+  "PyYAML>=6.0.2",
+  "rich>=13.7.1",
+  "SQLAlchemy>=2.0.36",
+  "typer>=0.12.5",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.3.3",
+  "pytest-asyncio>=0.24.0",
+]
+
+[project.scripts]
+lantern-house = "lantern_house.cli:app"
+
+[tool.hatch.build]
+include = [
+  "src/lantern_house/**/*.py",
+  "src/lantern_house/prompts/*.md",
+  "src/lantern_house/seeds/*.yaml",
+  "README.md",
+  "config.example.toml",
+  ".env.example",
+  "alembic.ini",
+  "alembic/**/*.py",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/lantern_house"]
+
+[tool.pytest.ini_options]
+pythonpath = [
+  "src",
+]
+testpaths = [
+  "tests",
+]
+asyncio_mode = "auto"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "N", "ASYNC", "RUF"]
+

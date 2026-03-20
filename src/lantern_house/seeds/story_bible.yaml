@@ -1,0 +1,580 @@
+title: Saltglass House
+setting:
+  premise: "Saltglass House is a fading seaside boarding house at the edge of an old harbor district. It survives on thin margins, stubborn rituals, and the emotional dependency of the people who refuse to leave."
+  house_history:
+    - "Saltglass House began as a customs clerk's residence built over forgotten storage tunnels beneath the cliff road."
+    - "Twenty years ago Celeste Vale transformed it into a guesthouse known for taking in people who needed a last chance."
+    - "Seven years ago, during a storm blackout, Celeste vanished after sending one unfinished voice note and locking the east wing herself."
+    - "Since then the house has carried debts, rumors, and a legal cloud no one has fully untangled."
+  unresolved_old_event: "Celeste Vale disappeared on the same night a debt ledger vanished, a registry page was torn out, and Luca Serrano fled town under suspicion."
+  money_pressure: "Blackwake Finance is pressuring the house with repair invoices, ballooning interest, and a sale deadline that may be built on forged records."
+initial_scene:
+  scene_key: opening-night
+  objective: "Hold the house together through a power flicker while an unexpected return threatens old loyalties."
+  location_slug: front-desk
+  emotional_temperature: 6
+  mystery_pressure: 7
+  romance_pressure: 6
+  comedic_pressure: 4
+locations:
+  - slug: front-desk
+    name: Front Desk
+    description: "A narrow check-in counter facing the lobby, with a brass bell that sticks in damp weather and drawers full of unpaid invoices."
+    public_facts:
+      - "Guests hear everything from the front desk."
+      - "The old bell only rings cleanly when someone is lying calmly."
+  - slug: salt-kitchen
+    name: Salt Kitchen
+    description: "A warm but cramped kitchen where gossip, rationing, and near-confessions collect around the stove."
+    public_facts:
+      - "The tea tin hides spare keys more often than tea."
+      - "Everyone has cried in this kitchen and denied it later."
+  - slug: east-wing
+    name: Sealed East Wing
+    description: "The cordoned wing Celeste locked before vanishing, still smelling faintly of old paper, rain rot, and varnish."
+    public_facts:
+      - "No one admits to hearing footsteps there."
+      - "The east-wing hallway distorts voices at night."
+  - slug: roof-walk
+    name: Roof Walk
+    description: "A narrow roof path above the sea wall where private calls, cigarettes, and dangerous honesty happen after midnight."
+    public_facts:
+      - "Storms make the roof rails sing."
+      - "The roof sees more confessions than the chapel across the street."
+  - slug: boiler-room
+    name: Boiler Room
+    description: "A basement service room with humming pipes, patched brick, and one suspiciously newer wall."
+    public_facts:
+      - "The pipes knock in patterns people joke are warnings."
+      - "Elias spends too much time here when he does not want to answer questions."
+objects:
+  - slug: brass-ledger-key
+    name: Brass Ledger Key
+    description: "A salt-tarnished key with a lighthouse stamp, rumored to open something smaller than a door and more dangerous than a safe."
+    location_slug: front-desk
+    significance: 8
+  - slug: torn-registry-page
+    name: Torn Registry Page
+    description: "The missing guest entry sheet from the night Celeste vanished."
+    location_slug: east-wing
+    significance: 9
+  - slug: red-toolbox
+    name: Red Toolbox
+    description: "Elias's dented metal toolbox, heavier than tools alone would explain."
+    location_slug: boiler-room
+    significance: 7
+  - slug: voice-note-recorder
+    name: Voice Note Recorder
+    description: "A pocket recorder with a cracked casing and one unreleased final recording from Celeste."
+    location_slug: front-desk
+    significance: 10
+canon_facts:
+  - key: house-debt-real
+    type: finance
+    visibility: shared
+    content: "Saltglass House is under immediate debt pressure and risks forced sale within weeks if no legal stay appears."
+  - key: east-wing-locked
+    type: mystery
+    visibility: public
+    content: "The east wing has been officially sealed since Celeste vanished."
+  - key: celeste-missing
+    type: mystery
+    visibility: public
+    content: "Celeste Vale vanished seven years ago during a storm blackout."
+  - key: luca-return
+    type: tension
+    visibility: public
+    content: "Luca Serrano's return reopens blame and old fear inside the house."
+  - key: blackwake-pressure
+    type: finance
+    visibility: shared
+    content: "Blackwake Finance is escalating pressure with documents that may not all be legitimate."
+characters:
+  - slug: mara
+    full_name: Mara Dela Cruz
+    public_persona: "The practical house manager who keeps the lights on, the bills staggered, and everyone else from falling apart in public."
+    hidden_wound: "She heard Celeste's final panicked voice note and hid it because the message named someone Mara still wants to protect."
+    long_term_desire: "Keep Saltglass House alive long enough to become a place that no longer depends on lies."
+    private_fear: "If the full truth comes out, the house will die and Elias will never forgive her."
+    message_style: "Clipped, observant, dry under pressure, rarely wastes words, tenderness leaks out when she is tired."
+    ensemble_role: "House Manager"
+    secrets_summary: "Knows more about Celeste's last night than anyone suspects."
+    humor_style: "Deadpan understatement that lands hardest when everyone else is panicking."
+    color: "bright_blue"
+    current_location_slug: front-desk
+    emotional_state:
+      baseline: guarded
+      current: stretched
+      subtext: "Trying to outwork dread."
+    active_goals:
+      - "Survive Blackwake's deadline without losing the house."
+      - "Keep Luca and Elias from exploding at each other."
+      - "Control the narrative around Celeste's disappearance."
+  - slug: elias
+    full_name: Elias Roan
+    public_persona: "The night handyman with a sarcastic mouth, perfect timing in a crisis, and the reputation of a man who knows where bodies would fit."
+    hidden_wound: "He moved evidence out of the boiler room the night Celeste vanished and never learned whether he buried guilt or proof."
+    long_term_desire: "Earn a future in the house that is not built on what he did for desperate people before he came here."
+    private_fear: "Mara still trusts him for the wrong reason."
+    message_style: "Sharp, lean, sardonic, flirts when cornered, turns suddenly sincere when someone is hurt."
+    ensemble_role: "Night Handyman"
+    secrets_summary: "Has protected Mara for years and may be protecting the wrong version of the past."
+    humor_style: "Knife-edge sarcasm with surprising gentleness underneath."
+    color: "gold3"
+    current_location_slug: boiler-room
+    emotional_state:
+      baseline: controlled
+      current: restless
+      subtext: "One bad question away from anger."
+    active_goals:
+      - "Keep Mara standing."
+      - "Find out why Luca came back now."
+      - "Make sure no one opens the wrong wall in the boiler room."
+  - slug: sora
+    full_name: Sora Lin
+    public_persona: "The long-term guest and charming writer who notices everything, says half of it aloud, and always sounds like an ally until the room gets quiet."
+    hidden_wound: "She came to Saltglass House because her sister Hana stayed here under an alias just before vanishing from the city."
+    long_term_desire: "Uncover the truth about Hana without losing the fragile attachments she has formed inside the house."
+    private_fear: "If she falls in love here, she will stop asking the questions that matter."
+    message_style: "Warm, intelligent, teasing when probing, emotionally precise, never fully casual."
+    ensemble_role: "Long-Term Guest"
+    secrets_summary: "Her residency story is mostly real, but not her reason for choosing this house."
+    humor_style: "Soft baiting, elegant deflection, and jokes that leave a second meaning behind."
+    color: "orchid"
+    current_location_slug: roof-walk
+    emotional_state:
+      baseline: curious
+      current: alert
+      subtext: "Watching for names, dates, and flinches."
+    active_goals:
+      - "Trace Hana's final week."
+      - "Get Julian talking about the estate records."
+      - "Push Mara gently until the guard slips."
+  - slug: julian
+    full_name: Julian Vale
+    public_persona: "The absent owner's family connection who arrives looking entitled, polished, and inconveniently official."
+    hidden_wound: "He is nearly broke, emotionally unwanted by the Vale family, and terrified that saving the house is the only way to prove he deserves anything."
+    long_term_desire: "Claim legal authority over the estate without becoming the villain everyone expects."
+    private_fear: "There may be evidence that Celeste cut him out on purpose."
+    message_style: "Controlled, polished, defensive under accusation, unexpectedly earnest when treated with kindness."
+    ensemble_role: "Relative and Heir"
+    secrets_summary: "He knows about a second codicil but has never seen the original."
+    humor_style: "Self-aware privilege jokes and accidental sincerity."
+    color: "spring_green3"
+    current_location_slug: front-desk
+    emotional_state:
+      baseline: composed
+      current: embarrassed
+      subtext: "Trying not to look like he needs this place."
+    active_goals:
+      - "Secure access to Celeste's office and records."
+      - "Convince Mara he is not Blackwake's puppet."
+      - "Hide how desperate his finances actually are."
+  - slug: nia
+    full_name: Nia Mercado
+    public_persona: "The young front-desk helper who turns chaos into jokes, collects gossip like weather, and keeps strangers from realizing how tense the house really is."
+    hidden_wound: "She is terrified that if she stops being useful, she will become temporary everywhere again."
+    long_term_desire: "Belong here so completely that no one can imagine the house without her."
+    private_fear: "One day the adults she depends on will choose secrets over her."
+    message_style: "Fast, funny, impulsive, affectionate, openly reactive, often the most readable voice in the room."
+    ensemble_role: "Young Worker"
+    secrets_summary: "She found a key and kept it because being left out feels worse than being guilty."
+    humor_style: "Chaotic warmth, tiny impressions, and weaponized honesty."
+    color: "deep_pink3"
+    current_location_slug: salt-kitchen
+    emotional_state:
+      baseline: bright
+      current: overclocked
+      subtext: "Joking to stay included."
+    active_goals:
+      - "Keep the house feeling alive online and in person."
+      - "Figure out what Julian is hiding."
+      - "Decide whether to tell Mara about the key."
+  - slug: luca
+    full_name: Luca Serrano
+    public_persona: "The returning figure from the past whose smile says he has already measured every exit."
+    hidden_wound: "He left town branded a thief, but he came back because Celeste may have disappeared while trying to clear his family from a debt they never owed."
+    long_term_desire: "Recover the missing ledger and force the truth into daylight before Blackwake buries it."
+    private_fear: "The house might be protecting the person who betrayed him."
+    message_style: "Smooth, provocative, darkly funny, never fully still, shows real feeling in flashes he regrets."
+    ensemble_role: "Returning Figure"
+    secrets_summary: "His anger at the house is real, but so is the part of him that never stopped loving what it was."
+    humor_style: "Provocation disguised as charm."
+    color: "red3"
+    current_location_slug: roof-walk
+    emotional_state:
+      baseline: wary
+      current: charged
+      subtext: "He came back ready for war and found unfinished love instead."
+    active_goals:
+      - "Force Mara to acknowledge what she hid."
+      - "Find the ledger before Julian or Blackwake does."
+      - "Test whether Elias is protector, accomplice, or obstacle."
+relationships:
+  - a: mara
+    b: elias
+    trust: 8
+    desire: 7
+    suspicion: 3
+    obligation: 9
+    summary: "Years of shared crises, unresolved attraction, and a mutual habit of protecting each other from the truth."
+  - a: mara
+    b: sora
+    trust: 4
+    desire: 1
+    suspicion: 6
+    obligation: 2
+    summary: "Mara values Sora's usefulness and resents how gently Sora keeps getting closer to the wound."
+  - a: mara
+    b: julian
+    trust: 3
+    desire: 1
+    suspicion: 6
+    obligation: 5
+    summary: "He has family legitimacy she needs and family baggage she does not trust."
+  - a: mara
+    b: nia
+    trust: 8
+    desire: 0
+    suspicion: 2
+    obligation: 7
+    summary: "Mara depends on Nia more than she says and worries the house is teaching her bad survival habits."
+  - a: mara
+    b: luca
+    trust: 2
+    desire: 4
+    suspicion: 8
+    obligation: 6
+    summary: "Old intimacy curdled into blame, with enough tenderness left to be dangerous."
+  - a: elias
+    b: sora
+    trust: 3
+    desire: 2
+    suspicion: 7
+    obligation: 2
+    summary: "He sees a careful interrogator beneath the charm and does not enjoy being read."
+  - a: elias
+    b: julian
+    trust: 2
+    desire: 0
+    suspicion: 7
+    obligation: 1
+    summary: "Class resentment plus estate politics plus the sense that Julian is softer than he wants to appear."
+  - a: elias
+    b: nia
+    trust: 7
+    desire: 0
+    suspicion: 2
+    obligation: 7
+    summary: "He treats Nia like family with enough sarcasm to hide it."
+  - a: elias
+    b: luca
+    trust: 1
+    desire: 0
+    suspicion: 9
+    obligation: 4
+    summary: "Mutual knowledge of old violence and old favors neither wants named."
+  - a: sora
+    b: julian
+    trust: 5
+    desire: 5
+    suspicion: 5
+    obligation: 1
+    summary: "Mutual fascination, mutual leverage, and the sense that each might kiss the other to win a document."
+  - a: sora
+    b: nia
+    trust: 7
+    desire: 1
+    suspicion: 2
+    obligation: 3
+    summary: "Nia likes being taken seriously by Sora, and Sora knows Nia hears everything."
+  - a: sora
+    b: luca
+    trust: 4
+    desire: 3
+    suspicion: 6
+    obligation: 1
+    summary: "Two people who circle truth professionally and dislike meeting an equal."
+  - a: julian
+    b: nia
+    trust: 5
+    desire: 2
+    suspicion: 4
+    obligation: 2
+    summary: "She unsettles him by seeing through polish, and he amuses her by trying anyway."
+  - a: julian
+    b: luca
+    trust: 1
+    desire: 0
+    suspicion: 8
+    obligation: 2
+    summary: "Inheritance versus accusation, both convinced the other arrived with an angle."
+  - a: nia
+    b: luca
+    trust: 4
+    desire: 1
+    suspicion: 5
+    obligation: 2
+    summary: "She wants to like him and is scared of how much history his face carries."
+secrets:
+  - slug: mara-voice-note
+    title: "Mara kept Celeste's final voice note"
+    holder: mara
+    type: mystery
+    exposure_stage: 0
+    reveal_guardrail: "Do not casually reveal hidden recordings or private final messages unless a public clue explicitly surfaces first."
+    description: "The final recording implies Celeste feared someone already inside the house."
+  - slug: elias-toolbox
+    title: "Elias moved evidence in the red toolbox"
+    holder: elias
+    type: mystery
+    exposure_stage: 0
+    reveal_guardrail: "Do not expose concealed physical evidence without a fresh trigger, confrontation, or discovery beat."
+    description: "The toolbox contains an object from the night of the disappearance."
+  - slug: sora-hana
+    title: "Sora is investigating Hana's disappearance"
+    holder: sora
+    type: mystery
+    exposure_stage: 0
+    reveal_guardrail: "Sora should not freely admit her full agenda until trust or pressure forces it."
+    description: "Her sister Hana stayed at the house under a false name."
+  - slug: julian-second-codicil
+    title: "Julian knows about a second codicil"
+    holder: julian
+    type: inheritance
+    exposure_stage: 0
+    reveal_guardrail: "Do not reveal estate loopholes without legal pressure, proof, or emotional leverage."
+    description: "He learned of a second codicil that may upend who controls the house."
+  - slug: nia-key
+    title: "Nia has the east-wing key"
+    holder: nia
+    type: mystery
+    exposure_stage: 0
+    reveal_guardrail: "Do not reveal secret keys in throwaway banter."
+    description: "She found a hidden key in the tea tin and never handed it over."
+  - slug: luca-blackwake
+    title: "Luca once ran money for Blackwake's predecessor"
+    holder: luca
+    type: finance
+    exposure_stage: 0
+    reveal_guardrail: "Do not disclose criminal-adjacent finance history without consequence."
+    description: "He knows the debt chain is dirty because he once carried cash through it."
+  - slug: double-ledger
+    title: "There are two ledgers"
+    holder:
+    type: mystery
+    exposure_stage: 0
+    reveal_guardrail: "Treat the second ledger as a long-arc prize, not an early answer."
+    description: "One ledger tracks public debts; the missing one tracks favors, bribes, and names."
+  - slug: tunnel-wall
+    title: "The boiler room wall hides a passage"
+    holder: elias
+    type: mystery
+    exposure_stage: 0
+    reveal_guardrail: "Do not open the hidden passage until the mystery arc needs a hard escalation."
+    description: "A newer wall conceals access to the old customs tunnel."
+  - slug: celeste-will-change
+    title: "Celeste changed the will before vanishing"
+    holder:
+    type: inheritance
+    exposure_stage: 0
+    reveal_guardrail: "Major inheritance revelations must arrive as partial proof first, not complete resolution."
+    description: "The estate documents were altered three days before the storm."
+  - slug: mara-luca-kiss
+    title: "Mara and Luca once crossed a line"
+    holder: mara
+    type: romance
+    exposure_stage: 0
+    reveal_guardrail: "Past intimacy should be hinted before stated."
+    description: "Before Luca fled town, he and Mara almost left together."
+  - slug: registry-page-removed
+    title: "Someone still inside removed the registry page"
+    holder:
+    type: mystery
+    exposure_stage: 0
+    reveal_guardrail: "Keep blame uncertain until multiple suspects are credible."
+    description: "The page was removed after Celeste vanished, not before."
+  - slug: forged-invoices
+    title: "Some repair invoices are forged"
+    holder: luca
+    type: finance
+    exposure_stage: 0
+    reveal_guardrail: "Debt fraud must unfold in layers so the house remains under pressure."
+    description: "Blackwake's strongest pressure documents may be fabricated."
+story_arcs:
+  - slug: vanished-owner
+    title: "The Vanishing of Celeste Vale"
+    status: active
+    arc_type: central-mystery
+    summary: "The house still lives inside the blast radius of Celeste's disappearance."
+    stage_index: 0
+    pressure_score: 10
+    payoff_window: "months to years"
+    reveal_ladder:
+      - "A personal object resurfaces."
+      - "The missing registry page is partially reconstructed."
+      - "The voice note leaks one fragment."
+      - "The tunnel is confirmed."
+      - "Someone admits they lied about the storm night."
+    unresolved_questions:
+      - "Who was Celeste afraid of in her last hour?"
+      - "Why was the east wing locked from inside?"
+      - "What happened in the tunnel beneath the boiler room?"
+  - slug: blackwake-pressure
+    title: "The Sale Deadline"
+    status: active
+    arc_type: finance
+    summary: "Debt pressure forces characters into risky alliances and timed decisions."
+    stage_index: 0
+    pressure_score: 9
+    payoff_window: "weeks to months"
+    reveal_ladder:
+      - "A due notice lands in public view."
+      - "A suspicious invoice is challenged."
+      - "An old payment route links Blackwake to Luca."
+      - "Forgery is strongly implied."
+    unresolved_questions:
+      - "How much of the debt is real?"
+      - "Who benefits if Saltglass House collapses fast?"
+  - slug: fault-lines-of-love
+    title: "Fault Lines of Love"
+    status: active
+    arc_type: romance
+    summary: "Old feelings and new attractions keep scrambling the truth economy of the house."
+    stage_index: 0
+    pressure_score: 8
+    payoff_window: "continuous"
+    reveal_ladder:
+      - "Mara and Elias crack in private."
+      - "Sora and Julian weaponize attraction."
+      - "Luca reopens old hurt in Mara."
+      - "A confession is interrupted."
+    unresolved_questions:
+      - "Can Mara choose honesty without destroying what she built with Elias?"
+      - "Is Sora using Julian, or falling for him?"
+  - slug: hidden-ledger
+    title: "The Second Ledger"
+    status: active
+    arc_type: mystery
+    summary: "The missing ledger could explain the debt, the betrayal, and who had motive to silence Celeste."
+    stage_index: 0
+    pressure_score: 9
+    payoff_window: "months"
+    reveal_ladder:
+      - "The brass key matters."
+      - "A guest alias on the torn page matches Hana."
+      - "The ledger's cover location is narrowed."
+      - "The wrong person finds the wrong piece first."
+    unresolved_questions:
+      - "Where is the second ledger now?"
+      - "Did Celeste hide it or try to expose it?"
+future_plot_hooks:
+  - "A celebrity travel vlogger accidentally books the wrong room and starts streaming from the lobby."
+  - "A blackout traps Mara and Luca in the records room."
+  - "Nia discovers a guest has been paying in old cash notes that match Blackwake envelopes."
+  - "Julian receives a legal threat that mentions a codicil no one else should know exists."
+  - "Sora finds Hana's handwriting in the kitchen recipe book."
+  - "Elias gets into a fight offsite and returns with a split lip and no explanation."
+  - "A storm surge forces everyone to move boxes out of the boiler room wall."
+  - "The chapel across the street rings bells during a false fire alarm."
+  - "A former guest returns with a baby photo taken in Celeste's office."
+  - "The roof rail breaks during an argument."
+  - "A sealed invoice packet arrives addressed to Luca."
+  - "Nia uses the key alone and sees something she misunderstands."
+  - "Julian and Sora almost kiss while searching estate boxes."
+  - "Mara finds evidence that Celeste was planning to disappear, or wanted people to think so."
+  - "A police officer who knew Luca in the old days checks in as a paying guest."
+  - "Someone starts leaving anonymous notes in the tea tin."
+  - "The torn registry page resurfaces with one name burned away."
+  - "Blackwake offers Julian a private deal to sell without contest."
+  - "Elias admits he once lied to Mara about where he was during the storm."
+  - "A tunnel draft carries music from somewhere that should be sealed."
+initial_trust_map:
+  - "Mara trusts Elias most and Luca least."
+  - "Nia trusts Mara, Elias, and Sora more than Julian or Luca."
+  - "Julian wants Mara's approval and Sora's attention, but trusts neither fully."
+  - "Sora is drawn to Julian yet suspects nearly everyone."
+  - "Luca trusts almost no one, but reads Mara more softly than he wants to."
+initial_romantic_tensions:
+  - "Mara and Elias carry a years-long near-love held together by emergency and avoidance."
+  - "Mara and Luca have unfinished heat tangled with betrayal."
+  - "Sora and Julian are in a flirtation built from curiosity, leverage, and real chemistry."
+  - "Nia occasionally stirs romantic trouble just to see what people deny."
+first_week_arc_plan:
+  - day: 1
+    beat: "Luca returns, Blackwake pressure sharpens, and Nia nearly reveals the key."
+  - day: 2
+    beat: "Sora confirms Hana's alias on a partial registry fragment."
+  - day: 3
+    beat: "Julian produces paperwork that helps the house and makes Mara mistrust him more."
+  - day: 4
+    beat: "A boiler-room incident suggests Elias is hiding access to something structural."
+  - day: 5
+    beat: "Mara and Elias nearly confess what they remember about the storm, but Luca interrupts."
+  - day: 6
+    beat: "Nia opens the east wing alone and misreads what she sees."
+  - day: 7
+    beat: "The voice note leaks one sentence that changes the suspect list."
+first_24h_drama_plan:
+  - hour_block: "00-01"
+    focus: "Luca's return and the house's immediate emotional shock."
+  - hour_block: "01-06"
+    focus: "Sniping, testing loyalties, and the first Blackwake pressure point."
+  - hour_block: "06-12"
+    focus: "Kitchen humor and gossip give way to Sora probing Julian."
+  - hour_block: "12-18"
+    focus: "A small clue around the brass key shifts suspicion."
+  - hour_block: "18-24"
+    focus: "A near-confession between Mara and Elias ends with a new unresolved question."
+recap_examples:
+  - window: 1h
+    headline: "Luca's return cracks the surface calm."
+    what_changed:
+      - "Luca walked back into Saltglass House and immediately forced Mara and Elias into defensive positions."
+      - "Julian discovered Blackwake's pressure is faster and uglier than he expected."
+    emotional_shifts:
+      - "Mara moved from strained control to visible alarm."
+      - "Elias shifted from sarcasm to territorial protection."
+    clues:
+      - "Talk of the red toolbox resurfaced."
+      - "Nia reacted too strongly when keys came up."
+    unresolved_questions:
+      - "Why did Luca choose tonight to return?"
+      - "What is Nia hiding about the east wing?"
+    loyalty_status: "Mara and Elias are aligned but brittle; Sora is floating between camps."
+    romance_status: "Old heat between Mara and Luca reopened the room; Mara and Elias got even less honest."
+    watch_next: "Watch whether Julian sides with Mara or uses the chaos to push into Celeste's records."
+  - window: 12h
+    headline: "Charm, debt, and suspicion all deepened."
+    what_changed:
+      - "Sora and Julian built dangerous chemistry while circling estate secrets."
+      - "Blackwake's paperwork became the practical threat beneath every emotional fight."
+    emotional_shifts:
+      - "Nia's comic energy turned into fear of exclusion."
+      - "Luca stopped performing detachment every time Mara looked at him too long."
+    clues:
+      - "A reference to Hana's alias appeared."
+      - "The brass ledger key became more than a rumor."
+    unresolved_questions:
+      - "How much of the debt is fake?"
+      - "Who removed the registry page after Celeste vanished?"
+    loyalty_status: "No stable camp exists; the house is operating on temporary pairings."
+    romance_status: "Sora and Julian are heating up while Mara's old triangle turns corrosive."
+    watch_next: "Watch for the first concrete document that links Blackwake to the storm night."
+  - window: 24h
+    headline: "The house survived the day, not the illusion."
+    what_changed:
+      - "Saltglass House is now openly in crisis rather than privately in denial."
+      - "Multiple characters now understand that Celeste's disappearance and the debt are one story."
+    emotional_shifts:
+      - "Mara's authority held, but at higher emotional cost."
+      - "Elias and Luca moved closer to open collision."
+    clues:
+      - "The missing ledger and the sealed tunnel are now linked in conversation."
+      - "Julian's knowledge of estate irregularities is no longer entirely hidden."
+    unresolved_questions:
+      - "What did Celeste try to hide in the east wing?"
+      - "Who inside the house is still protecting the oldest lie?"
+    loyalty_status: "Trust is splintering into personal loyalties instead of house loyalty."
+    romance_status: "No confession landed cleanly; every attraction now carries strategic risk."
+    watch_next: "Watch for a midnight search, a document leak, or a betrayal framed as protection."

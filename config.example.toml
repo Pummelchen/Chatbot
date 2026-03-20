@@ -1,0 +1,54 @@
+[database]
+url = "mysql+pymysql://root:password@127.0.0.1:3306/lantern_house"
+echo = false
+
+[ollama]
+base_url = "http://127.0.0.1:11434"
+request_timeout_seconds = 90
+keep_alive = "30m"
+auto_pull = false
+warm_on_start = true
+max_retries = 3
+
+[models]
+character = "gemma3:1b"
+manager = "gemma3:4b"
+announcer = "gemma3:4b"
+
+[runtime]
+active_character_min = 2
+active_character_max = 4
+manager_step_interval_messages = 2
+periodic_flush_messages = 1
+degraded_mode_on_model_failure = true
+healthcheck_interval_seconds = 60
+
+[timing]
+min_delay_seconds = 1.0
+max_delay_seconds = 3.0
+burst_probability = 0.18
+burst_min_delay_seconds = 0.6
+burst_max_delay_seconds = 1.3
+lull_probability = 0.12
+lull_min_delay_seconds = 3.1
+lull_max_delay_seconds = 5.0
+
+[thought_pulses]
+hourly_budget = 2
+cooldown_minutes = 20
+dramatic_threshold = 7
+
+[recaps]
+enabled = true
+windows = ["1h", "12h", "24h"]
+
+[story]
+title = "Saltglass House"
+seed_file = "story_bible.yaml"
+default_location_slug = "front-desk"
+
+[logging]
+level = "INFO"
+directory = "logs"
+file_name = "lantern_house.log"
+
