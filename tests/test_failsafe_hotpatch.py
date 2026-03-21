@@ -5,7 +5,12 @@ import subprocess
 import sys
 from pathlib import Path
 
-from lantern_house.config import FailSafeConfig, LoggingConfig
+from lantern_house.config import (
+    FailSafeConfig,
+    LoggingConfig,
+    build_hot_patch_config,
+    load_config,
+)
 from lantern_house.logging import configure_logging
 from lantern_house.runtime.failsafe import FailSafeExecutor
 
@@ -131,3 +136,28 @@ print(json.dumps({{
         assert payload["callback_calls"]
     finally:
         target.unlink(missing_ok=True)
+
+
+def test_runtime_hotpatch_config_tracks_loaded_config_and_update_file(
+    tmp_path: Path,
+) -> None:
+    update_file = tmp_path / "ops" / "votes.txt"
+    config_path = tmp_path / "runtime.toml"
+    config_path.write_text(
+        """
+[audience]
+update_file_path = "ops/votes.txt"
+
+[hot_patch]
+watch_paths = ["src/lantern_house"]
+""".strip(),
+        encoding="utf-8",
+    )
+
+    config = load_config(config_path)
+    hot_patch = build_hot_patch_config(config)
+
+    assert config.loaded_from == str(config_path.resolve())
+    assert config.audience.update_file_path == str(update_file.resolve())
+    assert str(config_path.resolve()) in hot_patch.watch_paths
+    assert str(update_file.resolve()) in hot_patch.watch_paths

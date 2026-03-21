@@ -48,6 +48,7 @@ windows = ["1h", "12h", "24h"]
 
 [story]
 title = "Lantern House"
+# Use a packaged seed resource name or an absolute/relative local YAML path.
 seed_file = "story_bible.yaml"
 default_location_slug = "front-desk"
 
@@ -99,5 +100,7 @@ unexpected_iteration_delay_seconds = 3
 [hot_patch]
 enabled = true
 check_interval_seconds = 15
+# The runtime also auto-adds the active config file, .env, and the resolved
+# audience steering file path to the watched set at startup.
 watch_paths = ["src/lantern_house", "config.example.toml", "update.txt"]
 watch_extensions = [".py", ".md", ".toml", ".yaml", ".yml", ".txt"]

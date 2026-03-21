@@ -7,13 +7,14 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+from collections.abc import Callable
 from pathlib import Path
 
 import typer
 from alembic.config import Config as AlembicConfig
 
 from alembic import command
-from lantern_house.config import AppConfig, load_config
+from lantern_house.config import AppConfig, build_hot_patch_config, load_config
 from lantern_house.context.assembler import ContextAssembler
 from lantern_house.db.repository import StoryRepository
 from lantern_house.db.session import SessionFactory, create_engine_from_config
@@ -21,7 +22,7 @@ from lantern_house.llm.ollama import OllamaClient
 from lantern_house.logging import configure_logging
 from lantern_house.quality.pacing import ContinuityGuard, PacingHealthEvaluator
 from lantern_house.rendering.terminal import TerminalRenderer
-from lantern_house.runtime.failsafe import FailSafeExecutor
+from lantern_house.runtime.failsafe import FailSafeExecutor, log_call_failure
 from lantern_house.runtime.hotpatch import HotPatchController
 from lantern_house.runtime.orchestrator import RuntimeOrchestrator
 from lantern_house.runtime.recovery import RecoveryService
@@ -53,29 +54,46 @@ def _load(config_path: str | None) -> AppConfig:
 @app.command()
 def migrate(config: str | None = typer.Option(None, "--config")) -> None:
     cfg = _load(config)
-    os.environ["LANTERN_HOUSE_DATABASE_URL"] = cfg.database.url
-    alembic_cfg = AlembicConfig(str(ROOT / "alembic.ini"))
-    command.upgrade(alembic_cfg, "head")
-    typer.echo("Migrations applied.")
+    _run_cli_command(
+        "migrate",
+        cfg,
+        lambda: _migrate(cfg),
+        expected_inputs=[
+            "A reachable MySQL database URL in config or .env.",
+            "A readable alembic.ini and migration directory.",
+        ],
+        retry_advice="Fix the database or migration configuration and rerun migrate.",
+    )
 
 
 @app.command()
 def seed(config: str | None = typer.Option(None, "--config")) -> None:
     cfg = _load(config)
-    engine = create_engine_from_config(cfg.database)
-    session_factory = SessionFactory(engine)
-    loader = StorySeedLoader(session_factory)
-    loader.seed_database()
-    typer.echo("Story bible seeded.")
+    _run_cli_command(
+        "seed",
+        cfg,
+        lambda: _seed(cfg),
+        expected_inputs=[
+            "A migrated MySQL database.",
+            "A valid packaged or local story seed YAML file.",
+        ],
+        retry_advice="Run migrate first or repair story.seed_file and rerun seed.",
+    )
 
 
 @app.command()
 def healthcheck(config: str | None = typer.Option(None, "--config")) -> None:
     cfg = _load(config)
-    session_factory = SessionFactory(create_engine_from_config(cfg.database))
-    session_factory.ping()
-    asyncio.run(_ollama_healthcheck(cfg))
-    typer.echo("Database and Ollama healthcheck passed.")
+    _run_cli_command(
+        "healthcheck",
+        cfg,
+        lambda: _healthcheck(cfg),
+        expected_inputs=[
+            "A reachable MySQL database URL in config or .env.",
+            "A reachable Ollama endpoint with the configured base URL.",
+        ],
+        retry_advice="Repair the database or Ollama connection details and try again.",
+    )
 
 
 async def _ollama_healthcheck(config: AppConfig) -> None:
@@ -89,8 +107,17 @@ async def _ollama_healthcheck(config: AppConfig) -> None:
 @app.command()
 def recap_now(config: str | None = typer.Option(None, "--config")) -> None:
     cfg = _load(config)
-    configure_logging(cfg.logging)
-    asyncio.run(_recap_now(cfg))
+    _run_cli_command(
+        "recap-now",
+        cfg,
+        lambda: asyncio.run(_recap_now(cfg)),
+        expected_inputs=[
+            "A seeded database with stored events.",
+            "A reachable announcer model in Ollama.",
+        ],
+        retry_advice="Seed the project and restore Ollama availability before retrying.",
+        configure_logs_first=True,
+    )
 
 
 async def _recap_now(config: AppConfig) -> None:
@@ -114,8 +141,18 @@ def run(
     once: bool = typer.Option(False, "--once", help="Generate a single turn and exit."),
 ) -> None:
     cfg = _load(config)
-    configure_logging(cfg.logging)
-    asyncio.run(_run_async(cfg, once=once))
+    _run_cli_command(
+        "run",
+        cfg,
+        lambda: asyncio.run(_run_async(cfg, once=once)),
+        expected_inputs=[
+            "A migrated and seeded database.",
+            "Reachable configured Ollama models.",
+            "Readable runtime files such as the config and update.txt.",
+        ],
+        retry_advice="Repair the failing dependency and rerun the live runtime.",
+        configure_logs_first=True,
+    )
 
 
 @app.command()
@@ -125,8 +162,39 @@ def simulate(
     turns_per_hour: int = typer.Option(90, "--turns-per-hour", min=1, max=360),
 ) -> None:
     cfg = _load(config)
-    configure_logging(cfg.logging)
-    _simulate(cfg, hours=hours, turns_per_hour=turns_per_hour)
+    _run_cli_command(
+        "simulate",
+        cfg,
+        lambda: _simulate(cfg, hours=hours, turns_per_hour=turns_per_hour),
+        expected_inputs=[
+            "A migrated and seeded database.",
+            "A readable strategy-ready story state.",
+        ],
+        retry_advice="Seed the database and restore strategy inputs before simulating.",
+        configure_logs_first=True,
+    )
+
+
+def _migrate(config: AppConfig) -> None:
+    os.environ["LANTERN_HOUSE_DATABASE_URL"] = config.database.url
+    alembic_cfg = AlembicConfig(str(ROOT / "alembic.ini"))
+    command.upgrade(alembic_cfg, "head")
+    typer.echo("Migrations applied.")
+
+
+def _seed(config: AppConfig) -> None:
+    engine = create_engine_from_config(config.database)
+    session_factory = SessionFactory(engine)
+    loader = StorySeedLoader(session_factory, seed_file=config.story.seed_file)
+    loader.seed_database()
+    typer.echo("Story bible seeded.")
+
+
+def _healthcheck(config: AppConfig) -> None:
+    session_factory = SessionFactory(create_engine_from_config(config.database))
+    session_factory.ping()
+    asyncio.run(_ollama_healthcheck(config))
+    typer.echo("Database and Ollama healthcheck passed.")
 
 
 def _simulate(config: AppConfig, *, hours: int, turns_per_hour: int) -> None:
@@ -221,7 +289,7 @@ async def _run_async(config: AppConfig, *, once: bool) -> None:
         )
         orchestrator.attach_hot_patch_controller(
             HotPatchController(
-                config=config.hot_patch,
+                config=build_hot_patch_config(config),
                 project_root=ROOT,
                 rebuild_runtime=orchestrator.rebuild_runtime_components,
             )
@@ -229,3 +297,53 @@ async def _run_async(config: AppConfig, *, once: bool) -> None:
         await orchestrator.run(once=once)
     finally:
         await client.close()
+
+
+def _run_cli_command(
+    command_name: str,
+    config: AppConfig,
+    operation: Callable[[], None],
+    *,
+    expected_inputs: list[str],
+    retry_advice: str,
+    configure_logs_first: bool = False,
+) -> None:
+    if configure_logs_first:
+        configure_logging(config.logging)
+    try:
+        operation()
+    except Exception as exc:
+        configure_logging(config.logging)
+        log_call_failure(
+            f"cli.{command_name}",
+            exc,
+            context={"config_path": config.loaded_from},
+            expected_inputs=expected_inputs,
+            retry_advice=retry_advice,
+        )
+        typer.secho(
+            _format_cli_error(
+                command_name=command_name,
+                error=exc,
+                expected_inputs=expected_inputs,
+                retry_advice=retry_advice,
+            ),
+            err=True,
+            fg=typer.colors.RED,
+        )
+        raise typer.Exit(code=1) from exc
+
+
+def _format_cli_error(
+    *,
+    command_name: str,
+    error: Exception,
+    expected_inputs: list[str],
+    retry_advice: str,
+) -> str:
+    parts = [f"{command_name} failed: {error}"]
+    if expected_inputs:
+        parts.append("Expected: " + "; ".join(expected_inputs))
+    if retry_advice:
+        parts.append("Retry: " + retry_advice)
+    return "\n".join(parts)

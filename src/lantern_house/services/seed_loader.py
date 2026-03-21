@@ -4,20 +4,54 @@
 # for uninterrupted long-running operation.
 from __future__ import annotations
 
+from pathlib import Path
+
+import yaml
 from sqlalchemy import select
 
 from lantern_house.db import models
 from lantern_house.db.session import SessionFactory
+from lantern_house.runtime.failsafe import AdaptiveServiceError
 from lantern_house.utils.resources import load_yaml
 from lantern_house.utils.time import floor_to_hour, utcnow
 
 
 class StorySeedLoader:
-    def __init__(self, session_factory: SessionFactory) -> None:
+    def __init__(
+        self,
+        session_factory: SessionFactory,
+        *,
+        seed_file: str = "story_bible.yaml",
+    ) -> None:
         self.session_factory = session_factory
+        self.seed_file = seed_file
 
     def load_seed_payload(self) -> dict:
-        return load_yaml("lantern_house.seeds", "story_bible.yaml")
+        if _looks_like_path(self.seed_file):
+            path = Path(self.seed_file).expanduser()
+            if not path.exists():
+                raise AdaptiveServiceError(
+                    "Configured story seed file was not found",
+                    expected_inputs=[
+                        "A valid local YAML file path for story.seed_file.",
+                        "Or a packaged seed resource under lantern_house.seeds.",
+                    ],
+                    retry_advice=(
+                        "Point story.seed_file at an existing YAML file or restore the default "
+                        "packaged seed name."
+                    ),
+                    context={"seed_file": self.seed_file},
+                )
+            payload = yaml.safe_load(path.read_text(encoding="utf-8"))
+            if not isinstance(payload, dict):
+                raise AdaptiveServiceError(
+                    "Configured story seed file must decode to a mapping",
+                    expected_inputs=["A YAML document with a top-level mapping/object."],
+                    retry_advice="Rewrite the custom story seed as a mapping and retry.",
+                    context={"seed_file": str(path)},
+                )
+            return payload
+        return load_yaml("lantern_house.seeds", self.seed_file)
 
     def seed_database(self, *, force: bool = False) -> None:
         payload = self.load_seed_payload()
@@ -466,3 +500,7 @@ class StorySeedLoader:
                     metadata_json={"seed_title": payload["title"], "runtime_phase": "seeded"},
                 )
             )
+
+
+def _looks_like_path(value: str) -> bool:
+    return any(token in value for token in ("/", "\\")) or value.startswith(".")

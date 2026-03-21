@@ -25,6 +25,7 @@ If you are moving from an older story bible to the current globally optimized ca
 
 - Edit [update.txt](/Users/andreborchert/Library/CloudStorage/Dropbox/Chatbot/update.txt) to steer the live story from subscriber votes.
 - The runtime checks the file every 10 minutes by default.
+- Relative paths in config are resolved from the active config file location, so custom runtime TOML files can safely point at their own `update.txt`, log directory, and optional custom seed YAML.
 - The manager interprets those changes gradually over the configured rollout window, which defaults to 24 hours.
 - Use the file for tone dials, cast additions/removals, location changes, relationship votes, freeform requests, and "must happen" or "avoid for now" guidance.
 - Major vote requests are compiled into staged rollout beats and stored both in the existing `beats` table and in dedicated rollout-tracking tables.
@@ -51,11 +52,12 @@ If you are moving from an older story bible to the current globally optimized ca
 - Logs are written to `logs/lantern_house.log`.
 - Structured failure context is written to `logs/error.txt`.
 - Console logging is disabled by default during `run`, so the live operator terminal stays clean for story output only.
-- Runtime hot-patch scanning watches `src/lantern_house`, `config.example.toml`, and `update.txt` by default and can rebuild services in place when safe files change.
+- Runtime hot-patch scanning watches `src/lantern_house` plus the active config file, `.env`, and the resolved audience steering file path, so a `--config` runtime does not silently fall back to the default example config during a reload.
 
 ## Failure Handling
 
 - If Ollama times out, the runtime retries with backoff.
+- CLI commands fail with concise operator messages and also log structured failure context to `logs/error.txt`; normal setup mistakes should not dump raw Python tracebacks anymore.
 - Manager and God-AI paths use shorter retry budgets than character turns because both have deterministic fallbacks and should fail over quickly.
 - If the model response is malformed, the client attempts JSON extraction before falling back.
 - If a character payload omits optional-but-expected relationship details, the coercion layer fills safe defaults instead of crashing the turn.

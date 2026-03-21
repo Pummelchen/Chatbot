@@ -129,6 +129,7 @@ lantern-house run
 ```
 
 9. Edit `update.txt` whenever you want to steer the live story. The manager will absorb the changes on its next 10-minute audience-control check.
+10. If you keep multiple runtime configs, pass `--config /absolute/path/to/runtime.toml`. Hot patching now keeps tracking that active config file instead of snapping back to the default example config.
 
 ## CLI Commands
 
@@ -138,6 +139,8 @@ lantern-house run
 - `lantern-house simulate`: run the accelerated deterministic simulation lab against the current world state
 - `lantern-house recap-now`: generate recap blocks immediately
 - `lantern-house healthcheck`: verify database and Ollama availability
+
+All CLI commands now fail with concise operator messages plus logged context in `logs/error.txt`; they no longer dump raw Python tracebacks for normal setup mistakes like bad DB credentials or running `seed` before `migrate`.
 
 ## Runtime Notes
 
@@ -158,6 +161,8 @@ lantern-house run
 - The live loop wraps critical subsystems in a fail-safe executor. Unexpected failures are logged with context, routed to conservative fallbacks or last-good state, and never printed into the public chat stream.
 - Repeated failures enter a cooldown window instead of hammering the same broken dependency every turn.
 - Hot-patch scanning can rebuild runtime services from changed files without dropping the live process. ORM schema modules are intentionally excluded from live reload to avoid corrupting SQLAlchemy state.
+- Hot-patch scanning now follows the active runtime config file, the resolved audience steering file, and `.env` in addition to the default source tree watchers, so live config edits are not silently ignored after startup.
+- `story.seed_file` now works as a real setting: it can point either to a packaged seed resource name or a local YAML file path for custom world variants.
 - Degraded mode can keep the simulation alive when a model request fails, but it does so conservatively.
 - Manager and God-AI planners now use shorter retry budgets because both have deterministic fallbacks; this keeps fallback guidance timely instead of minutes late.
 - Recap prompts are compacted into bounded event digests so 12h and 24h summaries stay stable during true 24/7 operation.

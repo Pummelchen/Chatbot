@@ -12,7 +12,7 @@ from importlib import import_module
 from pathlib import Path
 from typing import Any
 
-from lantern_house.config import AppConfig
+from lantern_house.config import AppConfig, build_hot_patch_config
 from lantern_house.context.assembler import ContextAssembler
 from lantern_house.db.repository import StoryRepository
 from lantern_house.domain.contracts import (
@@ -864,7 +864,7 @@ class RuntimeOrchestrator:
             context={"force": force},
             expected_inputs=["A seeded house_state, scene_state, and readable recent events."],
             retry_advice="Restore house state persistence so deterministic pressure can recover.",
-            fallback=self.repository.get_house_state_snapshot(),
+            fallback=lambda: self.repository.get_house_state_snapshot(),
             fallback_label="last-house-state",
         )
 
@@ -1015,11 +1015,12 @@ class RuntimeOrchestrator:
         changed_files: list[str],
         changed_modules: list[str],
     ) -> None:
-        latest_config = import_module("lantern_house.config").load_config()
+        config_module = import_module("lantern_house.config")
+        latest_config = config_module.load_config(self.config.loaded_from)
         self.config = latest_config
-        self.fail_safe = import_module("lantern_house.runtime.failsafe").FailSafeExecutor(
-            latest_config.failsafe
-        )
+        self.fail_safe = import_module(
+            "lantern_house.runtime.failsafe"
+        ).FailSafeExecutor(latest_config.failsafe)
 
         pacing_module = import_module("lantern_house.quality.pacing")
         governance_module = import_module("lantern_house.quality.governance")
@@ -1104,7 +1105,7 @@ class RuntimeOrchestrator:
         if self.hot_patch_controller is not None and changed_modules:
             hotpatch_module = import_module("lantern_house.runtime.hotpatch")
             self.hot_patch_controller = hotpatch_module.HotPatchController(
-                config=latest_config.hot_patch,
+                config=build_hot_patch_config(latest_config),
                 project_root=Path(__file__).resolve().parents[3],
                 rebuild_runtime=self.rebuild_runtime_components,
             )

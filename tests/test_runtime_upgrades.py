@@ -8,7 +8,9 @@ import asyncio
 from datetime import timedelta
 
 from lantern_house.config import (
+    AppConfig,
     CriticConfig,
+    FailSafeConfig,
     GodAIConfig,
     HousePressureConfig,
     SimulationConfig,
@@ -26,6 +28,8 @@ from lantern_house.domain.contracts import (
     StoryGravityStateSnapshot,
     StrategicBriefPlan,
 )
+from lantern_house.runtime.failsafe import FailSafeExecutor
+from lantern_house.runtime.orchestrator import RuntimeOrchestrator
 from lantern_house.services.critic import TurnCriticService
 from lantern_house.services.god_ai import GodAIService
 from lantern_house.services.house import HousePressureService
@@ -258,6 +262,29 @@ class HangingLLM:
     async def generate_json(self, **kwargs):
         await asyncio.sleep(60)
         raise AssertionError("unreachable")
+
+
+def test_refresh_house_pressure_uses_lazy_repository_fallback() -> None:
+    calls = {"refresh": 0}
+
+    class Repo:
+        def get_house_state_snapshot(self):
+            raise AssertionError("fallback should stay lazy")
+
+    class HouseService:
+        def refresh(self, *, now=None, force=False):
+            calls["refresh"] += 1
+            return HouseStateSnapshot()
+
+    orchestrator = RuntimeOrchestrator.__new__(RuntimeOrchestrator)
+    orchestrator.config = AppConfig()
+    orchestrator.fail_safe = FailSafeExecutor(FailSafeConfig())
+    orchestrator.repository = Repo()
+    orchestrator.house_pressure_service = HouseService()
+
+    RuntimeOrchestrator._refresh_house_pressure(orchestrator, now=utcnow(), force=True)
+
+    assert calls["refresh"] == 1
 
 
 def _manager_packet() -> ManagerContextPacket:

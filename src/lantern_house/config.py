@@ -195,6 +195,8 @@ class AppConfig(BaseModel):
     simulation: SimulationConfig = Field(default_factory=SimulationConfig)
     failsafe: FailSafeConfig = Field(default_factory=FailSafeConfig)
     hot_patch: HotPatchConfig = Field(default_factory=HotPatchConfig)
+    loaded_from: str | None = Field(default=None, exclude=True)
+    config_root: str | None = Field(default=None, exclude=True)
 
 
 def load_config(config_path: str | Path | None = None) -> AppConfig:
@@ -202,7 +204,9 @@ def load_config(config_path: str | Path | None = None) -> AppConfig:
 
     resolved_path = Path(
         config_path or os.getenv("LANTERN_HOUSE_CONFIG_PATH", "config.example.toml")
-    )
+    ).expanduser()
+    if not resolved_path.is_absolute():
+        resolved_path = (Path.cwd() / resolved_path).resolve()
     payload: dict[str, Any] = {}
     if resolved_path.exists():
         payload = tomllib.loads(resolved_path.read_text(encoding="utf-8"))
@@ -214,7 +218,47 @@ def load_config(config_path: str | Path | None = None) -> AppConfig:
     }
 
     merged = _deep_merge(payload, env_overrides)
-    return AppConfig.model_validate(merged)
+    config = AppConfig.model_validate(merged)
+    base_dir = resolved_path.parent
+    story_seed_file = config.story.seed_file
+    if _looks_like_path(story_seed_file):
+        story_seed_file = str(_resolve_runtime_path(base_dir, story_seed_file))
+    return config.model_copy(
+        update={
+            "logging": config.logging.model_copy(
+                update={
+                    "directory": str(
+                        _resolve_runtime_path(base_dir, config.logging.directory)
+                    )
+                }
+            ),
+            "audience": config.audience.model_copy(
+                update={
+                    "update_file_path": str(
+                        _resolve_runtime_path(base_dir, config.audience.update_file_path)
+                    )
+                }
+            ),
+            "story": config.story.model_copy(update={"seed_file": story_seed_file}),
+            "loaded_from": str(resolved_path),
+            "config_root": str(base_dir),
+        }
+    )
+
+
+def build_hot_patch_config(config: AppConfig) -> HotPatchConfig:
+    watch_paths = list(config.hot_patch.watch_paths)
+    extras = [
+        config.loaded_from,
+        config.audience.update_file_path,
+        str(Path(config.config_root) / ".env") if config.config_root else None,
+    ]
+    for item in extras:
+        if not item:
+            continue
+        if item not in watch_paths:
+            watch_paths.append(item)
+    return config.hot_patch.model_copy(update={"watch_paths": watch_paths})
 
 
 def _deep_merge(left: dict[str, Any], right: dict[str, Any]) -> dict[str, Any]:
@@ -230,3 +274,14 @@ def _deep_merge(left: dict[str, Any], right: dict[str, Any]) -> dict[str, Any]:
             continue
         merged[key] = value
     return merged
+
+
+def _resolve_runtime_path(base_dir: Path, raw_path: str) -> Path:
+    candidate = Path(raw_path).expanduser()
+    if candidate.is_absolute():
+        return candidate
+    return (base_dir / candidate).resolve()
+
+
+def _looks_like_path(value: str) -> bool:
+    return any(token in value for token in ("/", "\\")) or value.startswith(".")
