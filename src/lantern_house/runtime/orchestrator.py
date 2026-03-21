@@ -38,6 +38,7 @@ from lantern_house.services.house import HousePressureService
 from lantern_house.services.manager import StoryManagerService
 from lantern_house.services.progression import StoryProgressionService
 from lantern_house.services.recaps import RecapService
+from lantern_house.services.story_gravity import StoryGravityService
 from lantern_house.utils.time import ensure_utc, utcnow
 
 logger = logging.getLogger(__name__)
@@ -53,6 +54,7 @@ class RuntimeOrchestrator:
         audience_control_service: AudienceControlService,
         beat_service: StoryBeatService,
         house_pressure_service: HousePressureService,
+        story_gravity_service: StoryGravityService,
         god_ai_service: GodAIService,
         manager_service: StoryManagerService,
         character_service: CharacterService,
@@ -74,6 +76,7 @@ class RuntimeOrchestrator:
         self.audience_control_service = audience_control_service
         self.beat_service = beat_service
         self.house_pressure_service = house_pressure_service
+        self.story_gravity_service = story_gravity_service
         self.god_ai_service = god_ai_service
         self.manager_service = manager_service
         self.character_service = character_service
@@ -228,6 +231,7 @@ class RuntimeOrchestrator:
             now=startup_now,
         )
         self._refresh_house_pressure(now=startup_now, force=True)
+        self._refresh_story_gravity(now=startup_now, force=True)
         self.fail_safe.call(
             "runtime.set_loop_ready",
             lambda: self.repository.set_runtime_status(
@@ -267,6 +271,7 @@ class RuntimeOrchestrator:
             now=now,
         )
         self._refresh_house_pressure(now=now)
+        self._refresh_story_gravity(now=now)
 
         directive_result = self.fail_safe.call(
             "manager.get_latest_directive",
@@ -549,8 +554,10 @@ class RuntimeOrchestrator:
             fallback_label="neutral-critic-report",
         )
         critic_report = critic_result.value or TurnCriticReport()
+        repair_applied = False
         if self._should_repair_turn(flags=flags, critic_score=critic_report.score):
             degraded_mode = True
+            repair_applied = True
             turn = self.character_service.repair(
                 packet=packet,
                 thought_pulse_allowed=thought_pulse_allowed,
@@ -560,6 +567,11 @@ class RuntimeOrchestrator:
                 packet=packet,
                 directive=directive,
                 turn=turn,
+            )
+            critic_report = self.critic_service.review(
+                packet=packet,
+                turn=turn,
+                flags=flags,
             )
 
         persisted_result = self.fail_safe.call(
@@ -592,6 +604,24 @@ class RuntimeOrchestrator:
         persisted = persisted_result.value
         if persisted is None:
             return await self._pause_after_failed_iteration(once=once)
+
+        self.fail_safe.call(
+            "repository.record_public_turn_review",
+            lambda: self.repository.record_public_turn_review(
+                message_id=persisted["message_id"],
+                speaker_slug=speaker_slug,
+                report=critic_report,
+                turn=turn,
+                repaired=repair_applied,
+                strategic_brief=manager_packet.strategic_brief,
+                now=now,
+            ),
+            context={"speaker_slug": speaker_slug, "message_id": persisted["message_id"]},
+            expected_inputs=[
+                "A persisted message id, final critic report, and writable review tables."
+            ],
+            retry_advice="Restore review persistence so critique telemetry can resume.",
+        )
 
         self.fail_safe.call(
             "beats.reconcile_turn",
@@ -704,6 +734,19 @@ class RuntimeOrchestrator:
             context={"bucket_end_at": bucket_end_at.isoformat()},
             expected_inputs=["A valid RecapBundle and writable summary tables."],
             retry_advice="Restore summary persistence so recap bundles can be saved again.",
+        )
+        self.fail_safe.call(
+            "repository.record_recap_quality_scores",
+            lambda: self.repository.record_recap_quality_scores(
+                bucket_end_at=bucket_end_at,
+                quality_scores=self.recap_service.evaluate_quality(bundle=bundle),
+            ),
+            context={"bucket_end_at": bucket_end_at.isoformat()},
+            expected_inputs=["A recap bundle and writable recap_quality_scores table."],
+            retry_advice=(
+                "Restore recap-quality persistence so the strategist can score "
+                "recap health again."
+            ),
         )
         self.fail_safe.call(
             "runtime.write_recap_checkpoint",
@@ -823,6 +866,17 @@ class RuntimeOrchestrator:
             retry_advice="Restore house state persistence so deterministic pressure can recover.",
             fallback=self.repository.get_house_state_snapshot(),
             fallback_label="last-house-state",
+        )
+
+    def _refresh_story_gravity(self, *, now, force: bool = False) -> None:
+        self.fail_safe.call(
+            "story_gravity.refresh",
+            lambda: self.story_gravity_service.refresh(now=now, force=force),
+            context={"force": force},
+            expected_inputs=[
+                "Readable world memory, summaries, events, and a writable story_gravity_state."
+            ],
+            retry_advice="Restore story gravity persistence so the north star can refresh.",
         )
 
     def _build_manager_packet(
@@ -973,6 +1027,7 @@ class RuntimeOrchestrator:
         audience_module = import_module("lantern_house.services.audience")
         beats_module = import_module("lantern_house.services.beats")
         house_module = import_module("lantern_house.services.house")
+        gravity_module = import_module("lantern_house.services.story_gravity")
         simulation_module = import_module("lantern_house.services.simulation_lab")
         god_ai_module = import_module("lantern_house.services.god_ai")
         manager_module = import_module("lantern_house.services.manager")
@@ -1000,6 +1055,10 @@ class RuntimeOrchestrator:
         self.house_pressure_service = house_module.HousePressureService(
             self.repository,
             latest_config.house_pressure,
+        )
+        self.story_gravity_service = gravity_module.StoryGravityService(
+            self.repository,
+            latest_config.story_gravity,
         )
         simulation_lab = simulation_module.SimulationLabService(latest_config.simulation)
         self.god_ai_service = god_ai_module.GodAIService(

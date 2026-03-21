@@ -3,14 +3,15 @@
 
 ## System Shape
 
-Lantern House is split into six major layers:
+Lantern House is split into seven major layers:
 
 1. `db`: SQLAlchemy models, sessions, repositories, migrations
 2. `context`: selective retrieval and prompt-packet assembly
 3. `quality`: pacing and story-governance evaluators, continuity guardrails
-4. `services`: manager, character, audience-control, house pressure, beat planning, critic, progression, recap, event extraction, simulation, seeding
+4. `services`: manager, character, audience-control, house pressure, story gravity, beat planning, critic, progression, recap, event extraction, simulation, God-AI strategy, seeding
 5. `runtime`: scheduler, orchestrator, recovery, long-running loop
 6. `rendering`: terminal presentation for public output
+7. `prompts`: editable role instructions for manager, characters, announcer, and God-AI strategy
 
 ## Runtime Loop
 
@@ -19,17 +20,25 @@ Each loop iteration follows the same pattern:
 1. Recover or refresh run-state data.
 2. Check whether full-clock-hour recaps are due.
 3. Refresh the audience-control file state when its poll interval is due.
-4. Sync subscriber-vote rollout beats and refresh deterministic house pressure.
-5. Optionally apply any safe hot-patch file changes and rebuild runtime services in-place.
-6. Evaluate pacing, continuity, and story-governance health.
-7. Refresh the manager directive when required, blocking only for the first directive and otherwise using a prefetched background plan.
-8. Select the next speaker based on scene state, weights, recency, and burst/lull logic.
-9. Build a selective character context packet.
-10. Generate a structured turn from Ollama.
-11. Run the continuity guard and the lightweight turn critic before persistence.
-12. Extract events, reconcile beats, advance arc state, apply relationship deltas, persist the result, and optionally emit a thought pulse.
-13. Render the public message to the terminal.
-14. Sleep for a variable delay before the next turn.
+4. Sync subscriber-vote rollout requests and rollout beats.
+5. Refresh deterministic house pressure and persistent story-gravity state.
+6. Optionally apply any safe hot-patch file changes and rebuild runtime services in-place.
+7. Evaluate pacing, continuity, story-governance health, recap quality, and recent public-turn review signals.
+8. Refresh the manager directive when required, blocking only for the first directive and otherwise using a prefetched background plan.
+9. Select the next speaker based on scene state, weights, recency, and burst/lull logic.
+10. Build a selective character context packet.
+11. Generate a structured turn from Ollama.
+12. Run the continuity guard and the lightweight turn critic before persistence.
+13. Extract events, reconcile beats, advance arc state, apply relationship deltas, persist the result, and persist turn-review telemetry.
+14. Render the public message to the terminal.
+15. Sleep for a variable delay before the next turn.
+
+Parallel background loops:
+
+- God-AI strategist: analyzes recent structured events, review telemetry, recap quality, story gravity, and simulation rankings, then persists a structured strategic brief.
+- House-pressure engine: keeps grounded operational pressure alive and turns it into reusable beats.
+- Audience-rollout engine: converts `update.txt` steering into staged rollout requests and rollout beats.
+- Checkpoint loop: writes periodic restart-safe snapshots independent of turn persistence.
 
 ## Persistence Strategy
 
@@ -43,8 +52,13 @@ The system persists:
 - Arc state and reveal ladders
 - Scene and beat state
 - Deterministic house-pressure state
+- Persistent story-gravity state
 - Manager directives
 - Strategic briefs produced by the background God-AI planner
+- Simulation lab runs and ranked strategy candidates
+- Rollout requests and rollout beats compiled from `update.txt`
+- Public-turn reviews, clip-value scores, fandom-signal candidates, and recap-quality scores
+- Dormant-thread registry rows
 - Public chat messages
 - Thought pulses
 - Extracted events
@@ -73,13 +87,13 @@ Anti-drift is explicit and layered:
 - A deterministic `house_state` keeps financial, repair, inspection, weather, fatigue, and reputation pressure alive even if the models drift.
 - The manager is given pacing health and continuity warnings.
 - The manager is also given a story-governance report covering hourly progression, core-tension drift, cliffhanger pressure, and robotic-voice risk.
-- The manager also receives a normalized audience-control report built from `update.txt`, including tone dials, vote requests, and rollout stage.
-- The manager also receives house-pressure summaries, pending beats, simulation rankings, and the latest strategic brief when available.
+- The manager also receives a normalized audience-control report built from `update.txt`, including tone dials, vote requests, rollout stage, and staged rollout beats.
+- The manager also receives house-pressure summaries, story-gravity state, dormant-thread registry snapshots, recap-quality alerts, public-turn review signals, simulation rankings, and the latest strategic brief when available.
 - Repetition, romance stalls, mystery stalls, and low-progression windows are scored.
 - Unresolved-question memory is bounded and overflow is pushed into dormant payoff threads.
 - Forbidden-knowledge boundaries are injected into character packets.
 - Prose-like or robotic public turns can be repaired before they are committed.
-- A deterministic simulation lab ranks likely next directions, and a background God-AI planner converts that into strategic guidance without blocking the live loop.
+- A deterministic simulation lab ranks likely next directions, and a background God-AI planner converts that into structured strategic guidance without blocking the live loop.
 - A fail-safe executor wraps critical runtime calls, caches last-good values, and applies cooldowns after repeated failures so the loop keeps going conservatively instead of thrashing.
 - A hot-patch controller can soft-reload runtime/service/prompt/config code paths in place. SQLAlchemy ORM model modules are intentionally excluded from live reload because they are not safe to redefine mid-process.
 - Thought pulses are budgeted and cooldown-limited.
@@ -92,4 +106,5 @@ Anti-drift is explicit and layered:
 - Prompt templates are plain editable markdown files instead of deeply embedded strings.
 - A degraded-mode fallback exists to protect continuity during transient model failures.
 - The God-AI planner is intentionally background-only and low-frequency; it is valuable for direction, but not allowed to tax the visible cadence loop.
+- Console logging is disabled by default during live runs so only the diegetic renderer owns the operator-facing terminal.
 - Terminal-first output keeps the MVP narrow while preserving later OBS and YouTube integration paths.

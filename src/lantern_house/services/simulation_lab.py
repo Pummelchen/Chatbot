@@ -47,6 +47,7 @@ class SimulationLabService:
             candidates=candidates,
             systemic_risks=self._systemic_risks(context),
             recommended_focus=recommended_focus,
+            ranked_strategy_keys=[candidate.strategy_key for candidate in candidates],
         )
 
     def _score_house_pressure(self, context: ManagerContextPacket) -> SimulationCandidateScore:
@@ -75,6 +76,18 @@ class SimulationLabService:
         return SimulationCandidateScore(
             strategy_key="house-pressure-first",
             score=min(100, score),
+            value_profile={
+                "clip_worthiness": min(10, 6 + int(state.repair_backlog >= 6)),
+                "quote_worthiness": 5,
+                "reentry_value": min(10, 6 + int(state.inspection_risk >= 6)),
+                "theory_value": 5,
+                "betrayal_value": 6,
+                "romance_intensity": 5,
+                "mystery_progression": 5,
+                "novelty": 6,
+                "daily_uniqueness": 7,
+                "fandom_discussion_value": 6,
+            },
             rationale=rationale
             or ["The house can always generate concrete tension without lore dumping."],
             next_hour_focus=next_focus,
@@ -104,6 +117,18 @@ class SimulationLabService:
         return SimulationCandidateScore(
             strategy_key="mystery-evidence-first",
             score=min(100, score),
+            value_profile={
+                "clip_worthiness": 7,
+                "quote_worthiness": 6,
+                "reentry_value": 8,
+                "theory_value": 9,
+                "betrayal_value": 7,
+                "romance_intensity": 4,
+                "mystery_progression": 9,
+                "novelty": 7,
+                "daily_uniqueness": 7,
+                "fandom_discussion_value": 8,
+            },
             rationale=rationale or ["Mystery remains one of the house's permanent engines."],
             next_hour_focus=next_focus,
             six_hour_path=(
@@ -134,6 +159,18 @@ class SimulationLabService:
         return SimulationCandidateScore(
             strategy_key="romance-faultline-first",
             score=min(100, score),
+            value_profile={
+                "clip_worthiness": 8,
+                "quote_worthiness": 7,
+                "reentry_value": 6,
+                "theory_value": 5,
+                "betrayal_value": 8,
+                "romance_intensity": 9,
+                "mystery_progression": 4,
+                "novelty": 6,
+                "daily_uniqueness": 6,
+                "fandom_discussion_value": 9,
+            },
             rationale=rationale or ["Slow-burn romance remains a top retention mechanic."],
             next_hour_focus=next_focus,
             six_hour_path=(
@@ -166,6 +203,18 @@ class SimulationLabService:
         return SimulationCandidateScore(
             strategy_key="audience-rollout-first",
             score=min(100, score),
+            value_profile={
+                "clip_worthiness": 6,
+                "quote_worthiness": 5,
+                "reentry_value": 7,
+                "theory_value": 6,
+                "betrayal_value": 6,
+                "romance_intensity": 6,
+                "mystery_progression": 6,
+                "novelty": 8,
+                "daily_uniqueness": 8,
+                "fandom_discussion_value": 8,
+            },
             rationale=rationale
             or ["Audience steering is present but should not override core canon."],
             next_hour_focus=next_focus,
@@ -194,6 +243,18 @@ class SimulationLabService:
         return SimulationCandidateScore(
             strategy_key="ensemble-refresh-first",
             score=min(100, score),
+            value_profile={
+                "clip_worthiness": 6,
+                "quote_worthiness": 6,
+                "reentry_value": 6,
+                "theory_value": 5,
+                "betrayal_value": 7,
+                "romance_intensity": 6,
+                "mystery_progression": 5,
+                "novelty": 9,
+                "daily_uniqueness": 9,
+                "fandom_discussion_value": 7,
+            },
             rationale=rationale or ["A fresh pairing can reset tone without breaking canon."],
             next_hour_focus=next_focus,
             six_hour_path=(

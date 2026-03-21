@@ -213,6 +213,46 @@ class StorySeedLoader:
                     },
                 )
             )
+            story_engine = payload.get("story_engine", {})
+            session.add(
+                models.StoryGravityState(
+                    state_key="primary",
+                    north_star_objective=story_engine.get(
+                        "central_force",
+                        (
+                            "Keep the house tied to debt, hidden records, ownership conflict, "
+                            "and unstable attraction."
+                        ),
+                    ),
+                    central_tension=(
+                        story_engine.get(
+                            "core_promises",
+                            ["The house itself must always matter."],
+                        )[0]
+                    ),
+                    core_tensions=[
+                        item.get("key")
+                        for item in story_engine.get("core_tensions", [])
+                        if isinstance(item, dict) and item.get("key")
+                    ],
+                    active_axes=[
+                        item.get("key")
+                        for item in story_engine.get("core_tensions", [])[:2]
+                        if isinstance(item, dict) and item.get("key")
+                    ],
+                    dormant_threads=[],
+                    drift_score=12,
+                    reentry_priority=8,
+                    clip_priority=7,
+                    fandom_priority=7,
+                    recap_focus=payload["story_arcs"][0]["unresolved_questions"][:2],
+                    manager_guardrails=[
+                        *story_engine.get("core_promises", [])[:3],
+                        *story_engine.get("voice_guardrails", [])[:2],
+                    ],
+                    metadata_json={"seeded": True},
+                )
+            )
 
             scene = payload["initial_scene"]
             session.add(
@@ -263,6 +303,7 @@ class StorySeedLoader:
         required_models = {
             "world_state": models.WorldState,
             "house_state": models.HouseState,
+            "story_gravity_state": models.StoryGravityState,
             "scene_state": models.SceneState,
             "run_state": models.RunState,
         }
@@ -271,6 +312,13 @@ class StorySeedLoader:
             for name, model in required_models.items()
             if session.scalar(select(model.id).limit(1)) is None
         ]
+        if missing:
+            self._repair_required_seed_state(session, payload, missing)
+            missing = [
+                name
+                for name, model in required_models.items()
+                if session.scalar(select(model.id).limit(1)) is None
+            ]
         if missing:
             joined = ", ".join(missing)
             raise RuntimeError(
@@ -286,4 +334,135 @@ class StorySeedLoader:
             raise RuntimeError(
                 "Existing database is seeded with a different story bible title. "
                 "Reset the database and reseed to load the current ensemble and canon."
+            )
+
+    def _repair_required_seed_state(
+        self,
+        session,
+        payload: dict,
+        missing: list[str],
+    ) -> None:
+        hour_bucket = floor_to_hour(utcnow())
+        location_map = {
+            row.slug: row for row in session.scalars(select(models.Location)).all()
+        }
+        story_engine = payload.get("story_engine", {})
+        house_seed = payload.get("house_pressure_seed", {})
+        initial_scene = payload["initial_scene"]
+
+        if "world_state" in missing:
+            session.add(
+                models.WorldState(
+                    title=payload["title"],
+                    active_scene_key=initial_scene["scene_key"],
+                    current_story_day=1,
+                    emotional_temperature=initial_scene["emotional_temperature"],
+                    reveal_pressure=1,
+                    unresolved_questions=[
+                        payload["story_arcs"][0]["unresolved_questions"][0],
+                        payload["story_arcs"][1]["unresolved_questions"][0],
+                        payload["story_arcs"][2]["unresolved_questions"][0],
+                    ],
+                    archived_threads=payload["future_plot_hooks"][:6],
+                    metadata_json={
+                        "setting": payload["setting"],
+                        "initial_trust_map": payload["initial_trust_map"],
+                        "initial_romantic_tensions": payload["initial_romantic_tensions"],
+                        "first_week_arc_plan": payload["first_week_arc_plan"],
+                        "first_24h_drama_plan": payload["first_24h_drama_plan"],
+                        "future_plot_hooks": payload["future_plot_hooks"],
+                        "story_engine": story_engine,
+                        "future_recurring_character": payload.get("future_recurring_character"),
+                        "recap_examples": payload["recap_examples"],
+                    },
+                )
+            )
+        if "house_state" in missing:
+            session.add(
+                models.HouseState(
+                    state_key="primary",
+                    capacity=house_seed.get("capacity", 0),
+                    occupied_rooms=house_seed.get("occupied_rooms", 0),
+                    vacancy_pressure=house_seed.get("vacancy_pressure", 0),
+                    cash_on_hand=house_seed.get("cash_on_hand", 0),
+                    hourly_burn_rate=house_seed.get("hourly_burn_rate", 0),
+                    payroll_due_in_hours=house_seed.get("payroll_due_in_hours", 0),
+                    repair_backlog=house_seed.get("repair_backlog", 0),
+                    inspection_risk=house_seed.get("inspection_risk", 0),
+                    guest_tension=house_seed.get("guest_tension", 0),
+                    weather_pressure=house_seed.get("weather_pressure", 0),
+                    staff_fatigue=house_seed.get("staff_fatigue", 0),
+                    reputation_risk=house_seed.get("reputation_risk", 0),
+                    active_pressures=house_seed.get("active_pressures", []),
+                    metadata_json={
+                        "pressure_catalog": house_seed.get("pressure_catalog", []),
+                        "seed_note": house_seed.get("note", ""),
+                    },
+                )
+            )
+        if "story_gravity_state" in missing:
+            session.add(
+                models.StoryGravityState(
+                    state_key="primary",
+                    north_star_objective=story_engine.get(
+                        "central_force",
+                        (
+                            "Keep the house tied to debt, hidden records, ownership conflict, "
+                            "and unstable attraction."
+                        ),
+                    ),
+                    central_tension=(
+                        story_engine.get(
+                            "core_promises",
+                            ["The house itself must always matter."],
+                        )[0]
+                    ),
+                    core_tensions=[
+                        item.get("key")
+                        for item in story_engine.get("core_tensions", [])
+                        if isinstance(item, dict) and item.get("key")
+                    ],
+                    active_axes=[
+                        item.get("key")
+                        for item in story_engine.get("core_tensions", [])[:2]
+                        if isinstance(item, dict) and item.get("key")
+                    ],
+                    dormant_threads=[],
+                    drift_score=12,
+                    reentry_priority=8,
+                    clip_priority=7,
+                    fandom_priority=7,
+                    recap_focus=payload["story_arcs"][0]["unresolved_questions"][:2],
+                    manager_guardrails=[
+                        *story_engine.get("core_promises", [])[:3],
+                        *story_engine.get("voice_guardrails", [])[:2],
+                    ],
+                    metadata_json={"repaired_from_seed": True},
+                )
+            )
+        if "scene_state" in missing:
+            location = location_map.get(initial_scene["location_slug"])
+            session.add(
+                models.SceneState(
+                    scene_key=initial_scene["scene_key"],
+                    objective=initial_scene["objective"],
+                    emotional_temperature=initial_scene["emotional_temperature"],
+                    mystery_pressure=initial_scene["mystery_pressure"],
+                    romance_pressure=initial_scene["romance_pressure"],
+                    comedic_pressure=initial_scene["comedic_pressure"],
+                    location_id=location.id if location else None,
+                    active_character_slugs=initial_scene.get(
+                        "active_character_slugs",
+                        ["amelia", "rafael", "ayu"],
+                    ),
+                    current_hour_bucket=hour_bucket,
+                )
+            )
+        if "run_state" in missing:
+            session.add(
+                models.RunState(
+                    runtime_key="primary",
+                    status="idle",
+                    metadata_json={"seed_title": payload["title"], "runtime_phase": "seeded"},
+                )
             )

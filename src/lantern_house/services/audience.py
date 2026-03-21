@@ -42,6 +42,18 @@ class AudienceControlService:
             {"audience_control": report.model_dump()},
             now=now,
         )
+        sync_rollout = getattr(self.repository, "sync_rollout_requests", None)
+        if callable(sync_rollout):
+            sync_rollout(
+                change_id=report.change_id,
+                fingerprint=report.fingerprint,
+                priority=report.priority,
+                requests=report.requests,
+                directives=report.directives,
+                active=report.active,
+                activated_at=report.activated_at,
+                now=now,
+            )
         return report
 
     def current_report(self) -> AudienceControlReport:
@@ -355,6 +367,7 @@ def _relationship_beat_hints(
                         "direction": direction,
                         "phase": _phase_for_index(index, len(objectives)),
                         "request_text": request_text,
+                        "request_summary": request_text,
                     },
                 )
             )
@@ -467,7 +480,11 @@ def _objectives_to_hints(
                 significance=min(9, 6 + index),
                 ready_at=_schedule(anchor, full_integration_hours, index, len(objectives)),
                 keywords=_keywords_from_texts([request_text, objective]),
-                metadata={**metadata, "phase": _phase_for_index(index, len(objectives))},
+                metadata={
+                    **metadata,
+                    "phase": _phase_for_index(index, len(objectives)),
+                    "request_summary": request_text,
+                },
             )
         )
     return hints

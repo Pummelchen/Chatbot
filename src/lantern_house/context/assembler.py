@@ -10,6 +10,7 @@ from lantern_house.domain.contracts import (
     CharacterContextPacket,
     HouseStateSnapshot,
     ManagerContextPacket,
+    StoryGravityStateSnapshot,
 )
 from lantern_house.quality.governance import StoryGovernanceEvaluator
 from lantern_house.quality.pacing import PacingHealthEvaluator
@@ -47,6 +48,29 @@ class ContextAssembler:
             default=HouseStateSnapshot(),
         )
         pending_beats = _repo_call(self.repository, "list_pending_beats", limit=4, default=[])
+        story_gravity_state = _repo_call(
+            self.repository,
+            "get_story_gravity_state_snapshot",
+            default=StoryGravityStateSnapshot(),
+        )
+        public_turn_reviews = _repo_call(
+            self.repository,
+            "list_recent_public_turn_reviews",
+            limit=4,
+            default=[],
+        )
+        recap_quality_scores = _repo_call(
+            self.repository,
+            "list_recent_recap_quality_scores",
+            limit=3,
+            default=[],
+        )
+        dormant_threads = _repo_call(
+            self.repository,
+            "list_dormant_threads",
+            limit=4,
+            default=[],
+        )
         strategic_brief = (
             _repo_call(self.repository, "get_latest_strategic_brief", default=None)
             if include_strategic
@@ -58,6 +82,7 @@ class ContextAssembler:
         story_governance = self.governance_evaluator.evaluate(
             messages=messages,
             events=events,
+            summaries=summaries,
             world_metadata=world["metadata"],
             unresolved_questions=world["unresolved_questions"],
         )
@@ -70,11 +95,14 @@ class ContextAssembler:
             story_gravity=[
                 item
                 for item in [
-                    story_engine.get("central_force", ""),
+                    story_gravity_state.north_star_objective
+                    or story_engine.get("central_force", ""),
+                    *story_gravity_state.active_axes[:3],
                     *story_engine.get("core_promises", []),
                 ]
                 if item
-            ],
+            ][:6],
+            story_gravity_state=story_gravity_state,
             viewer_value_targets=story_engine.get("viewer_value_targets", []),
             voice_guardrails=story_engine.get("voice_guardrails", []),
             cast_guidance=[
@@ -102,7 +130,14 @@ class ContextAssembler:
             ],
             unresolved_questions=world["unresolved_questions"],
             payoff_threads=[
-                _compact_text(item, limit=120) for item in world["archived_threads"][:4]
+                _compact_text(item.summary, limit=120) for item in dormant_threads[:4]
+            ],
+            dormant_threads=[
+                _compact_text(
+                    f"{item.status} / heat {item.heat}: {item.summary}",
+                    limit=140,
+                )
+                for item in dormant_threads[:4]
             ],
             relationship_map=[
                 _compact_text(item, limit=140)
@@ -136,6 +171,28 @@ class ContextAssembler:
                 )
                 for flag in continuity_flags
             ],
+            recap_quality_alerts=[
+                _compact_text(
+                    (
+                        f"{item['summary_window']} recap quality "
+                        f"(clarity {item['clarity']}, hook {item['next_hook_strength']}): "
+                        f"{'; '.join(item['issues'][:2]) or 'no recent issue'}"
+                    ),
+                    limit=180,
+                )
+                for item in recap_quality_scores
+            ],
+            public_turn_review_signals=[
+                _compact_text(
+                    (
+                        f"{item['speaker_slug']} review {item['critic_score']} "
+                        f"(clip {item['clip_value']}, fandom {item['fandom_discussion_value']}): "
+                        f"{'; '.join(item['reasons'][:2]) or 'clean'}"
+                    ),
+                    limit=180,
+                )
+                for item in public_turn_reviews
+            ],
             pacing_health=pacing_health,
             story_governance=story_governance,
             audience_control=audience_control or AudienceControlReport(),
@@ -151,7 +208,9 @@ class ContextAssembler:
                 for beat in pending_beats
             ],
             strategic_guidance=[
+                _compact_text(strategic_brief.current_north_star_objective, limit=180),
                 _compact_text(strategic_brief.viewer_value_thesis, limit=180),
+                _compact_text(strategic_brief.next_one_hour_intention, limit=160),
                 *[
                     _compact_text(item, limit=150)
                     for item in (strategic_brief.recommendations[:2] if strategic_brief else [])
@@ -160,6 +219,7 @@ class ContextAssembler:
             if strategic_brief
             else [],
             simulation_ranking=strategic_brief.simulation_ranking[:4] if strategic_brief else [],
+            strategic_brief=strategic_brief,
         )
 
     def build_character_packet(

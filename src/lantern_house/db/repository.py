@@ -17,6 +17,7 @@ from lantern_house.domain.contracts import (
     BeatSnapshot,
     CharacterTurn,
     ContinuityFlagDraft,
+    DormantThreadSnapshot,
     EventCandidate,
     EventView,
     HouseStateSnapshot,
@@ -25,10 +26,12 @@ from lantern_house.domain.contracts import (
     RelationshipSnapshot,
     SimulationLabReport,
     StoryArcSnapshot,
+    StoryGravityStateSnapshot,
     StoryProgressionPlan,
     StrategicBriefPlan,
     StrategicBriefSnapshot,
     SummaryView,
+    TurnCriticReport,
 )
 from lantern_house.domain.enums import MessageKind, SummaryWindow
 from lantern_house.utils.time import ensure_utc, floor_to_hour, isoformat, utcnow
@@ -423,6 +426,36 @@ class StoryRepository:
                 updated_at=row.updated_at,
             )
 
+    def get_story_gravity_state_snapshot(self) -> StoryGravityStateSnapshot:
+        with self.session_factory.session_scope() as session:
+            row = session.scalar(
+                select(models.StoryGravityState).where(
+                    models.StoryGravityState.state_key == "primary"
+                )
+            )
+            if row is None:
+                return StoryGravityStateSnapshot()
+            return StoryGravityStateSnapshot(
+                state_key=row.state_key,
+                north_star_objective=row.north_star_objective,
+                central_tension=row.central_tension,
+                core_tensions=row.core_tensions,
+                active_axes=row.active_axes,
+                dormant_threads=[
+                    DormantThreadSnapshot.model_validate(item)
+                    for item in row.dormant_threads
+                    if isinstance(item, dict)
+                ],
+                drift_score=row.drift_score,
+                reentry_priority=row.reentry_priority,
+                clip_priority=row.clip_priority,
+                fandom_priority=row.fandom_priority,
+                recap_focus=row.recap_focus,
+                manager_guardrails=row.manager_guardrails,
+                metadata=row.metadata_json,
+                updated_at=row.updated_at,
+            )
+
     def save_house_state(self, snapshot: HouseStateSnapshot, *, now=None) -> HouseStateSnapshot:
         now = now or utcnow()
         with self.session_factory.session_scope() as session:
@@ -445,6 +478,57 @@ class StoryRepository:
             row.staff_fatigue = snapshot.staff_fatigue
             row.reputation_risk = snapshot.reputation_risk
             row.active_pressures = [item.model_dump() for item in snapshot.active_pressures]
+            row.metadata_json = dict(snapshot.metadata)
+            row.updated_at = now
+            for item in snapshot.active_pressures:
+                session.add(
+                    models.HousePressure(
+                        state_key=snapshot.state_key,
+                        signal_slug=item.slug,
+                        label=item.label,
+                        intensity=item.intensity,
+                        summary=item.summary,
+                        recommended_move=item.recommended_move,
+                        source_metric=item.source_metric,
+                        metadata_json={
+                            "updated_at": isoformat(now),
+                            "state_key": snapshot.state_key,
+                        },
+                        created_at=now,
+                    )
+                )
+            session.flush()
+            return snapshot.model_copy(update={"updated_at": now})
+
+    def save_story_gravity_state(
+        self,
+        snapshot: StoryGravityStateSnapshot,
+        *,
+        now=None,
+    ) -> StoryGravityStateSnapshot:
+        now = ensure_utc(now or utcnow())
+        with self.session_factory.session_scope() as session:
+            row = session.scalar(
+                select(models.StoryGravityState).where(
+                    models.StoryGravityState.state_key == snapshot.state_key
+                )
+            )
+            if row is None:
+                row = models.StoryGravityState(state_key=snapshot.state_key)
+                session.add(row)
+            row.north_star_objective = snapshot.north_star_objective
+            row.central_tension = snapshot.central_tension
+            row.core_tensions = snapshot.core_tensions
+            row.active_axes = snapshot.active_axes
+            row.dormant_threads = [
+                item.model_dump(mode="json") for item in snapshot.dormant_threads
+            ]
+            row.drift_score = snapshot.drift_score
+            row.reentry_priority = snapshot.reentry_priority
+            row.clip_priority = snapshot.clip_priority
+            row.fandom_priority = snapshot.fandom_priority
+            row.recap_focus = snapshot.recap_focus
+            row.manager_guardrails = snapshot.manager_guardrails
             row.metadata_json = dict(snapshot.metadata)
             row.updated_at = now
             session.flush()
@@ -651,10 +735,180 @@ class StoryRepository:
                         due_by=due_by,
                         metadata=metadata,
                     )
-                )
+                    )
                 if len(completed) >= limit:
                     break
             return completed
+
+    def sync_rollout_requests(
+        self,
+        *,
+        change_id: str | None,
+        fingerprint: str | None,
+        priority: int,
+        requests: list[str],
+        directives: list[str],
+        active: bool,
+        activated_at,
+        now=None,
+    ) -> None:
+        now = ensure_utc(now or utcnow())
+        change_id = change_id or "manual-unknown"
+        fingerprint = fingerprint or "none"
+        activated_dt = _parse_optional_timestamp(activated_at, default=now)
+        with self.session_factory.session_scope() as session:
+            active_rows = session.scalars(
+                select(models.RolloutRequest).where(models.RolloutRequest.status == "active")
+            ).all()
+            active_lookup = {
+                (row.fingerprint or "none", row.summary): row for row in active_rows
+            }
+            active_summaries = set(requests if active else [])
+            for row in active_rows:
+                if (row.fingerprint or "none") == fingerprint and row.summary in active_summaries:
+                    continue
+                row.status = "archived"
+
+            if not active:
+                return
+
+            for request in requests:
+                request_type = _classify_rollout_request(request)
+                row = active_lookup.get((fingerprint, request))
+                metadata = {
+                    "change_id": change_id,
+                    "request_type": request_type,
+                    "fingerprint": fingerprint,
+                }
+                if row is None:
+                    row = models.RolloutRequest(
+                        change_id=change_id,
+                        fingerprint=fingerprint,
+                        request_type=request_type,
+                        priority=priority,
+                        status="active",
+                        summary=request,
+                        directives=directives[:8],
+                        metadata_json=metadata,
+                        activated_at=activated_dt,
+                        created_at=now,
+                    )
+                    session.add(row)
+                    continue
+                row.change_id = change_id
+                row.request_type = request_type
+                row.priority = priority
+                row.status = "active"
+                row.directives = directives[:8]
+                row.metadata_json = metadata
+                row.activated_at = activated_dt
+
+    def sync_rollout_beats(
+        self,
+        *,
+        change_id: str | None,
+        beat_items: list[BeatPlanItem],
+        now=None,
+    ) -> None:
+        now = ensure_utc(now or utcnow())
+        with self.session_factory.session_scope() as session:
+            active_rows = session.scalars(
+                select(models.RolloutBeat).where(
+                    models.RolloutBeat.status.in_(["planned", "ready", "active"])
+                )
+            ).all()
+            existing = {row.beat_key: row for row in active_rows}
+            active_keys = {item.beat_key for item in beat_items}
+            request_lookup = {
+                row.summary: row.id
+                for row in session.scalars(
+                    select(models.RolloutRequest).where(
+                        models.RolloutRequest.status == "active",
+                        models.RolloutRequest.change_id == (change_id or "manual-unknown"),
+                    )
+                ).all()
+            }
+            for item in beat_items:
+                metadata = dict(item.metadata)
+                request_hint = _stringy(metadata.get("request_summary"))
+                ready_at = _parse_optional_timestamp(item.ready_at, default=now)
+                status = "ready" if ready_at <= now else "planned"
+                row = existing.get(item.beat_key)
+                if row is None:
+                    row = models.RolloutBeat(
+                        rollout_request_id=request_lookup.get(request_hint),
+                        beat_key=item.beat_key,
+                        beat_type=item.beat_type,
+                        objective=item.objective,
+                        status=status,
+                        ready_at=ready_at,
+                        significance=item.significance,
+                        metadata_json=metadata,
+                        created_at=now,
+                    )
+                    session.add(row)
+                    continue
+                row.rollout_request_id = request_lookup.get(request_hint)
+                row.beat_type = item.beat_type
+                row.objective = item.objective
+                row.status = status
+                row.ready_at = ready_at
+                row.significance = item.significance
+                row.metadata_json = metadata
+
+            for beat_key, row in existing.items():
+                if beat_key in active_keys:
+                    continue
+                row.status = "archived"
+                metadata = dict(row.metadata_json)
+                metadata["archived_at"] = isoformat(now)
+                row.metadata_json = metadata
+
+    def record_simulation_lab_run(
+        self,
+        *,
+        report: SimulationLabReport,
+        source: str,
+        now=None,
+    ) -> SimulationLabReport:
+        now = ensure_utc(now or utcnow())
+        with self.session_factory.session_scope() as session:
+            winner = report.candidates[0].strategy_key if report.candidates else None
+            row = models.SimulationLabRun(
+                source=source,
+                horizon_hours=report.horizon_hours,
+                turns_per_hour=report.turns_per_hour,
+                winner_key=winner,
+                systemic_risks=report.systemic_risks,
+                recommended_focus=report.recommended_focus,
+                metadata_json={"generated_at": isoformat(report.generated_at or now)},
+                created_at=now,
+            )
+            session.add(row)
+            session.flush()
+            for index, candidate in enumerate(report.candidates, start=1):
+                session.add(
+                    models.StrategyRanking(
+                        simulation_run_id=row.id,
+                        strategy_key=candidate.strategy_key,
+                        rank_order=index,
+                        score=candidate.score,
+                        rationale=candidate.rationale,
+                        next_hour_focus=candidate.next_hour_focus,
+                        six_hour_path=candidate.six_hour_path,
+                        value_profile=candidate.value_profile,
+                        created_at=now,
+                    )
+                )
+            return report.model_copy(
+                update={
+                    "run_id": row.id,
+                    "generated_at": report.generated_at or now,
+                    "ranked_strategy_keys": [
+                        candidate.strategy_key for candidate in report.candidates
+                    ],
+                }
+            )
 
     def get_latest_strategic_brief(
         self, *, now=None, active_only: bool = True
@@ -672,10 +926,32 @@ class StoryRepository:
                 source=row.source,
                 model_name=row.model_name,
                 title=row.title,
+                current_north_star_objective=row.current_north_star_objective or "",
                 viewer_value_thesis=row.viewer_value_thesis,
                 urgency=row.urgency,
+                arc_priority_ranking=row.arc_priority_ranking or [],
+                danger_of_drift_score=row.danger_of_drift_score or 25,
+                cliffhanger_urgency=row.cliffhanger_urgency or 5,
+                romance_urgency=row.romance_urgency or 5,
+                mystery_urgency=row.mystery_urgency or 5,
+                house_pressure_priority=row.house_pressure_priority or 5,
+                audience_rollout_priority=row.audience_rollout_priority or 5,
+                dormant_threads_to_revive=row.dormant_threads_to_revive or [],
+                reveals_allowed_soon=row.reveals_allowed_soon or [],
+                reveals_forbidden_for_now=row.reveals_forbidden_for_now or [],
+                next_one_hour_intention=row.next_one_hour_intention or "",
+                next_six_hour_intention=row.next_six_hour_intention or "",
+                next_twenty_four_hour_intention=row.next_twenty_four_hour_intention or "",
                 next_hour_focus=row.next_hour_focus,
                 next_six_hours=row.next_six_hours,
+                recap_priorities=row.recap_priorities or [],
+                fan_theory_potential=row.fan_theory_potential or 5,
+                clip_generation_potential=row.clip_generation_potential or 5,
+                reentry_clarity_priority=row.reentry_clarity_priority or 5,
+                quote_worthiness=row.quote_worthiness or 5,
+                betrayal_value=row.betrayal_value or 5,
+                daily_uniqueness=row.daily_uniqueness or 5,
+                fandom_discussion_value=row.fandom_discussion_value or 5,
                 recommendations=row.recommendations,
                 risk_alerts=row.risk_alerts,
                 house_pressure_actions=row.house_pressure_actions,
@@ -708,10 +984,32 @@ class StoryRepository:
                 status="active",
                 model_name=model_name,
                 title=plan.title,
+                current_north_star_objective=plan.current_north_star_objective,
                 viewer_value_thesis=plan.viewer_value_thesis,
                 urgency=plan.urgency,
+                arc_priority_ranking=plan.arc_priority_ranking,
+                danger_of_drift_score=plan.danger_of_drift_score,
+                cliffhanger_urgency=plan.cliffhanger_urgency,
+                romance_urgency=plan.romance_urgency,
+                mystery_urgency=plan.mystery_urgency,
+                house_pressure_priority=plan.house_pressure_priority,
+                audience_rollout_priority=plan.audience_rollout_priority,
+                dormant_threads_to_revive=plan.dormant_threads_to_revive,
+                reveals_allowed_soon=plan.reveals_allowed_soon,
+                reveals_forbidden_for_now=plan.reveals_forbidden_for_now,
+                next_one_hour_intention=plan.next_one_hour_intention,
+                next_six_hour_intention=plan.next_six_hour_intention,
+                next_twenty_four_hour_intention=plan.next_twenty_four_hour_intention,
                 next_hour_focus=plan.next_hour_focus,
                 next_six_hours=plan.next_six_hours,
+                recap_priorities=plan.recap_priorities,
+                fan_theory_potential=plan.fan_theory_potential,
+                clip_generation_potential=plan.clip_generation_potential,
+                reentry_clarity_priority=plan.reentry_clarity_priority,
+                quote_worthiness=plan.quote_worthiness,
+                betrayal_value=plan.betrayal_value,
+                daily_uniqueness=plan.daily_uniqueness,
+                fandom_discussion_value=plan.fandom_discussion_value,
                 recommendations=plan.recommendations,
                 risk_alerts=plan.risk_alerts,
                 house_pressure_actions=plan.house_pressure_actions,
@@ -732,14 +1030,43 @@ class StoryRepository:
             )
             session.add(row)
             session.flush()
+            if simulation_report is not None:
+                for ranking in session.scalars(
+                    select(models.StrategyRanking).where(
+                        models.StrategyRanking.simulation_run_id == simulation_report.run_id
+                    )
+                ).all():
+                    ranking.strategic_brief_id = row.id
             return StrategicBriefSnapshot(
                 source=row.source,
                 model_name=row.model_name,
                 title=row.title,
+                current_north_star_objective=row.current_north_star_objective,
                 viewer_value_thesis=row.viewer_value_thesis,
                 urgency=row.urgency,
+                arc_priority_ranking=row.arc_priority_ranking,
+                danger_of_drift_score=row.danger_of_drift_score,
+                cliffhanger_urgency=row.cliffhanger_urgency,
+                romance_urgency=row.romance_urgency,
+                mystery_urgency=row.mystery_urgency,
+                house_pressure_priority=row.house_pressure_priority,
+                audience_rollout_priority=row.audience_rollout_priority,
+                dormant_threads_to_revive=row.dormant_threads_to_revive,
+                reveals_allowed_soon=row.reveals_allowed_soon,
+                reveals_forbidden_for_now=row.reveals_forbidden_for_now,
+                next_one_hour_intention=row.next_one_hour_intention,
+                next_six_hour_intention=row.next_six_hour_intention,
+                next_twenty_four_hour_intention=row.next_twenty_four_hour_intention,
                 next_hour_focus=row.next_hour_focus,
                 next_six_hours=row.next_six_hours,
+                recap_priorities=row.recap_priorities,
+                fan_theory_potential=row.fan_theory_potential,
+                clip_generation_potential=row.clip_generation_potential,
+                reentry_clarity_priority=row.reentry_clarity_priority,
+                quote_worthiness=row.quote_worthiness,
+                betrayal_value=row.betrayal_value,
+                daily_uniqueness=row.daily_uniqueness,
+                fandom_discussion_value=row.fandom_discussion_value,
                 recommendations=row.recommendations,
                 risk_alerts=row.risk_alerts,
                 house_pressure_actions=row.house_pressure_actions,
@@ -1089,6 +1416,54 @@ class StoryRepository:
             metadata["last_recap_generated_at"] = isoformat(bucket_end_at)
             run_state.metadata_json = metadata
 
+    def record_recap_quality_scores(
+        self,
+        *,
+        bucket_end_at,
+        quality_scores: dict[str, dict[str, Any]],
+        now=None,
+    ) -> None:
+        now = ensure_utc(now or utcnow())
+        if not quality_scores:
+            return
+        with self.session_factory.session_scope() as session:
+            summary_lookup = {
+                row.summary_window: row
+                for row in session.scalars(
+                    select(models.Summary).where(models.Summary.bucket_end_at == bucket_end_at)
+                ).all()
+            }
+            for window, payload in quality_scores.items():
+                summary = summary_lookup.get(window)
+                session.add(
+                    models.RecapQualityScore(
+                        summary_id=summary.id if summary else None,
+                        summary_window=window,
+                        bucket_end_at=bucket_end_at,
+                        usefulness=_clamp(_int_or_default(payload.get("usefulness"), 5), 0, 10),
+                        clarity=_clamp(_int_or_default(payload.get("clarity"), 5), 0, 10),
+                        theory_value=_clamp(
+                            _int_or_default(payload.get("theory_value"), 5), 0, 10
+                        ),
+                        emotional_readability=_clamp(
+                            _int_or_default(payload.get("emotional_readability"), 5),
+                            0,
+                            10,
+                        ),
+                        next_hook_strength=_clamp(
+                            _int_or_default(payload.get("next_hook_strength"), 5),
+                            0,
+                            10,
+                        ),
+                        issues=[
+                            _compact_reason(item)
+                            for item in payload.get("issues", [])
+                            if _compact_reason(item)
+                        ],
+                        created_at=now,
+                    )
+                )
+
     def load_events_for_window(self, *, bucket_end_at, hours: int) -> list[EventView]:
         start = bucket_end_at - timedelta(hours=hours)
         with self.session_factory.session_scope() as session:
@@ -1133,6 +1508,233 @@ class StoryRepository:
                     f"{row.summary}"
                 )
             return result
+
+    def list_dormant_threads(self, *, limit: int = 6) -> list[DormantThreadSnapshot]:
+        with self.session_factory.session_scope() as session:
+            rows = session.scalars(
+                select(models.DormantThreadRegistry)
+                .where(models.DormantThreadRegistry.status != "archived")
+                .order_by(
+                    desc(models.DormantThreadRegistry.heat),
+                    desc(models.DormantThreadRegistry.updated_at),
+                )
+                .limit(limit)
+            ).all()
+            return [
+                DormantThreadSnapshot(
+                    thread_key=row.thread_key,
+                    summary=row.summary,
+                    source=row.source,
+                    status=row.status,
+                    heat=row.heat,
+                    last_seen_at=row.last_seen_at,
+                    last_revived_at=row.last_revived_at,
+                    metadata=row.metadata_json,
+                )
+                for row in rows
+            ]
+
+    def sync_dormant_threads(
+        self,
+        *,
+        threads: list[DormantThreadSnapshot],
+        now=None,
+    ) -> list[DormantThreadSnapshot]:
+        now = ensure_utc(now or utcnow())
+        with self.session_factory.session_scope() as session:
+            rows = session.scalars(select(models.DormantThreadRegistry)).all()
+            existing = {row.thread_key: row for row in rows}
+            active_keys = {thread.thread_key for thread in threads}
+            for thread in threads:
+                row = existing.get(thread.thread_key)
+                metadata = dict(thread.metadata)
+                metadata["synced_at"] = isoformat(now)
+                if row is None:
+                    row = models.DormantThreadRegistry(
+                        thread_key=thread.thread_key,
+                        summary=thread.summary,
+                        source=thread.source,
+                        status=thread.status,
+                        heat=thread.heat,
+                        last_seen_at=thread.last_seen_at or now,
+                        last_revived_at=thread.last_revived_at,
+                        metadata_json=metadata,
+                        created_at=now,
+                        updated_at=now,
+                    )
+                    session.add(row)
+                    continue
+                row.summary = thread.summary
+                row.source = thread.source
+                row.status = thread.status
+                row.heat = thread.heat
+                row.last_seen_at = thread.last_seen_at or now
+                row.last_revived_at = thread.last_revived_at
+                row.metadata_json = metadata
+                row.updated_at = now
+
+            for key, row in existing.items():
+                if key in active_keys:
+                    continue
+                row.status = "archived"
+                row.updated_at = now
+            return threads
+
+    def list_recent_recap_quality_scores(self, *, limit: int = 6) -> list[dict[str, Any]]:
+        with self.session_factory.session_scope() as session:
+            rows = session.scalars(
+                select(models.RecapQualityScore)
+                .order_by(desc(models.RecapQualityScore.created_at))
+                .limit(limit)
+            ).all()
+            return [
+                {
+                    "summary_window": row.summary_window,
+                    "bucket_end_at": row.bucket_end_at,
+                    "usefulness": row.usefulness,
+                    "clarity": row.clarity,
+                    "theory_value": row.theory_value,
+                    "emotional_readability": row.emotional_readability,
+                    "next_hook_strength": row.next_hook_strength,
+                    "issues": row.issues,
+                }
+                for row in rows
+            ]
+
+    def list_recent_public_turn_reviews(self, *, limit: int = 8) -> list[dict[str, Any]]:
+        with self.session_factory.session_scope() as session:
+            rows = session.scalars(
+                select(models.PublicTurnReview)
+                .order_by(desc(models.PublicTurnReview.created_at))
+                .limit(limit)
+            ).all()
+            return [
+                {
+                    "speaker_slug": row.speaker_slug,
+                    "review_status": row.review_status,
+                    "critic_score": row.critic_score,
+                    "repair_applied": row.repair_applied,
+                    "reasons": row.reasons,
+                    "repair_actions": row.repair_actions,
+                    "quote_worthiness": row.quote_worthiness,
+                    "clip_value": row.clip_value,
+                    "fandom_discussion_value": row.fandom_discussion_value,
+                    "novelty": row.novelty,
+                    "created_at": row.created_at,
+                }
+                for row in rows
+            ]
+
+    def list_recent_clip_value_scores(self, *, limit: int = 8) -> list[dict[str, Any]]:
+        with self.session_factory.session_scope() as session:
+            rows = session.scalars(
+                select(models.ClipValueScore)
+                .order_by(desc(models.ClipValueScore.created_at))
+                .limit(limit)
+            ).all()
+            return [
+                {
+                    "clip_value": row.clip_value,
+                    "quote_value": row.quote_value,
+                    "betrayal_value": row.betrayal_value,
+                    "romance_intensity": row.romance_intensity,
+                    "mystery_progression": row.mystery_progression,
+                    "novelty": row.novelty,
+                    "daily_uniqueness": row.daily_uniqueness,
+                    "metadata": row.metadata_json,
+                    "created_at": row.created_at,
+                }
+                for row in rows
+            ]
+
+    def list_recent_fandom_signals(self, *, limit: int = 8) -> list[dict[str, Any]]:
+        with self.session_factory.session_scope() as session:
+            rows = session.scalars(
+                select(models.FandomSignalCandidate)
+                .order_by(desc(models.FandomSignalCandidate.created_at))
+                .limit(limit)
+            ).all()
+            return [
+                {
+                    "signal_type": row.signal_type,
+                    "subject": row.subject,
+                    "intensity": row.intensity,
+                    "rationale": row.rationale,
+                    "metadata": row.metadata_json,
+                    "created_at": row.created_at,
+                }
+                for row in rows
+            ]
+
+    def record_public_turn_review(
+        self,
+        *,
+        message_id: int | None,
+        speaker_slug: str,
+        report: TurnCriticReport,
+        turn: CharacterTurn,
+        repaired: bool,
+        strategic_brief: StrategicBriefSnapshot | None = None,
+        now=None,
+    ) -> None:
+        now = ensure_utc(now or utcnow())
+        with self.session_factory.session_scope() as session:
+            status = "repaired" if repaired else "accepted"
+            session.add(
+                models.PublicTurnReview(
+                    message_id=message_id,
+                    speaker_slug=speaker_slug,
+                    review_status=status,
+                    critic_score=report.score,
+                    repair_applied=repaired,
+                    reasons=report.reasons,
+                    repair_actions=report.repair_actions,
+                    quote_worthiness=report.quote_worthiness,
+                    clip_value=report.clip_value,
+                    fandom_discussion_value=report.fandom_discussion_value,
+                    novelty=report.novelty,
+                    created_at=now,
+                )
+            )
+            brief_id = self._get_latest_strategic_brief_id(session)
+            if report.clip_value >= 5 or report.quote_worthiness >= 6:
+                session.add(
+                    models.ClipValueScore(
+                        message_id=message_id,
+                        strategic_brief_id=brief_id,
+                        source="public-turn-review",
+                        clip_value=report.clip_value,
+                        quote_value=report.quote_worthiness,
+                        betrayal_value=_estimate_betrayal_value(turn),
+                        romance_intensity=_estimate_romance_intensity(turn),
+                        mystery_progression=_estimate_mystery_progression(turn),
+                        novelty=report.novelty,
+                        daily_uniqueness=_estimate_daily_uniqueness(turn, report),
+                        metadata_json={
+                            "speaker_slug": speaker_slug,
+                            "message_excerpt": turn.public_message[:140],
+                            "strategic_title": strategic_brief.title if strategic_brief else "",
+                        },
+                        created_at=now,
+                    )
+                )
+            for signal in _build_fandom_signals(
+                speaker_slug=speaker_slug,
+                turn=turn,
+                report=report,
+            ):
+                session.add(
+                    models.FandomSignalCandidate(
+                        message_id=message_id,
+                        strategic_brief_id=brief_id,
+                        signal_type=signal["signal_type"],
+                        subject=signal["subject"],
+                        intensity=signal["intensity"],
+                        rationale=signal["rationale"],
+                        metadata_json=signal["metadata"],
+                        created_at=now,
+                    )
+                )
 
     def add_continuity_flags(self, flags: list[ContinuityFlagDraft]) -> None:
         if not flags:
@@ -1333,9 +1935,21 @@ class StoryRepository:
             last_shift_at=now,
         )
 
+    def _get_latest_strategic_brief_id(self, session) -> int | None:
+        return session.scalar(
+            select(models.StrategicBrief.id).order_by(desc(models.StrategicBrief.created_at))
+        )
+
 
 def _clamp(value: int, minimum: int = -10, maximum: int = 10) -> int:
     return max(minimum, min(maximum, value))
+
+
+def _int_or_default(value: object, default: int) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
 
 
 def _normalize_memory_item(value: str) -> str:
@@ -1381,6 +1995,122 @@ def _stringy(value: object) -> str | None:
         return None
     text = str(value).strip()
     return text or None
+
+
+def _compact_reason(value: object) -> str:
+    if value is None:
+        return ""
+    return " ".join(str(value).split())[:180]
+
+
+def _classify_rollout_request(text: str) -> str:
+    lowered = text.lower()
+    if " and " in lowered and any(
+        marker in lowered for marker in ("love", "hate", "baby", "marry", "breakup", "jealous")
+    ):
+        return "relationship"
+    if "location" in lowered or "room" in lowered or "wing" in lowered:
+        return "location"
+    if "character" in lowered or "resident" in lowered or "guest" in lowered:
+        return "character"
+    if any(marker in lowered for marker in ("mystery", "clue", "evidence", "ledger", "key")):
+        return "mystery"
+    return "story"
+
+
+def _estimate_betrayal_value(turn: CharacterTurn) -> int:
+    suspicion_weight = sum(max(0, delta.suspicion_delta) for delta in turn.relationship_updates)
+    accusation = "?" in turn.public_message and any(
+        marker in turn.public_message.lower() for marker in ("why", "who", "lied", "hiding")
+    )
+    return _clamp(4 + suspicion_weight + int(accusation), 0, 10)
+
+
+def _estimate_romance_intensity(turn: CharacterTurn) -> int:
+    desire_weight = sum(max(0, delta.desire_delta) for delta in turn.relationship_updates)
+    marker_hit = any(
+        marker in turn.public_message.lower()
+        for marker in ("stay", "don't go", "look at me", "with me", "jealous")
+    )
+    return _clamp(3 + desire_weight + int(marker_hit), 0, 10)
+
+
+def _estimate_mystery_progression(turn: CharacterTurn) -> int:
+    clue_events = sum(
+        1
+        for event in turn.event_candidates
+        if event.event_type.value in {"clue", "reveal", "question"}
+    )
+    return _clamp(3 + clue_events * 2 + len(turn.new_questions), 0, 10)
+
+
+def _estimate_daily_uniqueness(turn: CharacterTurn, report: TurnCriticReport) -> int:
+    specificity = int(any(char.isdigit() for char in turn.public_message)) + int(
+        any(
+            token in turn.public_message.lower()
+            for token in ("ledger", "key", "boiler", "roof")
+        )
+    )
+    return _clamp(report.novelty + specificity, 0, 10)
+
+
+def _build_fandom_signals(
+    *,
+    speaker_slug: str,
+    turn: CharacterTurn,
+    report: TurnCriticReport,
+) -> list[dict[str, Any]]:
+    signals: list[dict[str, Any]] = []
+    if turn.new_questions:
+        signals.append(
+            {
+                "signal_type": "theory",
+                "subject": speaker_slug,
+                "intensity": _clamp(5 + len(turn.new_questions), 1, 10),
+                "rationale": turn.new_questions[0][:180],
+                "metadata": {"questions": turn.new_questions[:3]},
+            }
+        )
+    ship_targets = [
+        delta.character_slug for delta in turn.relationship_updates if delta.desire_delta > 0
+    ]
+    if ship_targets:
+        signals.append(
+            {
+                "signal_type": "ship",
+                "subject": f"{speaker_slug}<->{ship_targets[0]}",
+                "intensity": _clamp(report.fandom_discussion_value, 1, 10),
+                "rationale": "The turn moved romantic tension in a visible way.",
+                "metadata": {"targets": ship_targets[:3]},
+            }
+        )
+    if report.quote_worthiness >= 7:
+        signals.append(
+            {
+                "signal_type": "quote",
+                "subject": speaker_slug,
+                "intensity": report.quote_worthiness,
+                "rationale": turn.public_message[:180],
+                "metadata": {"message": turn.public_message[:180]},
+            }
+        )
+    if any(delta.suspicion_delta > 0 for delta in turn.relationship_updates):
+        signals.append(
+            {
+                "signal_type": "betrayal-watch",
+                "subject": speaker_slug,
+                "intensity": _clamp(report.clip_value, 1, 10),
+                "rationale": "Suspicion rose enough to trigger betrayal discussion.",
+                "metadata": {
+                    "counterparts": [
+                        delta.character_slug
+                        for delta in turn.relationship_updates
+                        if delta.suspicion_delta > 0
+                    ][:3]
+                },
+            }
+        )
+    return signals[:3]
 
 
 def _effective_beat_status(status: str, *, due_by, now) -> str:

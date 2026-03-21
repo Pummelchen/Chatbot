@@ -194,9 +194,25 @@ class StoryGovernanceReport(BaseModel):
     viewer_value_score: int = Field(default=100, ge=0, le=100)
     hourly_progression_met: bool = True
     meaningful_progressions_last_hour: int = 0
+    trust_progression_last_hour: int = 0
+    desire_progression_last_hour: int = 0
+    evidence_progression_last_hour: int = 0
+    debt_pressure_progression_last_hour: int = 0
+    power_progression_last_hour: int = 0
+    loyalty_progression_last_hour: int = 0
     core_drift: bool = False
     robotic_voice_risk: bool = False
     cliffhanger_pressure_low: bool = False
+    repeated_dialogue_patterns: bool = False
+    collapsing_distinctiveness: bool = False
+    mystery_flattened: bool = False
+    romance_flattened: bool = False
+    recap_weakness: bool = False
+    unresolved_thread_overload: bool = False
+    clip_value_score: int = Field(default=50, ge=0, le=100)
+    reentry_value_score: int = Field(default=50, ge=0, le=100)
+    fandom_discussion_value: int = Field(default=50, ge=0, le=100)
+    daily_uniqueness_score: int = Field(default=50, ge=0, le=100)
     active_gravity_axes: list[str] = Field(default_factory=list)
     recommendations: list[str] = Field(default_factory=list)
 
@@ -253,6 +269,38 @@ class HouseStateSnapshot(BaseModel):
     updated_at: datetime | None = None
 
 
+class DormantThreadSnapshot(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    thread_key: str
+    summary: str
+    source: str = "world-memory"
+    status: str = "dormant"
+    heat: int = Field(default=5, ge=0, le=10)
+    last_seen_at: datetime | None = None
+    last_revived_at: datetime | None = None
+    metadata: dict = Field(default_factory=dict)
+
+
+class StoryGravityStateSnapshot(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    state_key: str = "primary"
+    north_star_objective: str = ""
+    central_tension: str = ""
+    core_tensions: list[str] = Field(default_factory=list)
+    active_axes: list[str] = Field(default_factory=list)
+    dormant_threads: list[DormantThreadSnapshot] = Field(default_factory=list)
+    drift_score: int = Field(default=0, ge=0, le=100)
+    reentry_priority: int = Field(default=5, ge=1, le=10)
+    clip_priority: int = Field(default=5, ge=1, le=10)
+    fandom_priority: int = Field(default=5, ge=1, le=10)
+    recap_focus: list[str] = Field(default_factory=list)
+    manager_guardrails: list[str] = Field(default_factory=list)
+    metadata: dict = Field(default_factory=dict)
+    updated_at: datetime | None = None
+
+
 class BeatPlanItem(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
@@ -283,6 +331,7 @@ class SimulationCandidateScore(BaseModel):
 
     strategy_key: str
     score: int = Field(default=50, ge=0, le=100)
+    value_profile: dict[str, int] = Field(default_factory=dict)
     rationale: list[str] = Field(default_factory=list)
     next_hour_focus: str
     six_hour_path: str
@@ -291,22 +340,46 @@ class SimulationCandidateScore(BaseModel):
 class SimulationLabReport(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
+    run_id: int | None = None
     generated_at: datetime | None = None
     horizon_hours: int = Field(default=24, ge=1, le=168)
     turns_per_hour: int = Field(default=90, ge=1, le=360)
     candidates: list[SimulationCandidateScore] = Field(default_factory=list)
     systemic_risks: list[str] = Field(default_factory=list)
     recommended_focus: list[str] = Field(default_factory=list)
+    ranked_strategy_keys: list[str] = Field(default_factory=list)
 
 
 class StrategicBriefPlan(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     title: str
+    current_north_star_objective: str
     viewer_value_thesis: str
     urgency: int = Field(default=5, ge=1, le=10)
+    arc_priority_ranking: list[str] = Field(default_factory=list)
+    danger_of_drift_score: int = Field(default=25, ge=0, le=100)
+    cliffhanger_urgency: int = Field(default=5, ge=1, le=10)
+    romance_urgency: int = Field(default=5, ge=1, le=10)
+    mystery_urgency: int = Field(default=5, ge=1, le=10)
+    house_pressure_priority: int = Field(default=5, ge=1, le=10)
+    audience_rollout_priority: int = Field(default=5, ge=1, le=10)
+    dormant_threads_to_revive: list[str] = Field(default_factory=list)
+    reveals_allowed_soon: list[str] = Field(default_factory=list)
+    reveals_forbidden_for_now: list[str] = Field(default_factory=list)
+    next_one_hour_intention: str
+    next_six_hour_intention: str
+    next_twenty_four_hour_intention: str
     next_hour_focus: list[str] = Field(default_factory=list)
     next_six_hours: list[str] = Field(default_factory=list)
+    recap_priorities: list[str] = Field(default_factory=list)
+    fan_theory_potential: int = Field(default=5, ge=1, le=10)
+    clip_generation_potential: int = Field(default=5, ge=1, le=10)
+    reentry_clarity_priority: int = Field(default=5, ge=1, le=10)
+    quote_worthiness: int = Field(default=5, ge=1, le=10)
+    betrayal_value: int = Field(default=5, ge=1, le=10)
+    daily_uniqueness: int = Field(default=5, ge=1, le=10)
+    fandom_discussion_value: int = Field(default=5, ge=1, le=10)
     recommendations: list[str] = Field(default_factory=list)
     risk_alerts: list[str] = Field(default_factory=list)
     house_pressure_actions: list[str] = Field(default_factory=list)
@@ -321,10 +394,32 @@ class StrategicBriefSnapshot(BaseModel):
     source: str = "god-ai"
     model_name: str | None = None
     title: str = ""
+    current_north_star_objective: str = ""
     viewer_value_thesis: str = ""
     urgency: int = Field(default=5, ge=1, le=10)
+    arc_priority_ranking: list[str] = Field(default_factory=list)
+    danger_of_drift_score: int = Field(default=25, ge=0, le=100)
+    cliffhanger_urgency: int = Field(default=5, ge=1, le=10)
+    romance_urgency: int = Field(default=5, ge=1, le=10)
+    mystery_urgency: int = Field(default=5, ge=1, le=10)
+    house_pressure_priority: int = Field(default=5, ge=1, le=10)
+    audience_rollout_priority: int = Field(default=5, ge=1, le=10)
+    dormant_threads_to_revive: list[str] = Field(default_factory=list)
+    reveals_allowed_soon: list[str] = Field(default_factory=list)
+    reveals_forbidden_for_now: list[str] = Field(default_factory=list)
+    next_one_hour_intention: str = ""
+    next_six_hour_intention: str = ""
+    next_twenty_four_hour_intention: str = ""
     next_hour_focus: list[str] = Field(default_factory=list)
     next_six_hours: list[str] = Field(default_factory=list)
+    recap_priorities: list[str] = Field(default_factory=list)
+    fan_theory_potential: int = Field(default=5, ge=1, le=10)
+    clip_generation_potential: int = Field(default=5, ge=1, le=10)
+    reentry_clarity_priority: int = Field(default=5, ge=1, le=10)
+    quote_worthiness: int = Field(default=5, ge=1, le=10)
+    betrayal_value: int = Field(default=5, ge=1, le=10)
+    daily_uniqueness: int = Field(default=5, ge=1, le=10)
+    fandom_discussion_value: int = Field(default=5, ge=1, le=10)
     recommendations: list[str] = Field(default_factory=list)
     risk_alerts: list[str] = Field(default_factory=list)
     house_pressure_actions: list[str] = Field(default_factory=list)
@@ -340,6 +435,11 @@ class TurnCriticReport(BaseModel):
 
     score: int = Field(default=100, ge=0, le=100)
     reasons: list[str] = Field(default_factory=list)
+    repair_actions: list[str] = Field(default_factory=list)
+    quote_worthiness: int = Field(default=5, ge=0, le=10)
+    clip_value: int = Field(default=5, ge=0, le=10)
+    fandom_discussion_value: int = Field(default=5, ge=0, le=10)
+    novelty: int = Field(default=5, ge=0, le=10)
     should_repair: bool = False
 
 
@@ -360,17 +460,23 @@ class ManagerContextPacket(BaseModel):
     scene_location: str
     emotional_temperature: int
     story_gravity: list[str] = Field(default_factory=list)
+    story_gravity_state: StoryGravityStateSnapshot = Field(
+        default_factory=StoryGravityStateSnapshot
+    )
     viewer_value_targets: list[str] = Field(default_factory=list)
     voice_guardrails: list[str] = Field(default_factory=list)
     cast_guidance: list[str] = Field(default_factory=list)
     current_arc_summaries: list[str] = Field(default_factory=list)
     unresolved_questions: list[str] = Field(default_factory=list)
     payoff_threads: list[str] = Field(default_factory=list)
+    dormant_threads: list[str] = Field(default_factory=list)
     relationship_map: list[str] = Field(default_factory=list)
     recent_summaries: list[str] = Field(default_factory=list)
     recent_events: list[str] = Field(default_factory=list)
     recent_messages: list[str] = Field(default_factory=list)
     continuity_warnings: list[str] = Field(default_factory=list)
+    recap_quality_alerts: list[str] = Field(default_factory=list)
+    public_turn_review_signals: list[str] = Field(default_factory=list)
     pacing_health: PacingHealthReport
     story_governance: StoryGovernanceReport = Field(default_factory=StoryGovernanceReport)
     audience_control: AudienceControlReport = Field(default_factory=AudienceControlReport)
@@ -378,6 +484,7 @@ class ManagerContextPacket(BaseModel):
     pending_beats: list[str] = Field(default_factory=list)
     strategic_guidance: list[str] = Field(default_factory=list)
     simulation_ranking: list[str] = Field(default_factory=list)
+    strategic_brief: StrategicBriefSnapshot | None = None
 
 
 class CharacterContextPacket(BaseModel):

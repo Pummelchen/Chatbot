@@ -7,7 +7,13 @@ from __future__ import annotations
 import asyncio
 from datetime import timedelta
 
-from lantern_house.config import CriticConfig, GodAIConfig, HousePressureConfig, SimulationConfig
+from lantern_house.config import (
+    CriticConfig,
+    GodAIConfig,
+    HousePressureConfig,
+    SimulationConfig,
+    StoryGravityConfig,
+)
 from lantern_house.domain.contracts import (
     AudienceControlReport,
     CharacterContextPacket,
@@ -17,12 +23,14 @@ from lantern_house.domain.contracts import (
     ManagerContextPacket,
     PacingHealthReport,
     StoryGovernanceReport,
+    StoryGravityStateSnapshot,
     StrategicBriefPlan,
 )
 from lantern_house.services.critic import TurnCriticService
 from lantern_house.services.god_ai import GodAIService
 from lantern_house.services.house import HousePressureService
 from lantern_house.services.simulation_lab import SimulationLabService
+from lantern_house.services.story_gravity import StoryGravityService
 from lantern_house.utils.time import isoformat, utcnow
 
 
@@ -128,6 +136,102 @@ class StrategicRepo:
         }
 
 
+class GravityRepo:
+    def __init__(self) -> None:
+        self.saved: StoryGravityStateSnapshot | None = None
+        self.synced_threads = []
+
+    def get_story_gravity_state_snapshot(self) -> StoryGravityStateSnapshot:
+        return StoryGravityStateSnapshot(updated_at=utcnow() - timedelta(hours=2))
+
+    def get_world_state_snapshot(self):
+        return {
+            "title": "Lantern House",
+            "unresolved_questions": ["Who hid the ledger?", "Why did Hana really return?"],
+            "archived_threads": [
+                "Amelia and Rafael were trapped in the records closet during the blackout.",
+                "Lucía once saw a second registry copy.",
+            ],
+            "metadata": {
+                "story_engine": {
+                    "central_force": (
+                        "Keep the house tied to debt, records, and unstable attraction."
+                    ),
+                    "core_promises": ["The house itself must always matter."],
+                    "voice_guardrails": ["Keep dialogue concrete."],
+                    "core_tensions": [
+                        {"key": "house-survival", "keywords": ["debt", "repair", "rent"]},
+                        {"key": "hidden-records", "keywords": ["ledger", "registry", "key"]},
+                    ],
+                }
+            },
+        }
+
+    def list_recent_messages(self, **kwargs):
+        now = utcnow()
+        return [
+            type(
+                "Message",
+                (),
+                {
+                    "content": "The ledger is still in the desk, unless someone moved it.",
+                    "created_at": now,
+                },
+            )()
+        ]
+
+    def list_recent_events(self, **kwargs):
+        now = utcnow()
+        return [
+            EventView(
+                event_type="clue",
+                title="Ledger mention",
+                details="A guest overheard a ledger argument at the desk.",
+                significance=7,
+                payload={},
+                created_at=now - timedelta(minutes=10),
+            ),
+            EventView(
+                event_type="financial",
+                title="Rent pressure",
+                details="Cash pressure keeps leaking into public talk.",
+                significance=8,
+                payload={},
+                created_at=now - timedelta(minutes=15),
+            ),
+        ]
+
+    def get_house_state_snapshot(self):
+        return HouseStateSnapshot(
+            repair_backlog=7,
+            inspection_risk=6,
+            active_pressures=[],
+        )
+
+    def list_recent_recap_quality_scores(self, **kwargs):
+        now = utcnow()
+        return [
+            {
+                "summary_window": "1h",
+                "bucket_end_at": now,
+                "usefulness": 4,
+                "clarity": 4,
+                "theory_value": 5,
+                "emotional_readability": 5,
+                "next_hook_strength": 4,
+                "issues": ["Recap language is getting generic."],
+            }
+        ]
+
+    def sync_dormant_threads(self, *, threads, now=None):
+        self.synced_threads = threads
+        return threads
+
+    def save_story_gravity_state(self, snapshot: StoryGravityStateSnapshot, *, now=None):
+        self.saved = snapshot
+        return snapshot
+
+
 class AssemblerStub:
     def __init__(self, packet: ManagerContextPacket, repository) -> None:
         self.packet = packet
@@ -198,6 +302,16 @@ def test_house_pressure_service_refreshes_state_and_beats() -> None:
     assert repository.synced_beats[0].beat_type == "house-pressure"
 
 
+def test_story_gravity_service_persists_state_and_dormant_threads() -> None:
+    repository = GravityRepo()
+    service = StoryGravityService(repository, StoryGravityConfig(refresh_interval_minutes=10))
+    snapshot = service.refresh(force=True)
+    assert "house-survival" in snapshot.active_axes
+    assert snapshot.dormant_threads
+    assert repository.synced_threads
+    assert repository.saved is not None
+
+
 def test_turn_critic_flags_low_value_generic_turn() -> None:
     critic = TurnCriticService(CriticConfig(repair_threshold=60, hard_fail_threshold=30))
     packet = CharacterContextPacket(
@@ -251,6 +365,8 @@ def test_god_ai_falls_back_to_deterministic_brief() -> None:
     saved = asyncio.run(service.refresh_if_due(force=True))
     assert repository.saved is not None
     assert "maximize retention" in repository.saved.viewer_value_thesis.lower()
+    assert repository.saved.current_north_star_objective
+    assert repository.saved.next_twenty_four_hour_intention
     assert saved["source"] == "god-ai"
 
 

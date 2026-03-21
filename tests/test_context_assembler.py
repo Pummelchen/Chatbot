@@ -9,9 +9,11 @@ from datetime import timedelta
 from lantern_house.context.assembler import ContextAssembler
 from lantern_house.domain.contracts import (
     AudienceControlReport,
+    DormantThreadSnapshot,
     EventView,
     MessageView,
     RelationshipSnapshot,
+    StoryGravityStateSnapshot,
     SummaryView,
 )
 from lantern_house.quality.pacing import PacingHealthEvaluator
@@ -179,6 +181,50 @@ class FakeRepository:
     def get_forbidden_boundaries(self, character_slug, limit=6):
         return ["Do not reveal hidden recordings without a trigger."]
 
+    def get_story_gravity_state_snapshot(self):
+        return StoryGravityStateSnapshot(
+            north_star_objective="Keep the house tied to debt, records, and unstable attraction.",
+            active_axes=["hidden-records", "house-survival"],
+            dormant_threads=[
+                DormantThreadSnapshot(
+                    thread_key="closet-blackout",
+                    summary="Amelia and Rafael were trapped in the records closet once.",
+                    heat=7,
+                )
+            ],
+            manager_guardrails=["The house itself must always matter."],
+        )
+
+    def list_recent_public_turn_reviews(self, limit=4):
+        return [
+            {
+                "speaker_slug": "amelia",
+                "critic_score": 68,
+                "clip_value": 7,
+                "fandom_discussion_value": 8,
+                "reasons": ["Low-value line."],
+            }
+        ]
+
+    def list_recent_recap_quality_scores(self, limit=3):
+        return [
+            {
+                "summary_window": "1h",
+                "clarity": 4,
+                "next_hook_strength": 4,
+                "issues": ["Recap language is getting generic."],
+            }
+        ]
+
+    def list_dormant_threads(self, limit=4):
+        return [
+            DormantThreadSnapshot(
+                thread_key="closet-blackout",
+                summary="Amelia and Rafael were trapped in the records closet once.",
+                heat=7,
+            )
+        ]
+
 
 def test_context_assembler_builds_packets() -> None:
     assembler = ContextAssembler(FakeRepository(), PacingHealthEvaluator())
@@ -204,9 +250,12 @@ def test_context_assembler_builds_packets() -> None:
     assert manager_packet.title == "Lantern House"
     assert "Amelia Vale" in manager_packet.cast_guidance[0]
     assert manager_packet.story_gravity
+    assert manager_packet.story_gravity_state.north_star_objective
     assert manager_packet.viewer_value_targets
     assert "Who hid the ledger?" in manager_packet.unresolved_questions
     assert manager_packet.payoff_threads
+    assert manager_packet.recap_quality_alerts
+    assert manager_packet.public_turn_review_signals
     assert manager_packet.audience_control.active is True
     assert character_packet.character_slug == "amelia"
     assert character_packet.voice_guardrails

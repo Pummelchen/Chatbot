@@ -84,9 +84,28 @@ class TurnCriticService:
             score -= 14
             reasons.append("Rule-based guards already see a voice or register problem.")
 
+        repair_actions = self._repair_actions(
+            reasons=reasons,
+            message=message,
+            packet=packet,
+        )
+        quote_worthiness = self._quote_worthiness(message)
+        clip_value = self._clip_value(turn=turn, message=message, score=score)
+        fandom_discussion_value = self._fandom_discussion_value(turn=turn, message=message)
+        novelty = self._novelty(
+            message=message,
+            recent_messages=packet.recent_messages,
+            has_grounding=not self._missing_grounding(packet=packet, message=lowered),
+        )
+
         return TurnCriticReport(
             score=max(0, min(100, score)),
             reasons=reasons[:4],
+            repair_actions=repair_actions[:3],
+            quote_worthiness=quote_worthiness,
+            clip_value=clip_value,
+            fandom_discussion_value=fandom_discussion_value,
+            novelty=novelty,
             should_repair=score < self.config.repair_threshold,
         )
 
@@ -134,6 +153,77 @@ class TurnCriticService:
             for candidate in recent
             if candidate
         )
+
+    def _repair_actions(
+        self,
+        *,
+        reasons: list[str],
+        message: str,
+        packet: CharacterContextPacket,
+    ) -> list[str]:
+        actions: list[str] = []
+        if any("placeholder" in reason.lower() for reason in reasons):
+            actions.append("Replace template leakage with an in-world line.")
+        if any("grounded" in reason.lower() for reason in reasons):
+            actions.append(f"Anchor the line to {packet.current_location} or a live pressure.")
+        if len(message.split()) > 30:
+            actions.append("Shorten the line so it lands like chat, not prose.")
+        if any("generic" in reason.lower() for reason in reasons):
+            actions.append("Swap generic confrontation phrasing for a concrete ask or threat.")
+        if not actions:
+            actions.append("Keep the turn specific, social, and slightly dangerous.")
+        return actions
+
+    def _quote_worthiness(self, message: str) -> int:
+        words = message.split()
+        short_punch = 4 <= len(words) <= 14
+        punctuation_lift = any(marker in message for marker in ("?", "!", ","))
+        concreteness = any(
+            token in message.lower()
+            for token in ("ledger", "desk", "door", "roof", "rent", "key", "tonight")
+        )
+        return max(
+            0,
+            min(
+                10,
+                4
+                + int(short_punch) * 2
+                + int(punctuation_lift)
+                + int(concreteness) * 2,
+            ),
+        )
+
+    def _clip_value(self, *, turn: CharacterTurn, message: str, score: int) -> int:
+        event_lift = sum(1 for event in turn.event_candidates if event.significance >= 6)
+        question_or_threat = int("?" in message or any(
+            marker in message.lower() for marker in ("don't", "before", "now", "unless")
+        ))
+        return max(0, min(10, 3 + event_lift * 2 + question_or_threat + score // 25))
+
+    def _fandom_discussion_value(self, *, turn: CharacterTurn, message: str) -> int:
+        relationship_heat = sum(
+            int(delta.desire_delta != 0 or delta.suspicion_delta != 0)
+            for delta in turn.relationship_updates
+        )
+        theory_heat = len(turn.new_questions)
+        ship_markers = int(
+            any(
+                token in message.lower()
+                for token in ("look at me", "stay", "jealous", "with me")
+            )
+        )
+        return max(0, min(10, 4 + relationship_heat * 2 + theory_heat + ship_markers))
+
+    def _novelty(
+        self,
+        *,
+        message: str,
+        recent_messages: list[str],
+        has_grounding: bool,
+    ) -> int:
+        normalized = _normalize_text(message)
+        repeated = any(normalized == _normalize_text(item) for item in recent_messages[-4:])
+        return max(0, min(10, 5 + int(has_grounding) * 2 - int(repeated) * 3))
 
 
 def _extract_terms(text: str) -> Iterable[str]:

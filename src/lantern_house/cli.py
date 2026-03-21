@@ -38,6 +38,7 @@ from lantern_house.services.progression import StoryProgressionService
 from lantern_house.services.recaps import RecapService
 from lantern_house.services.seed_loader import StorySeedLoader
 from lantern_house.services.simulation_lab import SimulationLabService
+from lantern_house.services.story_gravity import StoryGravityService
 from lantern_house.utils.time import floor_to_hour, utcnow
 
 app = typer.Typer(no_args_is_help=True)
@@ -138,6 +139,7 @@ def _simulate(config: AppConfig, *, hours: int, turns_per_hour: int) -> None:
     beat_service = StoryBeatService(repository)
     house_pressure_service = HousePressureService(repository, config.house_pressure)
     house_pressure_service.refresh(force=True)
+    StoryGravityService(repository, config.story_gravity).refresh(force=True)
     audience = audience_service.refresh_if_due(force=True)
     beat_service.sync_audience_rollout(audience, now=utcnow())
     assembler = ContextAssembler(repository, PacingHealthEvaluator())
@@ -146,6 +148,11 @@ def _simulate(config: AppConfig, *, hours: int, turns_per_hour: int) -> None:
         packet,
         horizon_hours=hours,
         turns_per_hour=turns_per_hour,
+    )
+    report = repository.record_simulation_lab_run(
+        report=report,
+        source="cli-simulate",
+        now=utcnow(),
     )
     typer.echo(f"Simulation horizon: {report.horizon_hours}h @ {report.turns_per_hour} turns/hour")
     for candidate in report.candidates:
@@ -186,6 +193,7 @@ async def _run_async(config: AppConfig, *, once: bool) -> None:
             audience_control_service=audience_control_service,
             beat_service=beat_service,
             house_pressure_service=HousePressureService(repository, config.house_pressure),
+            story_gravity_service=StoryGravityService(repository, config.story_gravity),
             god_ai_service=GodAIService(
                 config=god_ai_config,
                 assembler=assembler,

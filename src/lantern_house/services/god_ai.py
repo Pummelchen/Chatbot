@@ -69,6 +69,13 @@ class GodAIService:
             horizon_hours=self.config.simulation_horizon_hours,
             turns_per_hour=self.config.simulation_turns_per_hour,
         )
+        record_simulation = getattr(self.assembler.repository, "record_simulation_lab_run", None)
+        if callable(record_simulation):
+            simulation = record_simulation(
+                report=simulation,
+                source="god-ai",
+                now=now,
+            )
         provisional = None
         fallback_plan = self._fallback(
             context=context,
@@ -97,10 +104,17 @@ class GodAIService:
                     },
                 ),
                 temperature=0.45,
-                max_output_tokens=700,
+                max_output_tokens=900,
                 max_retries=1,
             )
-            plan = StrategicBriefPlan.model_validate(payload)
+            plan = StrategicBriefPlan.model_validate(
+                self._coerce_plan_payload(
+                    payload=payload,
+                    context=context,
+                    simulation=simulation,
+                    audience=audience_control,
+                )
+            )
             model_name = self.model_name
         except Exception as exc:
             log_call_failure(
@@ -153,6 +167,10 @@ class GodAIService:
             return True
         if context.pacing_health.score < 62:
             return True
+        if context.story_gravity_state.drift_score >= 55:
+            return True
+        if context.story_governance.recap_weakness:
+            return True
         if (
             context.audience_control.active
             and context.audience_control.rollout_stage == "payoff-ready"
@@ -173,16 +191,108 @@ class GodAIService:
             if audience.active and audience.requests
             else "No active subscriber vote is overriding the house's native momentum."
         )
+        arc_ranking = [
+            summary.split("(", 1)[0].strip() for summary in context.current_arc_summaries[:3]
+        ]
+        dormant_threads = [
+            thread.split(":", 1)[-1].strip() if ":" in thread else thread
+            for thread in context.dormant_threads[:3]
+        ]
         return StrategicBriefPlan(
             title=f"Strategic brief: {winner.strategy_key}",
+            current_north_star_objective=(
+                context.story_gravity_state.north_star_objective
+                or context.scene_objective
+                or "Keep the house anchored to debt, hidden records, and unstable attraction."
+            ),
             viewer_value_thesis=(
                 "Maximize retention by keeping the house believable, pressurized, shippable, "
                 "and easy to re-enter through one concrete progression per hour. "
                 f"{audience_line}"
             ),
             urgency=max(5, min(10, 11 - context.story_governance.viewer_value_score // 10)),
+            arc_priority_ranking=arc_ranking,
+            danger_of_drift_score=max(
+                0,
+                min(
+                    100,
+                    context.story_gravity_state.drift_score
+                    or (100 - context.story_governance.viewer_value_score),
+                ),
+            ),
+            cliffhanger_urgency=max(
+                4,
+                min(10, 7 + int(context.story_governance.cliffhanger_pressure_low)),
+            ),
+            romance_urgency=max(
+                4,
+                min(
+                    10,
+                    6
+                    + int(context.pacing_health.romance_stalled)
+                    + int(context.audience_control.tone_dials.get("romance", 0) >= 7),
+                ),
+            ),
+            mystery_urgency=max(
+                4,
+                min(10, 6 + int(context.pacing_health.mystery_stalled)),
+            ),
+            house_pressure_priority=max(
+                4,
+                min(10, 5 + len(context.house_state.active_pressures)),
+            ),
+            audience_rollout_priority=max(
+                3,
+                min(10, 4 + int(context.audience_control.active) * 3),
+            ),
+            dormant_threads_to_revive=dormant_threads,
+            reveals_allowed_soon=[
+                item for item in context.unresolved_questions[:2] if item
+            ],
+            reveals_forbidden_for_now=[
+                "Do not solve Evelyn Vale's disappearance outright.",
+                "Do not fully validate or destroy the top ship in one jump.",
+            ],
+            next_one_hour_intention=winner.next_hour_focus,
+            next_six_hour_intention=winner.six_hour_path,
+            next_twenty_four_hour_intention=(
+                "Create a day with one practical setback, one emotional reversal, "
+                "and one clue viewers can debate across time zones."
+            ),
             next_hour_focus=[winner.next_hour_focus, *simulation.recommended_focus[:1]],
             next_six_hours=[winner.six_hour_path, *simulation.recommended_focus[1:2]],
+            recap_priorities=[
+                "Make the recap name the biggest emotional shift clearly.",
+                "Give re-entry viewers one clue and one open question worth following.",
+            ],
+            fan_theory_potential=min(
+                10,
+                max(4, winner.value_profile.get("theory_value", 5)),
+            ),
+            clip_generation_potential=min(
+                10,
+                max(4, winner.value_profile.get("clip_worthiness", 5)),
+            ),
+            reentry_clarity_priority=max(
+                4,
+                min(10, context.story_gravity_state.reentry_priority),
+            ),
+            quote_worthiness=min(
+                10,
+                max(4, winner.value_profile.get("quote_worthiness", 5)),
+            ),
+            betrayal_value=min(
+                10,
+                max(4, winner.value_profile.get("betrayal_value", 5)),
+            ),
+            daily_uniqueness=min(
+                10,
+                max(4, winner.value_profile.get("daily_uniqueness", 5)),
+            ),
+            fandom_discussion_value=min(
+                10,
+                max(4, winner.value_profile.get("fandom_discussion_value", 5)),
+            ),
             recommendations=[
                 *context.story_governance.recommendations[:2],
                 *context.pacing_health.recommendations[:2],
@@ -215,3 +325,59 @@ class GodAIService:
                 self.config.max_brief_age_minutes, max(30, self.config.refresh_interval_minutes * 3)
             ),
         )
+
+    def _coerce_plan_payload(
+        self,
+        *,
+        payload: dict,
+        context: ManagerContextPacket,
+        simulation,
+        audience: AudienceControlReport,
+    ) -> dict:
+        fallback = self._fallback(
+            context=context,
+            simulation=simulation,
+            audience=audience,
+        ).model_dump()
+        merged = dict(fallback)
+        if isinstance(payload, dict):
+            merged.update(payload)
+        if not merged.get("current_north_star_objective"):
+            merged["current_north_star_objective"] = fallback["current_north_star_objective"]
+        merged.setdefault("arc_priority_ranking", fallback["arc_priority_ranking"])
+        merged.setdefault("danger_of_drift_score", fallback["danger_of_drift_score"])
+        merged.setdefault("cliffhanger_urgency", fallback["cliffhanger_urgency"])
+        merged.setdefault("romance_urgency", fallback["romance_urgency"])
+        merged.setdefault("mystery_urgency", fallback["mystery_urgency"])
+        merged.setdefault("house_pressure_priority", fallback["house_pressure_priority"])
+        merged.setdefault("audience_rollout_priority", fallback["audience_rollout_priority"])
+        merged.setdefault(
+            "dormant_threads_to_revive",
+            fallback["dormant_threads_to_revive"],
+        )
+        merged.setdefault("reveals_allowed_soon", fallback["reveals_allowed_soon"])
+        merged.setdefault(
+            "reveals_forbidden_for_now",
+            fallback["reveals_forbidden_for_now"],
+        )
+        merged.setdefault("next_one_hour_intention", fallback["next_one_hour_intention"])
+        merged.setdefault("next_six_hour_intention", fallback["next_six_hour_intention"])
+        merged.setdefault(
+            "next_twenty_four_hour_intention",
+            fallback["next_twenty_four_hour_intention"],
+        )
+        merged.setdefault("recap_priorities", fallback["recap_priorities"])
+        merged.setdefault("fan_theory_potential", fallback["fan_theory_potential"])
+        merged.setdefault("clip_generation_potential", fallback["clip_generation_potential"])
+        merged.setdefault(
+            "reentry_clarity_priority",
+            fallback["reentry_clarity_priority"],
+        )
+        merged.setdefault("quote_worthiness", fallback["quote_worthiness"])
+        merged.setdefault("betrayal_value", fallback["betrayal_value"])
+        merged.setdefault("daily_uniqueness", fallback["daily_uniqueness"])
+        merged.setdefault(
+            "fandom_discussion_value",
+            fallback["fandom_discussion_value"],
+        )
+        return merged

@@ -56,6 +56,7 @@ level = "INFO"
 directory = "logs"
 file_name = "lantern_house.log"
 error_file_name = "error.txt"
+console_enabled = false
 
 [audience]
 update_file_path = "update.txt"
@@ -66,6 +67,10 @@ enabled = true
 refresh_interval_minutes = 5
 max_active_signals = 4
 max_pending_beats = 4
+
+[story_gravity]
+enabled = true
+refresh_interval_minutes = 10
 
 [critic]
 enabled = true

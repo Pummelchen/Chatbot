@@ -103,6 +103,13 @@ class RecapService:
                 twenty_four_hours=self._fallback_window(events_24h, "Last 24 hours"),
             )
 
+    def evaluate_quality(self, *, bundle: RecapBundle) -> dict[str, dict]:
+        return {
+            "1h": self._score_window(bundle.one_hour),
+            "12h": self._score_window(bundle.twelve_hours),
+            "24h": self._score_window(bundle.twenty_four_hours),
+        }
+
     def _fallback_window(self, events: list[EventView], label: str) -> RecapWindowSummary:
         if not events:
             return RecapWindowSummary(
@@ -216,3 +223,54 @@ class RecapService:
         tokens = re.findall(r"\b[A-Z][A-Za-zÀ-ÿ'-]{2,}\b", text)
         unknown = [token for token in tokens if token not in known and token not in neutral]
         return len(set(unknown)) >= 3
+
+    def _score_window(self, summary: RecapWindowSummary) -> dict:
+        text = " ".join(
+            [
+                summary.headline,
+                *summary.what_changed,
+                *summary.emotional_shifts,
+                *summary.clues,
+                *summary.unresolved_questions,
+                summary.loyalty_status,
+                summary.romance_status,
+                summary.watch_next,
+            ]
+        ).lower()
+        usefulness = 5 + min(3, len(summary.what_changed)) + int(bool(summary.clues))
+        clarity = (
+            5
+            + int(len(summary.headline.split()) <= 10)
+            + int("watch" in summary.watch_next.lower())
+        )
+        theory_value = 5 + min(3, len(summary.unresolved_questions))
+        emotional_readability = (
+            5
+            + min(2, len(summary.emotional_shifts))
+            + int(bool(summary.romance_status))
+        )
+        next_hook_strength = (
+            5
+            + int("watch" in summary.watch_next.lower())
+            + int("?" in summary.watch_next)
+        )
+        issues: list[str] = []
+        if any(
+            phrase in text
+            for phrase in ("something happened", "things changed", "tension remained")
+        ):
+            issues.append("Recap language is getting generic.")
+        if len(summary.clues) == 0:
+            issues.append("Recap did not surface a concrete clue.")
+        if len(summary.unresolved_questions) == 0:
+            issues.append("Recap lost theory-building value.")
+        if len(summary.watch_next.split()) < 6:
+            issues.append("Watch-next hook is too thin.")
+        return {
+            "usefulness": max(0, min(10, usefulness)),
+            "clarity": max(0, min(10, clarity)),
+            "theory_value": max(0, min(10, theory_value)),
+            "emotional_readability": max(0, min(10, emotional_readability)),
+            "next_hook_strength": max(0, min(10, next_hook_strength)),
+            "issues": issues[:3],
+        }

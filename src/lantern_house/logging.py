@@ -74,7 +74,8 @@ def configure_logging(config: LoggingConfig) -> None:
     error_handler.setFormatter(JsonErrorFormatter())
     root.addHandler(error_handler)
 
-    console_handler = logging.StreamHandler()
-    console_handler.setLevel(logging.WARNING)
-    console_handler.setFormatter(formatter)
-    root.addHandler(console_handler)
+    if config.console_enabled:
+        console_handler = logging.StreamHandler()
+        console_handler.setLevel(logging.WARNING)
+        console_handler.setFormatter(formatter)
+        root.addHandler(console_handler)

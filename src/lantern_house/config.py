@@ -96,6 +96,7 @@ class LoggingConfig(BaseModel):
     directory: str = "logs"
     file_name: str = "lantern_house.log"
     error_file_name: str = "error.txt"
+    console_enabled: bool = False
 
 
 class AudienceConfig(BaseModel):
@@ -112,6 +113,13 @@ class HousePressureConfig(BaseModel):
     refresh_interval_minutes: int = 5
     max_active_signals: int = 4
     max_pending_beats: int = 4
+
+
+class StoryGravityConfig(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    enabled: bool = True
+    refresh_interval_minutes: int = 10
 
 
 class CriticConfig(BaseModel):
@@ -181,6 +189,7 @@ class AppConfig(BaseModel):
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
     audience: AudienceConfig = Field(default_factory=AudienceConfig)
     house_pressure: HousePressureConfig = Field(default_factory=HousePressureConfig)
+    story_gravity: StoryGravityConfig = Field(default_factory=StoryGravityConfig)
     critic: CriticConfig = Field(default_factory=CriticConfig)
     god_ai: GodAIConfig = Field(default_factory=GodAIConfig)
     simulation: SimulationConfig = Field(default_factory=SimulationConfig)

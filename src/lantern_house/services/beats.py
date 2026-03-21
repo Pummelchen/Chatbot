@@ -22,6 +22,13 @@ class StoryBeatService:
                 source_key="audience-control",
                 now=now,
             )
+            sync_rollout = getattr(self.repository, "sync_rollout_beats", None)
+            if callable(sync_rollout):
+                sync_rollout(
+                    change_id=report.change_id,
+                    beat_items=report.beat_hints,
+                    now=now,
+                )
             return
         self.repository.sync_beats(
             beat_type="audience-rollout",
@@ -29,6 +36,13 @@ class StoryBeatService:
             source_key="audience-control",
             now=now,
         )
+        sync_rollout = getattr(self.repository, "sync_rollout_beats", None)
+        if callable(sync_rollout):
+            sync_rollout(
+                change_id=report.change_id,
+                beat_items=[],
+                now=now,
+            )
 
     def reconcile_turn(self, *, turn: CharacterTurn, events, now=None) -> None:
         now = ensure_utc(now or utcnow())

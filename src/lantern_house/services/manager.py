@@ -26,7 +26,7 @@ class StoryManagerService:
         prompt = render_template(
             "lantern_house.prompts",
             "manager.md",
-            {"MANAGER_CONTEXT": context.model_dump()},
+            {"MANAGER_CONTEXT": context.model_dump(mode="json")},
         )
         try:
             payload, _stats = await self.llm.generate_json(
@@ -116,10 +116,13 @@ class StoryManagerService:
         audience = context.audience_control
         pending_beats = context.pending_beats
         strategic = context.strategic_guidance
+        strategic_brief = context.strategic_brief
         objective = (
             "Disturb the fragile calm with one practical problem "
             "and one emotionally loaded question."
         )
+        if strategic_brief and strategic_brief.current_north_star_objective:
+            objective = strategic_brief.current_north_star_objective
         if audience.active and audience.requests:
             objective = (
                 "Seed the leading audience-voted change in a believable way without "
@@ -164,6 +167,20 @@ class StoryManagerService:
                 "End the exchange on an interruption, dangerous question, "
                 "or emotionally loaded threat."
             )
+        if strategic_brief and strategic_brief.dormant_threads_to_revive:
+            desired[0] = (
+                "Revive this dormant thread with a grounded trigger: "
+                f"{strategic_brief.dormant_threads_to_revive[0]}"
+            )
+        if strategic_brief and strategic_brief.clip_generation_potential >= 8:
+            desired[1] = (
+                "Land a quotable line or interruption that can carry a clip without "
+                "breaking realism."
+            )
+        if strategic_brief and strategic_brief.reveals_forbidden_for_now:
+            forbidden = strategic_brief.reveals_forbidden_for_now[:2]
+        else:
+            forbidden = ["Do not solve the central mystery outright."]
         if audience.active and audience.tone_dials.get("romance", 0) >= 7:
             desired[1] = "Push slow-burn attraction, jealousy, or private domestic longing."
         per_character = {
@@ -175,12 +192,17 @@ class StoryManagerService:
                 pressure_point=(
                     "You want to speak and withhold at the same time while staying specific."
                 ),
-                taboo_topics=["Do not solve the central mystery outright."],
+                taboo_topics=forbidden,
             )
             for slug in active
         }
         thought = ThoughtPulseAuthorization(
-            allowed=context.pacing_health.score < 55,
+            allowed=context.pacing_health.score < 55
+            or (
+                strategic_brief is not None
+                and strategic_brief.clip_generation_potential >= 8
+                and strategic_brief.cliffhanger_urgency >= 8
+            ),
             character_slug=active[0],
             reason="The scene needs one brief flash of inner pressure.",
         )
@@ -196,13 +218,15 @@ class StoryManagerService:
             pacing_actions=(
                 context.pacing_health.recommendations
                 + governance.recommendations
+                + context.recap_quality_alerts[:1]
+                + context.public_turn_review_signals[:1]
                 + strategic[:2]
                 + audience.directives[:2]
             )[:4],
             continuity_watch=context.continuity_warnings[:4],
             unresolved_questions_to_push=context.unresolved_questions[:2],
             recentering_hint=(
-                "If energy dips, let a practical house problem, dormant payoff thread, or "
-                "document pressure expose an emotional fault line and end on a sharper question."
+                "If energy dips, use story gravity: push the house, hidden records, inheritance "
+                "conflict, or unstable attraction back into the room and end on a sharper hook."
             ),
         )

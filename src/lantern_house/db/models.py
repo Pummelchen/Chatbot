@@ -69,6 +69,30 @@ class HouseState(Base):
     )
 
 
+class StoryGravityState(Base):
+    __tablename__ = "story_gravity_state"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    state_key: Mapped[str] = mapped_column(
+        String(50), unique=True, nullable=False, default="primary"
+    )
+    north_star_objective: Mapped[str] = mapped_column(Text, nullable=False)
+    central_tension: Mapped[str] = mapped_column(Text, nullable=False)
+    core_tensions: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    active_axes: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    dormant_threads: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    drift_score: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    reentry_priority: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
+    clip_priority: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
+    fandom_priority: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
+    recap_focus: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    manager_guardrails: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    metadata_json: Mapped[dict] = mapped_column("metadata", JSON, default=dict, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, onupdate=_utcnow
+    )
+
+
 class Location(Base):
     __tablename__ = "locations"
 
@@ -253,10 +277,32 @@ class StrategicBrief(Base):
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="active")
     model_name: Mapped[str | None] = mapped_column(String(80), nullable=True)
     title: Mapped[str] = mapped_column(String(200), nullable=False)
+    current_north_star_objective: Mapped[str] = mapped_column(Text, nullable=False)
     viewer_value_thesis: Mapped[str] = mapped_column(Text, nullable=False)
     urgency: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
+    arc_priority_ranking: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    danger_of_drift_score: Mapped[int] = mapped_column(Integer, default=25, nullable=False)
+    cliffhanger_urgency: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
+    romance_urgency: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
+    mystery_urgency: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
+    house_pressure_priority: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
+    audience_rollout_priority: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
+    dormant_threads_to_revive: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    reveals_allowed_soon: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    reveals_forbidden_for_now: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    next_one_hour_intention: Mapped[str] = mapped_column(Text, nullable=False)
+    next_six_hour_intention: Mapped[str] = mapped_column(Text, nullable=False)
+    next_twenty_four_hour_intention: Mapped[str] = mapped_column(Text, nullable=False)
     next_hour_focus: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
     next_six_hours: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    recap_priorities: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    fan_theory_potential: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
+    clip_generation_potential: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
+    reentry_clarity_priority: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
+    quote_worthiness: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
+    betrayal_value: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
+    daily_uniqueness: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
+    fandom_discussion_value: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
     recommendations: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
     risk_alerts: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
     house_pressure_actions: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
@@ -265,6 +311,23 @@ class StrategicBrief(Base):
     simulation_ranking: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
     metadata_json: Mapped[dict] = mapped_column("metadata", JSON, default=dict, nullable=False)
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, nullable=False
+    )
+
+
+class HousePressure(Base):
+    __tablename__ = "house_pressures"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    state_key: Mapped[str] = mapped_column(String(50), nullable=False, default="primary")
+    signal_slug: Mapped[str] = mapped_column(String(120), nullable=False)
+    label: Mapped[str] = mapped_column(String(150), nullable=False)
+    intensity: Mapped[int] = mapped_column(Integer, nullable=False)
+    summary: Mapped[str] = mapped_column(Text, nullable=False)
+    recommended_move: Mapped[str] = mapped_column(Text, nullable=False)
+    source_metric: Mapped[str] = mapped_column(String(80), nullable=False)
+    metadata_json: Mapped[dict] = mapped_column("metadata", JSON, default=dict, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow, nullable=False
     )
@@ -362,6 +425,101 @@ class Summary(Base):
     )
 
 
+class RolloutRequest(Base):
+    __tablename__ = "rollout_requests"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    change_id: Mapped[str] = mapped_column(String(120), nullable=False)
+    fingerprint: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    request_type: Mapped[str] = mapped_column(String(50), nullable=False)
+    priority: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="active")
+    summary: Mapped[str] = mapped_column(Text, nullable=False)
+    directives: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    metadata_json: Mapped[dict] = mapped_column("metadata", JSON, default=dict, nullable=False)
+    activated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, nullable=False
+    )
+
+
+class RolloutBeat(Base):
+    __tablename__ = "rollout_beats"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    rollout_request_id: Mapped[int | None] = mapped_column(
+        ForeignKey("rollout_requests.id"), nullable=True
+    )
+    beat_key: Mapped[str] = mapped_column(String(150), unique=True, nullable=False)
+    beat_type: Mapped[str] = mapped_column(String(50), nullable=False)
+    objective: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="planned")
+    ready_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    significance: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
+    metadata_json: Mapped[dict] = mapped_column("metadata", JSON, default=dict, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, nullable=False
+    )
+
+
+class SimulationLabRun(Base):
+    __tablename__ = "simulation_lab_runs"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    source: Mapped[str] = mapped_column(String(50), nullable=False, default="god-ai")
+    horizon_hours: Mapped[int] = mapped_column(Integer, nullable=False)
+    turns_per_hour: Mapped[int] = mapped_column(Integer, nullable=False)
+    winner_key: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    systemic_risks: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    recommended_focus: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    metadata_json: Mapped[dict] = mapped_column("metadata", JSON, default=dict, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, nullable=False
+    )
+
+
+class StrategyRanking(Base):
+    __tablename__ = "strategy_rankings"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    simulation_run_id: Mapped[int | None] = mapped_column(
+        ForeignKey("simulation_lab_runs.id"), nullable=True
+    )
+    strategic_brief_id: Mapped[int | None] = mapped_column(
+        ForeignKey("strategic_briefs.id"), nullable=True
+    )
+    strategy_key: Mapped[str] = mapped_column(String(100), nullable=False)
+    rank_order: Mapped[int] = mapped_column(Integer, nullable=False)
+    score: Mapped[int] = mapped_column(Integer, nullable=False)
+    rationale: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    next_hour_focus: Mapped[str] = mapped_column(Text, nullable=False)
+    six_hour_path: Mapped[str] = mapped_column(Text, nullable=False)
+    value_profile: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, nullable=False
+    )
+
+
+class PublicTurnReview(Base):
+    __tablename__ = "public_turn_reviews"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    message_id: Mapped[int | None] = mapped_column(ForeignKey("messages.id"), nullable=True)
+    speaker_slug: Mapped[str] = mapped_column(String(100), nullable=False)
+    review_status: Mapped[str] = mapped_column(String(20), nullable=False, default="accepted")
+    critic_score: Mapped[int] = mapped_column(Integer, nullable=False)
+    repair_applied: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    reasons: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    repair_actions: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    quote_worthiness: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
+    clip_value: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
+    fandom_discussion_value: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
+    novelty: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, nullable=False
+    )
+
+
 class ContinuityFlag(Base):
     __tablename__ = "continuity_flags"
 
@@ -376,6 +534,84 @@ class ContinuityFlag(Base):
         DateTime(timezone=True), default=_utcnow, nullable=False
     )
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class DormantThreadRegistry(Base):
+    __tablename__ = "dormant_thread_registry"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    thread_key: Mapped[str] = mapped_column(String(150), unique=True, nullable=False)
+    summary: Mapped[str] = mapped_column(Text, nullable=False)
+    source: Mapped[str] = mapped_column(String(50), nullable=False, default="world-memory")
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="dormant")
+    heat: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
+    last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_revived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    metadata_json: Mapped[dict] = mapped_column("metadata", JSON, default=dict, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, onupdate=_utcnow
+    )
+
+
+class RecapQualityScore(Base):
+    __tablename__ = "recap_quality_scores"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    summary_id: Mapped[int | None] = mapped_column(ForeignKey("summaries.id"), nullable=True)
+    summary_window: Mapped[str] = mapped_column(String(20), nullable=False)
+    bucket_end_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    usefulness: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
+    clarity: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
+    theory_value: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
+    emotional_readability: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
+    next_hook_strength: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
+    issues: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, nullable=False
+    )
+
+
+class ClipValueScore(Base):
+    __tablename__ = "clip_value_scores"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    message_id: Mapped[int | None] = mapped_column(ForeignKey("messages.id"), nullable=True)
+    strategic_brief_id: Mapped[int | None] = mapped_column(
+        ForeignKey("strategic_briefs.id"), nullable=True
+    )
+    source: Mapped[str] = mapped_column(String(50), nullable=False)
+    clip_value: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
+    quote_value: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
+    betrayal_value: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
+    romance_intensity: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
+    mystery_progression: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
+    novelty: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
+    daily_uniqueness: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
+    metadata_json: Mapped[dict] = mapped_column("metadata", JSON, default=dict, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, nullable=False
+    )
+
+
+class FandomSignalCandidate(Base):
+    __tablename__ = "fandom_signal_candidates"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    message_id: Mapped[int | None] = mapped_column(ForeignKey("messages.id"), nullable=True)
+    strategic_brief_id: Mapped[int | None] = mapped_column(
+        ForeignKey("strategic_briefs.id"), nullable=True
+    )
+    signal_type: Mapped[str] = mapped_column(String(50), nullable=False)
+    subject: Mapped[str] = mapped_column(String(150), nullable=False)
+    intensity: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
+    rationale: Mapped[str] = mapped_column(Text, nullable=False)
+    metadata_json: Mapped[dict] = mapped_column("metadata", JSON, default=dict, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, nullable=False
+    )
 
 
 class RunState(Base):

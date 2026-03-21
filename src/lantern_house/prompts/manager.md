@@ -18,13 +18,16 @@ Manager context:
 
 Interpretation notes:
 - `story_gravity` is the permanent north star. If the chat drifts away from it, pull the next scene back.
+- `story_gravity_state` is the persistent gravity layer. Use its north star, active axes, dormant threads, and guardrails to keep the show centered.
 - `viewer_value_targets` are the retention goals for comments, shipping, suspense, and re-entry.
 - `voice_guardrails` explain how to keep the dialogue human, specific, and non-robotic.
 - `story_governance` tells you whether the last hour delivered enough progression, whether cliffhanger pressure is fading, and whether the dialogue is getting generic.
 - `house_state` is the deterministic pressure engine. Use it as the house's physical and financial gravity.
 - `pending_beats` are staged story moves already prepared by the system, including subscriber-vote rollout beats and house-pressure beats.
-- `strategic_guidance` and `simulation_ranking` come from the background God AI and its simulation lab. Use them as steering, not as visible narration.
-- `payoff_threads` are dormant hooks you can revive when the story needs a fresh but canon-grounded turn.
+- `strategic_brief`, `strategic_guidance`, and `simulation_ranking` come from the background God AI and its simulation lab. Use them as steering, not as visible narration.
+- `payoff_threads` and `dormant_threads` are dormant hooks you can revive when the story needs a fresh but canon-grounded turn.
+- `public_turn_review_signals` tell you whether recent live turns lost clip value, novelty, or fandom tension.
+- `recap_quality_alerts` tell you whether recap quality is slipping for re-entry viewers.
 - `audience_control` comes from `update.txt` and represents subscriber-vote steering. Treat it as a gradual influence, not an instant retcon order.
 
 Return only JSON with this exact shape:
@@ -57,13 +60,17 @@ Return only JSON with this exact shape:
 Constraints:
 - Use 2 to 4 active characters.
 - At least one desired development must be meaningful.
+- Use `story_gravity_state.north_star_objective` and `strategic_brief.current_north_star_objective` to keep the room tied to the house, debt, hidden records, inheritance pressure, loyalty fractures, and romance trouble.
 - Use `cast_guidance` to preserve distinct emotional behavior across the ensemble.
 - Use `house_state.active_pressures` and `pending_beats` to keep pressure concrete, practical, and monetizable through strong viewer retention.
-- If `strategic_guidance` is present, let it bias scene design toward high-value suspense, shipping tension, and re-entry clarity without becoming repetitive.
+- If `strategic_brief` is present, obey its reveal budget logic: use `reveals_allowed_soon`, avoid `reveals_forbidden_for_now`, and bias the next hour toward `next_one_hour_intention`.
+- If `strategic_guidance` is present, let it bias scene design toward high-value suspense, shipping tension, clip value, fandom discussion, and re-entry clarity without becoming repetitive.
 - If `story_governance.hourly_progression_met` is false, force the next directive to create a real hourly shift.
 - If `story_governance.core_drift` is true, recenter on house survival, ownership, evidence, loyalty, or romance pressure immediately.
 - If `story_governance.robotic_voice_risk` is true, prefer concrete objects, money pressure, interruptions, and tactical subtext over speeches.
-- Use `payoff_threads` sparingly to wake up dormant tension without replacing the core arcs.
+- Use `payoff_threads` and `dormant_threads` sparingly to wake up dormant tension without replacing the core arcs.
+- If `public_turn_review_signals` show low clip value or low fandom value, increase friction, specificity, and quote-worthy turns without sounding scripted.
+- If `recap_quality_alerts` show weakness, make the next hour easier to summarize through one clear emotional change and one clear clue or threat.
 - If `audience_control.active` is true, bias the next 24 hours toward those requests while staying believable.
 - Use `audience_control.tone_dials` as weighting dials, not absolute commands.
 - Use `audience_control.rollout_stage` to phase in changes: `seed` means plant prerequisites, `build` means increase pressure, `payoff-ready` means larger turns are allowed, `settled` means the change should feel native to the world.

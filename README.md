@@ -11,8 +11,9 @@ The project targets macOS Apple Silicon with Python 3.12+, MySQL 8.4, and Ollama
 - MySQL schema and Alembic migration
 - A production-minded orchestrator with recovery, pacing checks, recap scheduling, and context retrieval
 - A deterministic house-pressure engine that keeps the guesthouse generating believable financial, repair, inspection, weather, and fatigue pressure
+- A persistent story-gravity layer that keeps the show anchored to the house, its debt, hidden records, ownership conflict, and unstable bonds
 - A staged audience-rollout beat system that converts `update.txt` votes into prerequisite beats instead of instant retcons
-- A lightweight public-turn critic plus a deterministic simulation lab and background God-AI strategist
+- A lightweight public-turn critic plus a deterministic simulation lab and a background God-AI strategist that persists structured strategic briefs
 - An adaptive fail-safe runtime that keeps last-good state, backs off repeated failures, and writes structured recovery context to `logs/error.txt`
 - A hot-patch loader that can soft-reload changed runtime, service, prompt, and config files without stopping the live stream
 - Prompt templates for manager, characters, and recap generation
@@ -41,6 +42,7 @@ The runtime now includes a dedicated story-governance layer in addition to pacin
 - It pressures the manager to restore cliffhanger energy before the stream goes flat.
 - It keeps unresolved-question memory bounded and revives dormant payoff threads instead of letting prompts bloat over time.
 - It advances persistent story-arc pressure and reveal stages from structured events, so long-form continuity lives in state, not only in transcript momentum.
+- It persists `story_gravity_state`, dormant threads, recap quality scores, clip-value scores, fandom signals, and public-turn review data so the strategist and manager can steer from structured memory instead of vague prompt residue.
 
 The seeded `story_engine` defines the permanent north star for the drama, so the manager is not improvising the project’s value proposition from scratch every few turns.
 
@@ -53,7 +55,7 @@ Two new systems now keep the story from flattening over very long runs:
 - Subscriber votes in `update.txt` are compiled into staged rollout beats with prerequisite timing, not just passed through as text.
 - Pending beats are ordered by readiness, and future payoff beats cannot complete before their due window, so long-form vote changes unfold in sequence instead of skipping ahead.
 - A simulation lab ranks candidate strategic directions like house-pressure-first, mystery-evidence-first, romance-faultline-first, audience-rollout-first, and ensemble-refresh-first.
-- A background God-AI planner uses `gemma3:12b` plus the simulation ranking to persist strategic briefs for the live manager without blocking the chat loop.
+- A background God-AI planner uses `gemma3:12b` plus the simulation ranking to persist strategic briefs with north-star objective, arc ranking, reveal permissions, urgency scores, recap priorities, clip value, and fandom value for the live manager without blocking the chat loop.
 - The visible hot path is protected by prefetching manager directives in the background and by a lightweight critic that repairs bad live-turn output before persistence.
 
 ## Live Update Control
@@ -142,6 +144,7 @@ lantern-house run
 - Public chat output goes only to the terminal renderer.
 - Internal logs are written to `logs/lantern_house.log`.
 - Structured failure records are written to `logs/error.txt`.
+- Console logging is disabled by default during `run`, so the terminal stays reserved for the diegetic stream and recap blocks.
 - Hourly recap blocks emit 1h, 12h, and 24h summaries.
 - Runtime state is persisted on every turn and checkpointed independently on a background interval.
 - Default recovery protection includes per-turn checkpoint snapshots plus a 60-second heartbeat.
@@ -151,6 +154,7 @@ lantern-house run
 - Audience steering is also compiled into persisted rollout beats so major vote requests land as staged prerequisites over time.
 - `house_state` is persisted separately from transcript memory, giving the manager a deterministic practical gravity field even when models get vague.
 - The background God-AI planner can persist long-horizon strategic briefs during live operation, while `run --once` skips that loop to keep smoke runs fast.
+- The strategist stack now also persists simulation runs, ranked strategy candidates, dormant-thread registry rows, public-turn review telemetry, recap-quality scores, clip-value scores, and fandom-signal candidates.
 - The live loop wraps critical subsystems in a fail-safe executor. Unexpected failures are logged with context, routed to conservative fallbacks or last-good state, and never printed into the public chat stream.
 - Repeated failures enter a cooldown window instead of hammering the same broken dependency every turn.
 - Hot-patch scanning can rebuild runtime services from changed files without dropping the live process. ORM schema modules are intentionally excluded from live reload to avoid corrupting SQLAlchemy state.

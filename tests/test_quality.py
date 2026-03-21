@@ -16,6 +16,7 @@ from lantern_house.domain.contracts import (
     ManagerContextPacket,
     MessageView,
     PacingHealthReport,
+    SummaryView,
 )
 from lantern_house.domain.enums import EventType
 from lantern_house.quality.governance import StoryGovernanceEvaluator
@@ -294,6 +295,17 @@ def test_story_governance_detects_hourly_progression_gap_and_voice_risk() -> Non
     report = StoryGovernanceEvaluator().evaluate(
         messages=messages,
         events=events,
+        summaries=[
+            SummaryView(
+                summary_window="1h",
+                content=(
+                    "The truth is this changes everything | "
+                    "The truth is this changes everything"
+                ),
+                structured_highlights={},
+                bucket_end_at=now,
+            )
+        ],
         world_metadata={
             "story_engine": {
                 "core_tensions": [
