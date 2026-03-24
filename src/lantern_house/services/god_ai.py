@@ -18,6 +18,7 @@ from lantern_house.llm.ollama import OllamaClient
 from lantern_house.runtime.failsafe import log_call_failure
 from lantern_house.services.audience import AudienceControlService
 from lantern_house.services.simulation_lab import SimulationLabService
+from lantern_house.services.soak_audit import SoakAuditService
 from lantern_house.utils.resources import render_template
 from lantern_house.utils.time import ensure_utc, utcnow
 
@@ -30,6 +31,7 @@ class GodAIService:
         assembler: ContextAssembler,
         audience_control_service: AudienceControlService,
         simulation_lab: SimulationLabService,
+        soak_audit_service: SoakAuditService,
         llm: OllamaClient,
         model_name: str,
     ) -> None:
@@ -37,6 +39,7 @@ class GodAIService:
         self.assembler = assembler
         self.audience_control_service = audience_control_service
         self.simulation_lab = simulation_lab
+        self.soak_audit_service = soak_audit_service
         self.llm = llm
         self.model_name = model_name
         self.interval = timedelta(minutes=max(1, config.refresh_interval_minutes))
@@ -63,6 +66,8 @@ class GodAIService:
             and not self._needs_refresh(latest=latest, context=context, now=now)
         ):
             return latest
+
+        soak_audit = self.soak_audit_service.refresh_if_due(context, now=now, force=force)
 
         simulation = self.simulation_lab.evaluate(
             context,
@@ -100,6 +105,7 @@ class GodAIService:
                         "GOD_AI_CONTEXT": {
                             "manager_context": context.model_dump(mode="json"),
                             "simulation_report": simulation.model_dump(mode="json"),
+                            "soak_audit": soak_audit.model_dump(mode="json") if soak_audit else {},
                         }
                     },
                 ),
@@ -246,9 +252,7 @@ class GodAIService:
                 min(10, 4 + int(context.audience_control.active) * 3),
             ),
             dormant_threads_to_revive=dormant_threads,
-            reveals_allowed_soon=[
-                item for item in context.unresolved_questions[:2] if item
-            ],
+            reveals_allowed_soon=[item for item in context.unresolved_questions[:2] if item],
             reveals_forbidden_for_now=[
                 "Do not solve Evelyn Vale's disappearance outright.",
                 "Do not fully validate or destroy the top ship in one jump.",

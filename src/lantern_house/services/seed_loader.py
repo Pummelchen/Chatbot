@@ -377,9 +377,7 @@ class StorySeedLoader:
         missing: list[str],
     ) -> None:
         hour_bucket = floor_to_hour(utcnow())
-        location_map = {
-            row.slug: row for row in session.scalars(select(models.Location)).all()
-        }
+        location_map = {row.slug: row for row in session.scalars(select(models.Location)).all()}
         story_engine = payload.get("story_engine", {})
         house_seed = payload.get("house_pressure_seed", {})
         initial_scene = payload["initial_scene"]

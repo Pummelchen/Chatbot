@@ -11,8 +11,11 @@ from lantern_house.domain.contracts import (
     AudienceControlReport,
     DormantThreadSnapshot,
     EventView,
+    HighlightPackageSnapshot,
+    HourlyProgressLedgerSnapshot,
     MessageView,
     RelationshipSnapshot,
+    SoakAuditSnapshot,
     StoryGravityStateSnapshot,
     SummaryView,
 )
@@ -225,6 +228,54 @@ class FakeRepository:
             )
         ]
 
+    def get_latest_hourly_progress_ledger(self):
+        return HourlyProgressLedgerSnapshot(
+            meaningful_progressions=1,
+            evidence_shift_count=1,
+            contract_met=True,
+            dominant_axis="evidence",
+            recommended_push=["Push the copied ledger page harder."],
+        )
+
+    def list_canon_capsules(self, window_keys=None):
+        return [
+            type(
+                "Capsule",
+                (),
+                {
+                    "window_key": "24h",
+                    "headline": "24h canon: the copied ledger still matters.",
+                    "state_of_play": ["Debt and inheritance pressure are both active."],
+                },
+            )()
+        ]
+
+    def list_recent_highlight_packages(self, limit=4):
+        return [
+            HighlightPackageSnapshot(
+                speaker_slug="lucia",
+                title="Lucía just made the paperwork war personal",
+                hook_line="Show me one document that isn't already lying.",
+                quote_line="Show me one document that isn't already lying.",
+                summary_blurb="Lucía turned the inheritance argument sharper.",
+                score=84,
+            )
+        ]
+
+    def get_latest_soak_audit(self):
+        return SoakAuditSnapshot(
+            horizons_hours=[24, 72],
+            progression_miss_risk=35,
+            drift_risk=28,
+            strategy_lock_risk=40,
+            recap_decay_risk=25,
+            clip_drought_risk=20,
+            ship_stagnation_risk=30,
+            unresolved_overload_risk=18,
+            recommended_direction="mystery-evidence-first",
+            audit_notes=["The next several hours need a sharper clue path."],
+        )
+
 
 def test_context_assembler_builds_packets() -> None:
     assembler = ContextAssembler(FakeRepository(), PacingHealthEvaluator())
@@ -257,6 +308,11 @@ def test_context_assembler_builds_packets() -> None:
     assert manager_packet.recap_quality_alerts
     assert manager_packet.public_turn_review_signals
     assert manager_packet.audience_control.active is True
+    assert manager_packet.hourly_ledger.contract_met is True
+    assert manager_packet.canon_capsule_digest
+    assert manager_packet.highlight_signals
+    assert manager_packet.soak_audit_signals
     assert character_packet.character_slug == "amelia"
     assert character_packet.voice_guardrails
     assert "control the damage" in character_packet.manager_directive
+    assert character_packet.story_memory_capsule

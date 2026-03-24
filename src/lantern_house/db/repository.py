@@ -15,16 +15,20 @@ from lantern_house.db.session import SessionFactory
 from lantern_house.domain.contracts import (
     BeatPlanItem,
     BeatSnapshot,
+    CanonCapsuleSnapshot,
     CharacterTurn,
     ContinuityFlagDraft,
     DormantThreadSnapshot,
     EventCandidate,
     EventView,
+    HighlightPackageSnapshot,
+    HourlyProgressLedgerSnapshot,
     HouseStateSnapshot,
     ManagerDirectivePlan,
     MessageView,
     RelationshipSnapshot,
     SimulationLabReport,
+    SoakAuditSnapshot,
     StoryArcSnapshot,
     StoryGravityStateSnapshot,
     StoryProgressionPlan,
@@ -910,6 +914,57 @@ class StoryRepository:
                 }
             )
 
+    def record_soak_audit_run(
+        self,
+        *,
+        snapshot: SoakAuditSnapshot,
+        now=None,
+    ) -> SoakAuditSnapshot:
+        now = ensure_utc(now or utcnow())
+        with self.session_factory.session_scope() as session:
+            row = models.SoakAuditRun(
+                horizons_hours=snapshot.horizons_hours,
+                progression_miss_risk=snapshot.progression_miss_risk,
+                drift_risk=snapshot.drift_risk,
+                strategy_lock_risk=snapshot.strategy_lock_risk,
+                recap_decay_risk=snapshot.recap_decay_risk,
+                clip_drought_risk=snapshot.clip_drought_risk,
+                ship_stagnation_risk=snapshot.ship_stagnation_risk,
+                unresolved_overload_risk=snapshot.unresolved_overload_risk,
+                recommended_direction=snapshot.recommended_direction,
+                audit_notes=snapshot.audit_notes,
+                candidate_pressure=snapshot.candidate_pressure,
+                metadata_json=snapshot.metadata,
+                created_at=now,
+            )
+            session.add(row)
+            session.flush()
+            return snapshot.model_copy(update={"run_id": row.id, "created_at": now})
+
+    def get_latest_soak_audit(self) -> SoakAuditSnapshot | None:
+        with self.session_factory.session_scope() as session:
+            row = session.scalar(
+                select(models.SoakAuditRun).order_by(desc(models.SoakAuditRun.created_at))
+            )
+            if row is None:
+                return None
+            return SoakAuditSnapshot(
+                run_id=row.id,
+                horizons_hours=row.horizons_hours,
+                progression_miss_risk=row.progression_miss_risk,
+                drift_risk=row.drift_risk,
+                strategy_lock_risk=row.strategy_lock_risk,
+                recap_decay_risk=row.recap_decay_risk,
+                clip_drought_risk=row.clip_drought_risk,
+                ship_stagnation_risk=row.ship_stagnation_risk,
+                unresolved_overload_risk=row.unresolved_overload_risk,
+                recommended_direction=row.recommended_direction,
+                audit_notes=row.audit_notes,
+                candidate_pressure=row.candidate_pressure,
+                metadata=row.metadata_json,
+                created_at=row.created_at,
+            )
+
     def get_latest_strategic_brief(
         self, *, now=None, active_only: bool = True
     ) -> StrategicBriefSnapshot | None:
@@ -1601,6 +1656,76 @@ class StoryRepository:
                 for row in rows
             ]
 
+    def save_hourly_progress_ledger(
+        self,
+        *,
+        snapshot: HourlyProgressLedgerSnapshot,
+        now=None,
+    ) -> HourlyProgressLedgerSnapshot:
+        now = ensure_utc(now or utcnow())
+        bucket_start_at = ensure_utc(snapshot.bucket_start_at or floor_to_hour(now))
+        bucket_end_at = ensure_utc(snapshot.bucket_end_at or (bucket_start_at + timedelta(hours=1)))
+        with self.session_factory.session_scope() as session:
+            row = session.scalar(
+                select(models.HourlyProgressLedger).where(
+                    models.HourlyProgressLedger.bucket_start_at == bucket_start_at
+                )
+            )
+            if row is None:
+                row = models.HourlyProgressLedger(
+                    bucket_start_at=bucket_start_at,
+                    bucket_end_at=bucket_end_at,
+                    created_at=now,
+                )
+                session.add(row)
+            row.bucket_end_at = bucket_end_at
+            row.meaningful_progressions = snapshot.meaningful_progressions
+            row.trust_shift_count = snapshot.trust_shift_count
+            row.desire_shift_count = snapshot.desire_shift_count
+            row.evidence_shift_count = snapshot.evidence_shift_count
+            row.debt_shift_count = snapshot.debt_shift_count
+            row.power_shift_count = snapshot.power_shift_count
+            row.loyalty_shift_count = snapshot.loyalty_shift_count
+            row.contract_met = snapshot.contract_met
+            row.dominant_axis = snapshot.dominant_axis
+            row.blockers = snapshot.blockers
+            row.recommended_push = snapshot.recommended_push
+            row.metadata_json = snapshot.metadata
+            row.updated_at = now
+            return snapshot.model_copy(
+                update={
+                    "bucket_start_at": bucket_start_at,
+                    "bucket_end_at": bucket_end_at,
+                    "metadata": snapshot.metadata,
+                }
+            )
+
+    def get_latest_hourly_progress_ledger(self) -> HourlyProgressLedgerSnapshot | None:
+        with self.session_factory.session_scope() as session:
+            row = session.scalar(
+                select(models.HourlyProgressLedger).order_by(
+                    desc(models.HourlyProgressLedger.bucket_start_at)
+                )
+            )
+            if row is None:
+                return None
+            return HourlyProgressLedgerSnapshot(
+                bucket_start_at=row.bucket_start_at,
+                bucket_end_at=row.bucket_end_at,
+                meaningful_progressions=row.meaningful_progressions,
+                trust_shift_count=row.trust_shift_count,
+                desire_shift_count=row.desire_shift_count,
+                evidence_shift_count=row.evidence_shift_count,
+                debt_shift_count=row.debt_shift_count,
+                power_shift_count=row.power_shift_count,
+                loyalty_shift_count=row.loyalty_shift_count,
+                contract_met=row.contract_met,
+                dominant_axis=row.dominant_axis,
+                blockers=row.blockers,
+                recommended_push=row.recommended_push,
+                metadata=row.metadata_json,
+            )
+
     def list_recent_public_turn_reviews(self, *, limit: int = 8) -> list[dict[str, Any]]:
         with self.session_factory.session_scope() as session:
             rows = session.scalars(
@@ -1622,6 +1747,90 @@ class StoryRepository:
                     "novelty": row.novelty,
                     "created_at": row.created_at,
                 }
+                for row in rows
+            ]
+
+    def save_canon_capsule(
+        self,
+        *,
+        snapshot: CanonCapsuleSnapshot,
+        now=None,
+    ) -> CanonCapsuleSnapshot:
+        now = ensure_utc(now or utcnow())
+        with self.session_factory.session_scope() as session:
+            row = session.scalar(
+                select(models.CanonCapsule).where(
+                    models.CanonCapsule.window_key == snapshot.window_key
+                )
+            )
+            if row is None:
+                row = models.CanonCapsule(window_key=snapshot.window_key, created_at=now)
+                session.add(row)
+            row.headline = snapshot.headline
+            row.state_of_play = snapshot.state_of_play
+            row.key_clues = snapshot.key_clues
+            row.relationship_fault_lines = snapshot.relationship_fault_lines
+            row.active_pressures = snapshot.active_pressures
+            row.unresolved_questions = snapshot.unresolved_questions
+            row.protected_truths = snapshot.protected_truths
+            row.recap_hooks = snapshot.recap_hooks
+            row.metadata_json = snapshot.metadata
+            row.updated_at = now
+            created_at = row.created_at or now
+            return snapshot.model_copy(update={"created_at": created_at})
+
+    def list_canon_capsules(
+        self,
+        *,
+        window_keys: list[str] | None = None,
+    ) -> list[CanonCapsuleSnapshot]:
+        with self.session_factory.session_scope() as session:
+            stmt = select(models.CanonCapsule).order_by(models.CanonCapsule.window_key)
+            if window_keys:
+                stmt = stmt.where(models.CanonCapsule.window_key.in_(window_keys))
+            rows = session.scalars(stmt).all()
+            return [
+                CanonCapsuleSnapshot(
+                    window_key=row.window_key,
+                    headline=row.headline,
+                    state_of_play=row.state_of_play,
+                    key_clues=row.key_clues,
+                    relationship_fault_lines=row.relationship_fault_lines,
+                    active_pressures=row.active_pressures,
+                    unresolved_questions=row.unresolved_questions,
+                    protected_truths=row.protected_truths,
+                    recap_hooks=row.recap_hooks,
+                    metadata=row.metadata_json,
+                    created_at=row.created_at,
+                )
+                for row in rows
+            ]
+
+    def list_recent_highlight_packages(self, *, limit: int = 8) -> list[HighlightPackageSnapshot]:
+        with self.session_factory.session_scope() as session:
+            rows = session.scalars(
+                select(models.HighlightPackage)
+                .order_by(desc(models.HighlightPackage.created_at))
+                .limit(limit)
+            ).all()
+            return [
+                HighlightPackageSnapshot(
+                    message_id=row.message_id,
+                    speaker_slug=row.speaker_slug,
+                    title=row.title,
+                    alternate_titles=row.alternate_titles,
+                    hook_line=row.hook_line,
+                    quote_line=row.quote_line,
+                    summary_blurb=row.summary_blurb,
+                    ship_angle=row.ship_angle,
+                    theory_angle=row.theory_angle,
+                    conflict_axis=row.conflict_axis,
+                    recommended_clip_seconds=row.recommended_clip_seconds,
+                    source_window_minutes=row.source_window_minutes,
+                    score=row.score,
+                    metadata=row.metadata_json,
+                    created_at=row.created_at,
+                )
                 for row in rows
             ]
 
@@ -1735,6 +1944,35 @@ class StoryRepository:
                         created_at=now,
                     )
                 )
+
+    def record_highlight_package(
+        self,
+        *,
+        package: HighlightPackageSnapshot,
+        now=None,
+    ) -> HighlightPackageSnapshot:
+        now = ensure_utc(now or utcnow())
+        with self.session_factory.session_scope() as session:
+            row = models.HighlightPackage(
+                message_id=package.message_id,
+                speaker_slug=package.speaker_slug,
+                title=package.title,
+                alternate_titles=package.alternate_titles,
+                hook_line=package.hook_line,
+                quote_line=package.quote_line,
+                summary_blurb=package.summary_blurb,
+                ship_angle=package.ship_angle,
+                theory_angle=package.theory_angle,
+                conflict_axis=package.conflict_axis,
+                recommended_clip_seconds=package.recommended_clip_seconds,
+                source_window_minutes=package.source_window_minutes,
+                score=package.score,
+                metadata_json=package.metadata,
+                created_at=now,
+            )
+            session.add(row)
+            session.flush()
+            return package.model_copy(update={"created_at": now})
 
     def add_continuity_flags(self, flags: list[ContinuityFlagDraft]) -> None:
         if not flags:

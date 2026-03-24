@@ -24,6 +24,7 @@ from lantern_house.domain.contracts import (
     HouseStateSnapshot,
     ManagerContextPacket,
     PacingHealthReport,
+    SoakAuditSnapshot,
     StoryGovernanceReport,
     StoryGravityStateSnapshot,
     StrategicBriefPlan,
@@ -253,6 +254,23 @@ class AudienceStub:
         return self.report
 
 
+class SoakAuditStub:
+    def refresh_if_due(self, context, *, now=None, force=False):
+        return SoakAuditSnapshot(
+            horizons_hours=[24, 72, 168],
+            progression_miss_risk=40,
+            drift_risk=35,
+            strategy_lock_risk=45,
+            recap_decay_risk=30,
+            clip_drought_risk=28,
+            ship_stagnation_risk=32,
+            unresolved_overload_risk=24,
+            recommended_direction="house-pressure-first",
+            audit_notes=["The hourly contract still needs a hard shift."],
+            candidate_pressure=["Force a money or evidence turn."],
+        )
+
+
 class FailingLLM:
     async def generate_json(self, **kwargs):
         raise RuntimeError("offline in test")
@@ -386,6 +404,7 @@ def test_god_ai_falls_back_to_deterministic_brief() -> None:
         assembler=AssemblerStub(packet, repository),
         audience_control_service=AudienceStub(report),
         simulation_lab=SimulationLabService(SimulationConfig()),
+        soak_audit_service=SoakAuditStub(),
         llm=FailingLLM(),
         model_name="gemma3:12b",
     )
@@ -405,6 +424,7 @@ def test_god_ai_persists_provisional_brief_before_model_returns() -> None:
         assembler=AssemblerStub(packet, repository),
         audience_control_service=AudienceStub(packet.audience_control),
         simulation_lab=SimulationLabService(SimulationConfig()),
+        soak_audit_service=SoakAuditStub(),
         llm=HangingLLM(),
         model_name="gemma3:12b",
     )

@@ -350,6 +350,80 @@ class SimulationLabReport(BaseModel):
     ranked_strategy_keys: list[str] = Field(default_factory=list)
 
 
+class HourlyProgressLedgerSnapshot(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    bucket_start_at: datetime | None = None
+    bucket_end_at: datetime | None = None
+    meaningful_progressions: int = Field(default=0, ge=0)
+    trust_shift_count: int = Field(default=0, ge=0)
+    desire_shift_count: int = Field(default=0, ge=0)
+    evidence_shift_count: int = Field(default=0, ge=0)
+    debt_shift_count: int = Field(default=0, ge=0)
+    power_shift_count: int = Field(default=0, ge=0)
+    loyalty_shift_count: int = Field(default=0, ge=0)
+    contract_met: bool = False
+    dominant_axis: str = "none"
+    blockers: list[str] = Field(default_factory=list)
+    recommended_push: list[str] = Field(default_factory=list)
+    metadata: dict = Field(default_factory=dict)
+
+
+class CanonCapsuleSnapshot(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    window_key: str
+    headline: str = ""
+    state_of_play: list[str] = Field(default_factory=list)
+    key_clues: list[str] = Field(default_factory=list)
+    relationship_fault_lines: list[str] = Field(default_factory=list)
+    active_pressures: list[str] = Field(default_factory=list)
+    unresolved_questions: list[str] = Field(default_factory=list)
+    protected_truths: list[str] = Field(default_factory=list)
+    recap_hooks: list[str] = Field(default_factory=list)
+    metadata: dict = Field(default_factory=dict)
+    created_at: datetime | None = None
+
+
+class HighlightPackageSnapshot(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    message_id: int | None = None
+    speaker_slug: str = ""
+    title: str
+    alternate_titles: list[str] = Field(default_factory=list)
+    hook_line: str = ""
+    quote_line: str = ""
+    summary_blurb: str = ""
+    ship_angle: str = ""
+    theory_angle: str = ""
+    conflict_axis: str = ""
+    recommended_clip_seconds: int = Field(default=25, ge=5, le=120)
+    source_window_minutes: int = Field(default=4, ge=1, le=60)
+    score: int = Field(default=0, ge=0, le=100)
+    metadata: dict = Field(default_factory=dict)
+    created_at: datetime | None = None
+
+
+class SoakAuditSnapshot(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    run_id: int | None = None
+    horizons_hours: list[int] = Field(default_factory=list)
+    progression_miss_risk: int = Field(default=0, ge=0, le=100)
+    drift_risk: int = Field(default=0, ge=0, le=100)
+    strategy_lock_risk: int = Field(default=0, ge=0, le=100)
+    recap_decay_risk: int = Field(default=0, ge=0, le=100)
+    clip_drought_risk: int = Field(default=0, ge=0, le=100)
+    ship_stagnation_risk: int = Field(default=0, ge=0, le=100)
+    unresolved_overload_risk: int = Field(default=0, ge=0, le=100)
+    recommended_direction: str = ""
+    audit_notes: list[str] = Field(default_factory=list)
+    candidate_pressure: list[str] = Field(default_factory=list)
+    metadata: dict = Field(default_factory=dict)
+    created_at: datetime | None = None
+
+
 class StrategicBriefPlan(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
@@ -482,6 +556,12 @@ class ManagerContextPacket(BaseModel):
     audience_control: AudienceControlReport = Field(default_factory=AudienceControlReport)
     house_state: HouseStateSnapshot = Field(default_factory=HouseStateSnapshot)
     pending_beats: list[str] = Field(default_factory=list)
+    hourly_ledger: HourlyProgressLedgerSnapshot = Field(
+        default_factory=HourlyProgressLedgerSnapshot
+    )
+    canon_capsule_digest: list[str] = Field(default_factory=list)
+    highlight_signals: list[str] = Field(default_factory=list)
+    soak_audit_signals: list[str] = Field(default_factory=list)
     strategic_guidance: list[str] = Field(default_factory=list)
     simulation_ranking: list[str] = Field(default_factory=list)
     strategic_brief: StrategicBriefSnapshot | None = None
@@ -513,6 +593,7 @@ class CharacterContextPacket(BaseModel):
     relevant_facts: list[str] = Field(default_factory=list)
     recent_events: list[str] = Field(default_factory=list)
     live_pressures: list[str] = Field(default_factory=list)
+    story_memory_capsule: list[str] = Field(default_factory=list)
     manager_directive: str
     forbidden_boundaries: list[str] = Field(default_factory=list)
 

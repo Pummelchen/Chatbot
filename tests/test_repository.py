@@ -12,6 +12,12 @@ from lantern_house.db import models
 from lantern_house.db.base import Base
 from lantern_house.db.repository import StoryRepository
 from lantern_house.db.session import SessionFactory
+from lantern_house.domain.contracts import (
+    CanonCapsuleSnapshot,
+    HighlightPackageSnapshot,
+    HourlyProgressLedgerSnapshot,
+    SoakAuditSnapshot,
+)
 from lantern_house.utils.time import utcnow
 
 
@@ -89,6 +95,83 @@ def test_complete_matching_beats_does_not_complete_future_planned_beats() -> Non
     beats = repository.list_pending_beats(limit=1, now=now)
     assert beats[0].beat_key == "future"
     assert beats[0].status == "planned"
+
+
+def test_repository_can_persist_story_memory_layers() -> None:
+    repository = _repository_with_scene()
+    now = utcnow()
+
+    repository.save_hourly_progress_ledger(
+        snapshot=HourlyProgressLedgerSnapshot(
+            bucket_start_at=now.replace(minute=0, second=0, microsecond=0),
+            bucket_end_at=now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1),
+            meaningful_progressions=2,
+            evidence_shift_count=1,
+            debt_shift_count=1,
+            contract_met=True,
+            dominant_axis="evidence",
+            recommended_push=["Push a sharper question next."],
+        ),
+        now=now,
+    )
+    ledger = repository.get_latest_hourly_progress_ledger()
+    assert ledger is not None
+    assert ledger.contract_met is True
+    assert ledger.dominant_axis == "evidence"
+
+    repository.save_canon_capsule(
+        snapshot=CanonCapsuleSnapshot(
+            window_key="24h",
+            headline="24h canon: Debt and desire both moved.",
+            state_of_play=["The house is still under cash pressure."],
+            key_clues=["CLUE: The copied ledger page exists."],
+            relationship_fault_lines=["amelia<->rafael: trust 8, desire 8."],
+            active_pressures=["Payroll cliff: someone has to blink."],
+            unresolved_questions=["Who copied the registry page?"],
+            protected_truths=["Do not solve Evelyn's disappearance outright."],
+            recap_hooks=["Lucía challenged the paperwork."],
+        ),
+        now=now,
+    )
+    capsules = repository.list_canon_capsules(window_keys=["24h"])
+    assert capsules[0].headline.startswith("24h canon")
+
+    repository.record_highlight_package(
+        package=HighlightPackageSnapshot(
+            message_id=1,
+            speaker_slug="amelia",
+            title="Amelia just changed the balance of power",
+            hook_line="Tell me the truth before payroll tells it for you.",
+            quote_line="Tell me the truth before payroll tells it for you.",
+            summary_blurb="A money threat became personal.",
+            conflict_axis="financial",
+            score=82,
+        ),
+        now=now,
+    )
+    highlights = repository.list_recent_highlight_packages(limit=1)
+    assert highlights[0].speaker_slug == "amelia"
+    assert highlights[0].score == 82
+
+    repository.record_soak_audit_run(
+        snapshot=SoakAuditSnapshot(
+            horizons_hours=[24, 72, 168],
+            progression_miss_risk=40,
+            drift_risk=35,
+            strategy_lock_risk=55,
+            recap_decay_risk=30,
+            clip_drought_risk=25,
+            ship_stagnation_risk=45,
+            unresolved_overload_risk=20,
+            recommended_direction="mystery-evidence-first",
+            audit_notes=["The next day needs a sharper clue path."],
+            candidate_pressure=["Push copied-ledger evidence."],
+        ),
+        now=now,
+    )
+    audit = repository.get_latest_soak_audit()
+    assert audit is not None
+    assert audit.recommended_direction == "mystery-evidence-first"
 
 
 def _repository_with_scene() -> StoryRepository:

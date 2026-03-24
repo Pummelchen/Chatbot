@@ -8,6 +8,7 @@ from lantern_house.db.repository import StoryRepository
 from lantern_house.domain.contracts import (
     AudienceControlReport,
     CharacterContextPacket,
+    HourlyProgressLedgerSnapshot,
     HouseStateSnapshot,
     ManagerContextPacket,
     StoryGravityStateSnapshot,
@@ -71,6 +72,27 @@ class ContextAssembler:
             limit=4,
             default=[],
         )
+        hourly_ledger = _repo_call(
+            self.repository,
+            "get_latest_hourly_progress_ledger",
+            default=None,
+        )
+        canon_capsules = _repo_call(
+            self.repository,
+            "list_canon_capsules",
+            default=[],
+        )
+        highlight_packages = _repo_call(
+            self.repository,
+            "list_recent_highlight_packages",
+            limit=4,
+            default=[],
+        )
+        soak_audit = _repo_call(
+            self.repository,
+            "get_latest_soak_audit",
+            default=None,
+        )
         strategic_brief = (
             _repo_call(self.repository, "get_latest_strategic_brief", default=None)
             if include_strategic
@@ -129,9 +151,7 @@ class ContextAssembler:
                 for arc in arcs
             ],
             unresolved_questions=world["unresolved_questions"],
-            payoff_threads=[
-                _compact_text(item.summary, limit=120) for item in dormant_threads[:4]
-            ],
+            payoff_threads=[_compact_text(item.summary, limit=120) for item in dormant_threads[:4]],
             dormant_threads=[
                 _compact_text(
                     f"{item.status} / heat {item.heat}: {item.summary}",
@@ -207,6 +227,39 @@ class ContextAssembler:
                 )
                 for beat in pending_beats
             ],
+            hourly_ledger=hourly_ledger or HourlyProgressLedgerSnapshot(),
+            canon_capsule_digest=[
+                _compact_text(
+                    (
+                        f"{capsule.window_key}: {capsule.headline} | "
+                        f"{', '.join(capsule.state_of_play[:2])}"
+                    ),
+                    limit=200,
+                )
+                for capsule in canon_capsules[:3]
+            ],
+            highlight_signals=[
+                _compact_text(
+                    f"{item.speaker_slug} / score {item.score}: {item.title} | {item.hook_line}",
+                    limit=190,
+                )
+                for item in highlight_packages[:3]
+            ],
+            soak_audit_signals=(
+                [
+                    _compact_text(
+                        (
+                            f"Soak winner {soak_audit.recommended_direction}; "
+                            f"progression risk {soak_audit.progression_miss_risk}; "
+                            f"drift risk {soak_audit.drift_risk}"
+                        ),
+                        limit=180,
+                    ),
+                    *[_compact_text(item, limit=160) for item in soak_audit.audit_notes[:2]],
+                ]
+                if soak_audit
+                else []
+            ),
             strategic_guidance=[
                 _compact_text(strategic_brief.current_north_star_objective, limit=180),
                 _compact_text(strategic_brief.viewer_value_thesis, limit=180),
@@ -242,6 +295,12 @@ class ContextAssembler:
             default=HouseStateSnapshot(),
         )
         pending_beats = _repo_call(self.repository, "list_pending_beats", limit=3, default=[])
+        canon_capsules = _repo_call(
+            self.repository,
+            "list_canon_capsules",
+            window_keys=["6h", "24h"],
+            default=[],
+        )
         story_engine = self.repository.get_world_state_snapshot()["metadata"].get(
             "story_engine", {}
         )
@@ -306,6 +365,13 @@ class ContextAssembler:
                     for item in house_state.active_pressures[:2]
                 ],
                 *[_compact_text(beat.objective, limit=120) for beat in pending_beats[:1]],
+            ],
+            story_memory_capsule=[
+                _compact_text(
+                    f"{capsule.window_key}: {capsule.headline}",
+                    limit=110,
+                )
+                for capsule in canon_capsules[:2]
             ],
             manager_directive=_compact_text(directive_text, limit=220),
             forbidden_boundaries=[_compact_text(item, limit=100) for item in boundaries],

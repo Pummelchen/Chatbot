@@ -299,8 +299,7 @@ def test_story_governance_detects_hourly_progression_gap_and_voice_risk() -> Non
             SummaryView(
                 summary_window="1h",
                 content=(
-                    "The truth is this changes everything | "
-                    "The truth is this changes everything"
+                    "The truth is this changes everything | The truth is this changes everything"
                 ),
                 structured_highlights={},
                 bucket_end_at=now,

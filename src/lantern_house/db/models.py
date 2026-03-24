@@ -319,7 +319,7 @@ class StrategicBrief(Base):
 class HousePressure(Base):
     __tablename__ = "house_pressures"
 
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     state_key: Mapped[str] = mapped_column(String(50), nullable=False, default="primary")
     signal_slug: Mapped[str] = mapped_column(String(120), nullable=False)
     label: Mapped[str] = mapped_column(String(150), nullable=False)
@@ -359,7 +359,7 @@ class ManagerDirective(Base):
 class Message(Base):
     __tablename__ = "messages"
 
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     tick_no: Mapped[int] = mapped_column(Integer, nullable=False)
     scene_id: Mapped[int | None] = mapped_column(ForeignKey("scene_state.id"), nullable=True)
     speaker_character_id: Mapped[int | None] = mapped_column(
@@ -379,7 +379,7 @@ class Message(Base):
 class ThoughtPulse(Base):
     __tablename__ = "thought_pulses"
 
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     tick_no: Mapped[int] = mapped_column(Integer, nullable=False)
     character_id: Mapped[int] = mapped_column(ForeignKey("characters.id"), nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False)
@@ -394,7 +394,7 @@ class ThoughtPulse(Base):
 class ExtractedEvent(Base):
     __tablename__ = "extracted_events"
 
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     source_message_id: Mapped[int | None] = mapped_column(ForeignKey("messages.id"), nullable=True)
     event_type: Mapped[str] = mapped_column(String(50), nullable=False)
     title: Mapped[str] = mapped_column(String(200), nullable=False)
@@ -414,7 +414,7 @@ class Summary(Base):
         UniqueConstraint("summary_window", "bucket_end_at", name="uq_summary_window_bucket"),
     )
 
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     summary_window: Mapped[str] = mapped_column(String(20), nullable=False)
     bucket_end_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False)
@@ -428,7 +428,7 @@ class Summary(Base):
 class RolloutRequest(Base):
     __tablename__ = "rollout_requests"
 
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     change_id: Mapped[str] = mapped_column(String(120), nullable=False)
     fingerprint: Mapped[str | None] = mapped_column(String(128), nullable=True)
     request_type: Mapped[str] = mapped_column(String(50), nullable=False)
@@ -446,7 +446,7 @@ class RolloutRequest(Base):
 class RolloutBeat(Base):
     __tablename__ = "rollout_beats"
 
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     rollout_request_id: Mapped[int | None] = mapped_column(
         ForeignKey("rollout_requests.id"), nullable=True
     )
@@ -465,7 +465,7 @@ class RolloutBeat(Base):
 class SimulationLabRun(Base):
     __tablename__ = "simulation_lab_runs"
 
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     source: Mapped[str] = mapped_column(String(50), nullable=False, default="god-ai")
     horizon_hours: Mapped[int] = mapped_column(Integer, nullable=False)
     turns_per_hour: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -500,6 +500,33 @@ class StrategyRanking(Base):
     )
 
 
+class HourlyProgressLedger(Base):
+    __tablename__ = "hourly_progress_ledger"
+    __table_args__ = (UniqueConstraint("bucket_start_at", name="uq_hourly_progress_bucket"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    bucket_start_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    bucket_end_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    meaningful_progressions: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    trust_shift_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    desire_shift_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    evidence_shift_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    debt_shift_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    power_shift_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    loyalty_shift_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    contract_met: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    dominant_axis: Mapped[str] = mapped_column(String(40), default="none", nullable=False)
+    blockers: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    recommended_push: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    metadata_json: Mapped[dict] = mapped_column("metadata", JSON, default=dict, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, onupdate=_utcnow
+    )
+
+
 class PublicTurnReview(Base):
     __tablename__ = "public_turn_reviews"
 
@@ -520,6 +547,29 @@ class PublicTurnReview(Base):
     )
 
 
+class CanonCapsule(Base):
+    __tablename__ = "canon_capsules"
+    __table_args__ = (UniqueConstraint("window_key", name="uq_canon_capsule_window"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    window_key: Mapped[str] = mapped_column(String(20), nullable=False)
+    headline: Mapped[str] = mapped_column(String(220), nullable=False, default="")
+    state_of_play: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    key_clues: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    relationship_fault_lines: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    active_pressures: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    unresolved_questions: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    protected_truths: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    recap_hooks: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    metadata_json: Mapped[dict] = mapped_column("metadata", JSON, default=dict, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, onupdate=_utcnow
+    )
+
+
 class ContinuityFlag(Base):
     __tablename__ = "continuity_flags"
 
@@ -534,6 +584,29 @@ class ContinuityFlag(Base):
         DateTime(timezone=True), default=_utcnow, nullable=False
     )
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class HighlightPackage(Base):
+    __tablename__ = "highlight_packages"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    message_id: Mapped[int | None] = mapped_column(ForeignKey("messages.id"), nullable=True)
+    speaker_slug: Mapped[str] = mapped_column(String(100), nullable=False)
+    title: Mapped[str] = mapped_column(String(220), nullable=False)
+    alternate_titles: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    hook_line: Mapped[str] = mapped_column(Text, nullable=False)
+    quote_line: Mapped[str] = mapped_column(Text, nullable=False)
+    summary_blurb: Mapped[str] = mapped_column(Text, nullable=False)
+    ship_angle: Mapped[str] = mapped_column(String(160), nullable=False, default="")
+    theory_angle: Mapped[str] = mapped_column(String(160), nullable=False, default="")
+    conflict_axis: Mapped[str] = mapped_column(String(120), nullable=False, default="")
+    recommended_clip_seconds: Mapped[int] = mapped_column(Integer, default=25, nullable=False)
+    source_window_minutes: Mapped[int] = mapped_column(Integer, default=4, nullable=False)
+    score: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    metadata_json: Mapped[dict] = mapped_column("metadata", JSON, default=dict, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, nullable=False
+    )
 
 
 class DormantThreadRegistry(Base):
@@ -608,6 +681,27 @@ class FandomSignalCandidate(Base):
     subject: Mapped[str] = mapped_column(String(150), nullable=False)
     intensity: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
     rationale: Mapped[str] = mapped_column(Text, nullable=False)
+    metadata_json: Mapped[dict] = mapped_column("metadata", JSON, default=dict, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, nullable=False
+    )
+
+
+class SoakAuditRun(Base):
+    __tablename__ = "soak_audit_runs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    horizons_hours: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    progression_miss_risk: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    drift_risk: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    strategy_lock_risk: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    recap_decay_risk: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    clip_drought_risk: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    ship_stagnation_risk: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    unresolved_overload_risk: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    recommended_direction: Mapped[str] = mapped_column(Text, nullable=False)
+    audit_notes: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    candidate_pressure: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
     metadata_json: Mapped[dict] = mapped_column("metadata", JSON, default=dict, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow, nullable=False

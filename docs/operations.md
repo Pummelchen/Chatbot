@@ -16,6 +16,7 @@ lantern-house healthcheck
 lantern-house migrate
 lantern-house seed
 lantern-house simulate --hours 24 --turns-per-hour 90
+lantern-house soak-audit
 lantern-house run
 ```
 
@@ -35,6 +36,8 @@ If you are moving from an older story bible to the current globally optimized ca
 
 - The runtime keeps a persistent `run_state` row with the last tick, message, recap hour, and degraded-mode markers.
 - The runtime also keeps a persistent `house_state` row that models financial pressure, repair backlog, inspections, weather strain, fatigue, and reputation risk.
+- The runtime also keeps a persistent hourly beat ledger so each clock hour can be audited for real progression.
+- The runtime also keeps multi-window canon capsules so long memory stays bounded and queryable.
 - The runtime also keeps a persistent `story_gravity_state` row that tracks the north star, active axes, dormant threads, recap focus, and drift score.
 - The runtime writes a structured checkpoint snapshot into `run_state.metadata` on every configured flush and on a background heartbeat.
 - Default settings checkpoint every minute even if the scene is stalled, and also snapshot on every turn.
@@ -42,8 +45,9 @@ If you are moving from an older story bible to the current globally optimized ca
 - Recovery marks an `unclean-shutdown` continuity flag if the prior process died while `run_state.status` was `starting` or `running`.
 - Manager refreshes are interval-based with health-triggered overrides, and after the first directive they are prefetched in the background instead of blocking every visible turn.
 - A background God-AI planner uses `gemma3:12b` plus the deterministic simulation lab to persist strategic briefs during live operation.
-- The strategist stack also persists simulation runs, strategy rankings, recap-quality scores, public-turn reviews, clip-value scores, fandom signals, and dormant-thread registry rows.
+- The strategist stack also persists simulation runs, strategy rankings, recap-quality scores, public-turn reviews, clip-value scores, fandom signals, dormant-thread registry rows, highlight packages, and soak-audit runs.
 - `run --once` intentionally skips the God-AI background loop so smoke tests stay fast and deterministic.
+- `soak-audit` is the deterministic long-run health command. It uses the same strategy engine as the God-AI stack, but stretches it across `24h`, `72h`, and `7d` horizons to catch slow drift before it hits the live audience.
 - Audience-control state from `update.txt` is persisted in `run_state.metadata.audience_control`, so the last good live-vote interpretation survives the next manager step and can survive malformed file edits.
 - The manager also receives a story-governance report that checks hourly progression, core-story drift, cliffhanger pressure, and robotic-voice risk.
 - The manager also receives pending house-pressure and audience-rollout beats, so practical pressure and vote steering are both staged explicitly.
@@ -63,7 +67,7 @@ If you are moving from an older story bible to the current globally optimized ca
 - If a character payload omits optional-but-expected relationship details, the coercion layer fills safe defaults instead of crashing the turn.
 - If a generated turn is low-value, overly generic, or drifts into prose, the lightweight critic can force a conservative repair before persistence.
 - If model generation still fails and degraded mode is enabled, the service emits conservative continuity-safe output.
-- If a generated chat turn reads like robotic dialogue or prose narration, the runtime can repair it with a continuity-safe fallback before persistence.
+- If a generated chat turn reads like robotic dialogue or prose narration, the runtime first tries the configured small repair model and then falls back to a continuity-safe deterministic line if repair fails.
 - Critical runtime calls are wrapped in a fail-safe executor that can reuse last-good state, fall back conservatively, and apply cooldowns after repeated failures.
 - Hot-patch failures are logged and ignored; the process keeps running on the previous healthy runtime bundle.
 - Internal errors, retries, and recovery notices must never be emitted into the public chat stream.

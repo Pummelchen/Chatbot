@@ -35,6 +35,7 @@ class ModelConfig(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     character: str = "gemma3:1b"
+    repair: str = "gemma3:1b"
     manager: str = "gemma3:4b"
     announcer: str = "gemma3:4b"
     god_ai: str = "gemma3:12b"
@@ -147,6 +148,42 @@ class SimulationConfig(BaseModel):
     default_turns_per_hour: int = 90
 
 
+class HourlyBeatLedgerConfig(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    enabled: bool = True
+    meaningful_significance_threshold: int = 6
+    refresh_every_turn: bool = True
+    enforce_progression_window_hours: int = 1
+
+
+class CanonConfig(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    enabled: bool = True
+    windows: list[str] = Field(default_factory=lambda: ["1h", "6h", "24h", "7d", "30d"])
+    max_items_per_section: int = 4
+
+
+class HighlightsConfig(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    enabled: bool = True
+    clip_threshold: int = 7
+    quote_threshold: int = 7
+    max_recent_packages: int = 8
+
+
+class SoakAuditConfig(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    enabled: bool = True
+    horizons_hours: list[int] = Field(default_factory=lambda: [24, 72, 168])
+    turns_per_hour: int = 90
+    refresh_interval_minutes: int = 30
+    max_recent_runs: int = 6
+
+
 class FailSafeConfig(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
@@ -193,6 +230,10 @@ class AppConfig(BaseModel):
     critic: CriticConfig = Field(default_factory=CriticConfig)
     god_ai: GodAIConfig = Field(default_factory=GodAIConfig)
     simulation: SimulationConfig = Field(default_factory=SimulationConfig)
+    hourly_beat_ledger: HourlyBeatLedgerConfig = Field(default_factory=HourlyBeatLedgerConfig)
+    canon: CanonConfig = Field(default_factory=CanonConfig)
+    highlights: HighlightsConfig = Field(default_factory=HighlightsConfig)
+    soak_audit: SoakAuditConfig = Field(default_factory=SoakAuditConfig)
     failsafe: FailSafeConfig = Field(default_factory=FailSafeConfig)
     hot_patch: HotPatchConfig = Field(default_factory=HotPatchConfig)
     loaded_from: str | None = Field(default=None, exclude=True)
@@ -226,11 +267,7 @@ def load_config(config_path: str | Path | None = None) -> AppConfig:
     return config.model_copy(
         update={
             "logging": config.logging.model_copy(
-                update={
-                    "directory": str(
-                        _resolve_runtime_path(base_dir, config.logging.directory)
-                    )
-                }
+                update={"directory": str(_resolve_runtime_path(base_dir, config.logging.directory))}
             ),
             "audience": config.audience.model_copy(
                 update={

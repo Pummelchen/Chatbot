@@ -30,8 +30,7 @@ class AdaptiveServiceError(RuntimeError):
         self.reason = reason
         self.expected_inputs = expected_inputs or []
         self.retry_advice = (
-            retry_advice
-            or "Retry after correcting the input or allowing the service to recover."
+            retry_advice or "Retry after correcting the input or allowing the service to recover."
         )
         self.context = context or {}
         self.recoverable = recoverable
@@ -52,11 +51,7 @@ class AdaptiveFailure:
     traceback_excerpt: str | None = None
 
     def caller_message(self) -> str:
-        expected = (
-            f" Expected: {'; '.join(self.expected_inputs)}."
-            if self.expected_inputs
-            else ""
-        )
+        expected = f" Expected: {'; '.join(self.expected_inputs)}." if self.expected_inputs else ""
         retry = f" {self.retry_advice}" if self.retry_advice else ""
         return f"{self.reason}.{expected}{retry}".strip()
 

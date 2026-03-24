@@ -12,6 +12,7 @@ from lantern_house.domain.contracts import (
     CharacterTurn,
     EventCandidate,
     RelationshipUpdate,
+    TurnCriticReport,
 )
 from lantern_house.domain.enums import EventType
 from lantern_house.llm.ollama import InvocationStats, OllamaClient
@@ -50,9 +51,15 @@ class CharacterService:
         "one short internal sentence or null",
     }
 
-    def __init__(self, llm: OllamaClient, model_name: str) -> None:
+    def __init__(
+        self,
+        llm: OllamaClient,
+        model_name: str,
+        repair_model_name: str | None = None,
+    ) -> None:
         self.llm = llm
         self.model_name = model_name
+        self.repair_model_name = repair_model_name or model_name
 
     async def generate(
         self,
@@ -126,6 +133,59 @@ class CharacterService:
         thought_pulse_allowed: bool,
     ) -> CharacterTurn:
         return self._fallback(packet, thought_pulse_allowed=thought_pulse_allowed)
+
+    async def repair_with_model(
+        self,
+        *,
+        packet: CharacterContextPacket,
+        original_turn: CharacterTurn,
+        critic_report: TurnCriticReport,
+        thought_pulse_allowed: bool,
+    ) -> tuple[CharacterTurn, InvocationStats | None, bool]:
+        prompt = render_template(
+            "lantern_house.prompts",
+            "repair.md",
+            {
+                "CHARACTER_CONTEXT": packet.model_dump(mode="json"),
+                "ORIGINAL_TURN": original_turn.model_dump(mode="json"),
+                "CRITIC_REPORT": critic_report.model_dump(mode="json"),
+                "THOUGHT_PULSE_ALLOWED": "true" if thought_pulse_allowed else "false",
+            },
+        )
+        try:
+            payload, stats = await self.llm.generate_json(
+                model=self.repair_model_name,
+                prompt=prompt,
+                temperature=0.35,
+                max_output_tokens=260,
+                max_retries=1,
+            )
+            turn = CharacterTurn.model_validate(self._coerce_payload(payload))
+            sanitized = self._sanitize(turn, thought_pulse_allowed=thought_pulse_allowed)
+            if self._looks_like_template_leak(sanitized):
+                raise ValueError("repair model echoed template placeholders")
+            return sanitized, stats, False
+        except Exception as exc:
+            log_call_failure(
+                "character.repair_with_model",
+                exc,
+                context={
+                    "character_slug": packet.character_slug,
+                    "model": self.repair_model_name,
+                    "critic_reasons": critic_report.reasons,
+                },
+                expected_inputs=[
+                    "A valid character context packet.",
+                    "A valid original CharacterTurn.",
+                    "A JSON repaired turn matching CharacterTurn.",
+                ],
+                retry_advice=(
+                    "Retry with a valid repaired JSON turn or let the deterministic fallback "
+                    "protect the live stream."
+                ),
+                fallback_used="deterministic-character-fallback",
+            )
+            return self._fallback(packet, thought_pulse_allowed=thought_pulse_allowed), None, True
 
     def _fallback(
         self, packet: CharacterContextPacket, *, thought_pulse_allowed: bool

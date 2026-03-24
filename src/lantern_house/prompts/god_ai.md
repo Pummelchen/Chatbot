@@ -19,6 +19,10 @@ Strategic context:
 Interpretation notes:
 - `manager_context.house_state` is the deterministic gravity system. Use it to keep the world materially believable.
 - `manager_context.story_gravity_state` is the persistent north-star layer. Respect it and strengthen it.
+- `manager_context.hourly_ledger` is the hard hourly progression contract. Use it to detect which value axis is underfed.
+- `manager_context.canon_capsule_digest` is the bounded canon memory. Use it to keep strategy coherent across long windows.
+- `manager_context.highlight_signals` show what the audience can actually clip, quote, and argue about.
+- `manager_context.soak_audit_signals` summarize long-run deterministic stress tests. Treat them as early warnings, not optional flavor.
 - `manager_context.pending_beats` are staged moves already available for rollout.
 - `manager_context.public_turn_review_signals` tell you if recent live turns are becoming weak, generic, or less clip-worthy.
 - `manager_context.recap_quality_alerts` tell you if re-entry material is weakening.

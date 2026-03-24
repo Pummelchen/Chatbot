@@ -128,6 +128,17 @@ class StoryManagerService:
                 "Seed the leading audience-voted change in a believable way without "
                 "forcing instant payoff."
             )
+        if not context.hourly_ledger.contract_met:
+            objective = (
+                "Before this clock hour closes, land one concrete shift in trust, desire, "
+                "evidence, debt pressure, power, or loyalty."
+            )
+            if audience.active and audience.requests:
+                objective = (
+                    "Seed the leading audience-voted change while still landing one "
+                    "concrete hourly shift in trust, desire, evidence, debt pressure, "
+                    "power, or loyalty."
+                )
         if not governance.hourly_progression_met:
             objective = (
                 "Force one irreversible shift this hour in trust, evidence, money pressure, "
@@ -144,6 +155,8 @@ class StoryManagerService:
         ]
         if pending_beats:
             desired[0] = f"Land this prepared beat in a grounded way: {pending_beats[0]}"
+        if context.hourly_ledger.recommended_push:
+            desired[0] = context.hourly_ledger.recommended_push[0]
         if audience.active and audience.requests:
             desired[0] = f"Begin gradual integration of: {audience.requests[0]}"
         if context.payoff_threads:
@@ -177,6 +190,12 @@ class StoryManagerService:
                 "Land a quotable line or interruption that can carry a clip without "
                 "breaking realism."
             )
+        if context.highlight_signals:
+            desired[1] = (
+                "Restore clip value with a sharper interruption, confession, or leverage line."
+            )
+        if context.soak_audit_signals:
+            desired[0] = f"Follow the latest soak warning: {context.soak_audit_signals[0]}"
         if strategic_brief and strategic_brief.reveals_forbidden_for_now:
             forbidden = strategic_brief.reveals_forbidden_for_now[:2]
         else:
@@ -220,6 +239,8 @@ class StoryManagerService:
                 + governance.recommendations
                 + context.recap_quality_alerts[:1]
                 + context.public_turn_review_signals[:1]
+                + context.highlight_signals[:1]
+                + context.soak_audit_signals[:1]
                 + strategic[:2]
                 + audience.directives[:2]
             )[:4],

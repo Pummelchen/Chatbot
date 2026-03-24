@@ -186,18 +186,16 @@ class TurnCriticService:
             0,
             min(
                 10,
-                4
-                + int(short_punch) * 2
-                + int(punctuation_lift)
-                + int(concreteness) * 2,
+                4 + int(short_punch) * 2 + int(punctuation_lift) + int(concreteness) * 2,
             ),
         )
 
     def _clip_value(self, *, turn: CharacterTurn, message: str, score: int) -> int:
         event_lift = sum(1 for event in turn.event_candidates if event.significance >= 6)
-        question_or_threat = int("?" in message or any(
-            marker in message.lower() for marker in ("don't", "before", "now", "unless")
-        ))
+        question_or_threat = int(
+            "?" in message
+            or any(marker in message.lower() for marker in ("don't", "before", "now", "unless"))
+        )
         return max(0, min(10, 3 + event_lift * 2 + question_or_threat + score // 25))
 
     def _fandom_discussion_value(self, *, turn: CharacterTurn, message: str) -> int:
@@ -207,10 +205,7 @@ class TurnCriticService:
         )
         theory_heat = len(turn.new_questions)
         ship_markers = int(
-            any(
-                token in message.lower()
-                for token in ("look at me", "stay", "jealous", "with me")
-            )
+            any(token in message.lower() for token in ("look at me", "stay", "jealous", "with me"))
         )
         return max(0, min(10, 4 + relationship_heat * 2 + theory_heat + ship_markers))
 

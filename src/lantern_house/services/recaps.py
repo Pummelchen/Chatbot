@@ -245,14 +245,10 @@ class RecapService:
         )
         theory_value = 5 + min(3, len(summary.unresolved_questions))
         emotional_readability = (
-            5
-            + min(2, len(summary.emotional_shifts))
-            + int(bool(summary.romance_status))
+            5 + min(2, len(summary.emotional_shifts)) + int(bool(summary.romance_status))
         )
         next_hook_strength = (
-            5
-            + int("watch" in summary.watch_next.lower())
-            + int("?" in summary.watch_next)
+            5 + int("watch" in summary.watch_next.lower()) + int("?" in summary.watch_next)
         )
         issues: list[str] = []
         if any(

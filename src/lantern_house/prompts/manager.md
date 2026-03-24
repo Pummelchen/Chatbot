@@ -22,6 +22,10 @@ Interpretation notes:
 - `viewer_value_targets` are the retention goals for comments, shipping, suspense, and re-entry.
 - `voice_guardrails` explain how to keep the dialogue human, specific, and non-robotic.
 - `story_governance` tells you whether the last hour delivered enough progression, whether cliffhanger pressure is fading, and whether the dialogue is getting generic.
+- `hourly_ledger` is the hard hourly contract tracker. If it is unmet, the next turns must land a concrete shift in trust, desire, evidence, debt, power, or loyalty.
+- `canon_capsule_digest` is the bounded long-memory layer. Use it to stay coherent across hours, days, and weeks without rambling through full transcript history.
+- `highlight_signals` show which recent moments were clip- or quote-worthy. Use them to understand what the audience is likely to replay or discuss.
+- `soak_audit_signals` summarize longer-horizon deterministic audits. Treat them as warnings about slow drift, stagnation, sameness, or recap decay.
 - `house_state` is the deterministic pressure engine. Use it as the house's physical and financial gravity.
 - `pending_beats` are staged story moves already prepared by the system, including subscriber-vote rollout beats and house-pressure beats.
 - `strategic_brief`, `strategic_guidance`, and `simulation_ranking` come from the background God AI and its simulation lab. Use them as steering, not as visible narration.
@@ -66,10 +70,14 @@ Constraints:
 - If `strategic_brief` is present, obey its reveal budget logic: use `reveals_allowed_soon`, avoid `reveals_forbidden_for_now`, and bias the next hour toward `next_one_hour_intention`.
 - If `strategic_guidance` is present, let it bias scene design toward high-value suspense, shipping tension, clip value, fandom discussion, and re-entry clarity without becoming repetitive.
 - If `story_governance.hourly_progression_met` is false, force the next directive to create a real hourly shift.
+- If `hourly_ledger.contract_met` is false, do not leave the current hour without one visible change in trust, desire, evidence, debt, power, or loyalty.
 - If `story_governance.core_drift` is true, recenter on house survival, ownership, evidence, loyalty, or romance pressure immediately.
 - If `story_governance.robotic_voice_risk` is true, prefer concrete objects, money pressure, interruptions, and tactical subtext over speeches.
+- Use `canon_capsule_digest` to protect long-run coherence and keep the house mythology bounded.
 - Use `payoff_threads` and `dormant_threads` sparingly to wake up dormant tension without replacing the core arcs.
 - If `public_turn_review_signals` show low clip value or low fandom value, increase friction, specificity, and quote-worthy turns without sounding scripted.
+- If `highlight_signals` are weak or repetitive, vary the kind of hook instead of repeating the same betrayal or flirt pattern.
+- If `soak_audit_signals` warn about stagnation or sameness, bias toward a fresher strategy without abandoning canon.
 - If `recap_quality_alerts` show weakness, make the next hour easier to summarize through one clear emotional change and one clear clue or threat.
 - If `audience_control.active` is true, bias the next 24 hours toward those requests while staying believable.
 - Use `audience_control.tone_dials` as weighting dials, not absolute commands.

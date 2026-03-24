@@ -11,9 +11,14 @@ The project targets macOS Apple Silicon with Python 3.12+, MySQL 8.4, and Ollama
 - MySQL schema and Alembic migration
 - A production-minded orchestrator with recovery, pacing checks, recap scheduling, and context retrieval
 - A deterministic house-pressure engine that keeps the guesthouse generating believable financial, repair, inspection, weather, and fatigue pressure
+- A deterministic hourly beat ledger that tracks whether each clock hour landed a real shift in trust, desire, evidence, debt, power, or loyalty
+- Multi-resolution canon capsules for `1h`, `6h`, `24h`, `7d`, and `30d` memory distillation
+- Automatic highlight packaging that turns strong turns into clip-ready and quote-ready metadata
+- A deterministic soak-audit harness that stress-tests long-run strategy over `24h`, `72h`, and `7d` horizons
 - A persistent story-gravity layer that keeps the show anchored to the house, its debt, hidden records, ownership conflict, and unstable bonds
 - A staged audience-rollout beat system that converts `update.txt` votes into prerequisite beats instead of instant retcons
 - A lightweight public-turn critic plus a deterministic simulation lab and a background God-AI strategist that persists structured strategic briefs
+- A small repair-model path for weak public turns, with deterministic fallback if repair fails
 - An adaptive fail-safe runtime that keeps last-good state, backs off repeated failures, and writes structured recovery context to `logs/error.txt`
 - A hot-patch loader that can soft-reload changed runtime, service, prompt, and config files without stopping the live stream
 - Prompt templates for manager, characters, and recap generation
@@ -28,6 +33,7 @@ The system avoids shoving the entire transcript into every prompt. Instead it pe
 
 - Character turns receive identity, current emotional state, active goals, relevant recent messages, relationship snapshots, location facts, and manager instructions.
 - The manager receives unresolved questions, arc status, dormant payoff threads, recent event highlights, continuity warnings, pacing health, and recent summaries.
+- The manager also receives the latest hourly ledger status, canon capsule digests, highlight signals, and soak-audit warnings.
 - Recaps are generated from stored events and prior summaries rather than transcript replay.
 
 The manager operates in micro-steps. It sets the scene objective, controls reveal pace, assigns soft goals, tracks pacing health, and authorizes rare thought pulses.
@@ -42,7 +48,7 @@ The runtime now includes a dedicated story-governance layer in addition to pacin
 - It pressures the manager to restore cliffhanger energy before the stream goes flat.
 - It keeps unresolved-question memory bounded and revives dormant payoff threads instead of letting prompts bloat over time.
 - It advances persistent story-arc pressure and reveal stages from structured events, so long-form continuity lives in state, not only in transcript momentum.
-- It persists `story_gravity_state`, dormant threads, recap quality scores, clip-value scores, fandom signals, and public-turn review data so the strategist and manager can steer from structured memory instead of vague prompt residue.
+- It persists `story_gravity_state`, dormant threads, recap quality scores, clip-value scores, fandom signals, public-turn review data, hourly ledgers, canon capsules, highlight packages, and soak-audit runs so the strategist and manager can steer from structured memory instead of vague prompt residue.
 
 The seeded `story_engine` defines the permanent north star for the drama, so the manager is not improvising the project’s value proposition from scratch every few turns.
 
@@ -54,9 +60,13 @@ Two new systems now keep the story from flattening over very long runs:
 - Active house pressures are converted into reusable `beats`, so the manager always has grounded practical conflict available.
 - Subscriber votes in `update.txt` are compiled into staged rollout beats with prerequisite timing, not just passed through as text.
 - Pending beats are ordered by readiness, and future payoff beats cannot complete before their due window, so long-form vote changes unfold in sequence instead of skipping ahead.
+- The hourly beat ledger persists a hard contract for each clock hour, so the manager and strategist can see when the stream is generating tension without actually changing anything.
+- Canon capsules distill the story into bounded memory windows, which keeps prompts compact while still preserving weeks of continuity.
+- Highlight packages turn strong public turns into reusable metadata for clips, quotes, ship angles, and theory angles.
 - A simulation lab ranks candidate strategic directions like house-pressure-first, mystery-evidence-first, romance-faultline-first, audience-rollout-first, and ensemble-refresh-first.
+- A soak-audit harness uses those deterministic strategy rankings across `24h`, `72h`, and `7d` horizons to detect slow-death failure modes like repetition, recap decay, clip drought, ship stagnation, and strategy lock-in.
 - A background God-AI planner uses `gemma3:12b` plus the simulation ranking to persist strategic briefs with north-star objective, arc ranking, reveal permissions, urgency scores, recap priorities, clip value, and fandom value for the live manager without blocking the chat loop.
-- The visible hot path is protected by prefetching manager directives in the background and by a lightweight critic that repairs bad live-turn output before persistence.
+- The visible hot path is protected by prefetching manager directives in the background, by a lightweight critic, and by a small repair-model pass that can salvage weak turns before persistence.
 
 ## Live Update Control
 
@@ -137,6 +147,7 @@ lantern-house run
 - `lantern-house seed`: load the initial story bible into MySQL
 - `lantern-house run`: start the live terminal chat runtime
 - `lantern-house simulate`: run the accelerated deterministic simulation lab against the current world state
+- `lantern-house soak-audit`: run the long-horizon deterministic soak audit against the current world state
 - `lantern-house recap-now`: generate recap blocks immediately
 - `lantern-house healthcheck`: verify database and Ollama availability
 
@@ -158,6 +169,7 @@ All CLI commands now fail with concise operator messages plus logged context in 
 - `house_state` is persisted separately from transcript memory, giving the manager a deterministic practical gravity field even when models get vague.
 - The background God-AI planner can persist long-horizon strategic briefs during live operation, while `run --once` skips that loop to keep smoke runs fast.
 - The strategist stack now also persists simulation runs, ranked strategy candidates, dormant-thread registry rows, public-turn review telemetry, recap-quality scores, clip-value scores, and fandom-signal candidates.
+- The strategist stack now also persists hourly progress ledgers, canon capsules, highlight packages, and soak-audit runs.
 - The live loop wraps critical subsystems in a fail-safe executor. Unexpected failures are logged with context, routed to conservative fallbacks or last-good state, and never printed into the public chat stream.
 - Repeated failures enter a cooldown window instead of hammering the same broken dependency every turn.
 - Hot-patch scanning can rebuild runtime services from changed files without dropping the live process. ORM schema modules are intentionally excluded from live reload to avoid corrupting SQLAlchemy state.
@@ -168,6 +180,7 @@ All CLI commands now fail with concise operator messages plus logged context in 
 - Recap prompts are compacted into bounded event digests so 12h and 24h summaries stay stable during true 24/7 operation.
 - Low-quality unresolved-question fragments are filtered before they enter canon memory.
 - If a model turn drifts into robotic or prose-like register, the runtime repairs it before persisting public output.
+- The repair path can use a dedicated small model configured as `models.repair`; if that model fails, the runtime falls back to the deterministic continuity-safe line instead of blocking.
 
 ## Quality Checks
 
@@ -180,6 +193,7 @@ python3 -m ruff check src tests
 pytest -q
 lantern-house healthcheck
 lantern-house simulate --hours 24 --turns-per-hour 90
+lantern-house soak-audit
 ```
 
 ## Documentation

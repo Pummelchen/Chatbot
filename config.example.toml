@@ -13,6 +13,7 @@ max_retries = 3
 
 [models]
 character = "gemma3:1b"
+repair = "gemma3:1b"
 manager = "gemma3:4b"
 announcer = "gemma3:4b"
 god_ai = "gemma3:12b"
@@ -88,6 +89,30 @@ simulation_turns_per_hour = 90
 [simulation]
 default_horizon_hours = 24
 default_turns_per_hour = 90
+
+[hourly_beat_ledger]
+enabled = true
+meaningful_significance_threshold = 6
+refresh_every_turn = true
+enforce_progression_window_hours = 1
+
+[canon]
+enabled = true
+windows = ["1h", "6h", "24h", "7d", "30d"]
+max_items_per_section = 4
+
+[highlights]
+enabled = true
+clip_threshold = 7
+quote_threshold = 7
+max_recent_packages = 8
+
+[soak_audit]
+enabled = true
+horizons_hours = [24, 72, 168]
+turns_per_hour = 90
+refresh_interval_minutes = 30
+max_recent_runs = 6
 
 [failsafe]
 enabled = true

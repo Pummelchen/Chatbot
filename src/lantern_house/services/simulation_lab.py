@@ -54,6 +54,12 @@ class SimulationLabService:
         score = 50
         rationale: list[str] = []
         state = context.house_state
+        if not context.hourly_ledger.contract_met:
+            score += 10
+            rationale.append(
+                "The hourly contract is still open, so practical house pressure can "
+                "force movement cleanly."
+            )
         if state.cash_on_hand and state.hourly_burn_rate:
             reserve_hours = state.cash_on_hand // max(1, state.hourly_burn_rate)
             if reserve_hours < 72:
@@ -100,6 +106,12 @@ class SimulationLabService:
     def _score_mystery(self, context: ManagerContextPacket) -> SimulationCandidateScore:
         score = 48
         rationale: list[str] = []
+        if (
+            not context.hourly_ledger.contract_met
+            and context.hourly_ledger.evidence_shift_count == 0
+        ):
+            score += 10
+            rationale.append("The hourly ledger still needs evidence movement for theory value.")
         if context.pacing_health.mystery_stalled:
             score += 20
             rationale.append("Mystery is stalled and needs a fresh inconsistency or clue.")
@@ -140,6 +152,9 @@ class SimulationLabService:
     def _score_romance(self, context: ManagerContextPacket) -> SimulationCandidateScore:
         score = 46
         rationale: list[str] = []
+        if not context.hourly_ledger.contract_met and context.hourly_ledger.desire_shift_count == 0:
+            score += 8
+            rationale.append("The hourly ledger still needs desire movement to keep ships alive.")
         if context.pacing_health.romance_stalled:
             score += 18
             rationale.append("Romance energy is down and needs unstable intimacy or jealousy.")
@@ -195,6 +210,9 @@ class SimulationLabService:
         if context.audience_control.requests:
             score += 10
             rationale.append("Votes already define a discussion-friendly destination.")
+        if context.canon_capsule_digest:
+            score += 4
+            rationale.append("Bounded canon capsules make rollout safer over longer horizons.")
         next_focus = (
             context.pending_beats[0]
             if context.pending_beats
@@ -236,6 +254,9 @@ class SimulationLabService:
         if context.story_governance.robotic_voice_risk:
             score += 8
             rationale.append("A broader ensemble rotation can restore voice contrast.")
+        if context.highlight_signals:
+            score += 4
+            rationale.append("Fresh pairings can vary the kind of moment viewers clip and quote.")
         next_focus = (
             "Bring in a quieter character with a concrete agenda and let them "
             "disrupt the current rhythm."
@@ -265,6 +286,11 @@ class SimulationLabService:
 
     def _systemic_risks(self, context: ManagerContextPacket) -> list[str]:
         risks: list[str] = []
+        if not context.hourly_ledger.contract_met:
+            risks.append(
+                "The current clock hour still lacks a hard shift in trust, desire, "
+                "evidence, debt, power, or loyalty."
+            )
         if not context.story_governance.hourly_progression_met:
             risks.append(
                 "The last hour under-delivered on progression and needs an irreversible shift."
@@ -282,4 +308,6 @@ class SimulationLabService:
             risks.append(
                 "Staff fatigue is high enough to justify mistakes, slips, and brittle reactions."
             )
-        return risks[:4]
+        if context.soak_audit_signals:
+            risks.extend(context.soak_audit_signals[:1])
+        return risks[:5]

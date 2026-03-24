@@ -124,14 +124,10 @@ class StoryGravityService:
     ) -> list[DormantThreadSnapshot]:
         dormant: list[DormantThreadSnapshot] = []
         archived_threads = [
-            str(item).strip()
-            for item in world.get("archived_threads", [])
-            if str(item).strip()
+            str(item).strip() for item in world.get("archived_threads", []) if str(item).strip()
         ]
         unresolved = [
-            str(item).strip()
-            for item in world.get("unresolved_questions", [])
-            if str(item).strip()
+            str(item).strip() for item in world.get("unresolved_questions", []) if str(item).strip()
         ]
         for index, item in enumerate(archived_threads[:8]):
             dormant.append(

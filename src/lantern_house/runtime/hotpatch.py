@@ -49,9 +49,7 @@ class HotPatchController:
             candidate = (project_root / item).resolve()
             if candidate.exists():
                 resolved_roots.append(candidate)
-        self._watch_roots = [
-            candidate for candidate in resolved_roots
-        ]
+        self._watch_roots = [candidate for candidate in resolved_roots]
         self._known_mtimes: dict[Path, int] = {}
         self._last_checked_at = None
 
@@ -63,11 +61,9 @@ class HotPatchController:
         now = ensure_utc(now or utcnow())
         if not self.config.enabled:
             return None
-        if (
-            self._last_checked_at is not None
-            and (now - ensure_utc(self._last_checked_at)).total_seconds()
-            < max(1, self.config.check_interval_seconds)
-        ):
+        if self._last_checked_at is not None and (
+            now - ensure_utc(self._last_checked_at)
+        ).total_seconds() < max(1, self.config.check_interval_seconds):
             return None
 
         current = self._scan()
