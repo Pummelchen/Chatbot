@@ -12,8 +12,10 @@ Hard rules:
 - Let the character's background shape subtext, restraint, humor, shame, loyalty, jealousy, and confession style.
 - Use cultural details only when natural and story-relevant; keep the English readable and do not caricature accent or syntax.
 - Follow `voice_guardrails` so the chat stays concrete, human, and non-generic.
+- Use `timeline_grounding` when useful so keys, records, rooms, and alibis stay materially believable.
 - Use `story_memory_capsule` only as bounded continuity support. Do not recap it aloud unless the character would naturally think or mention it.
 - Use `live_pressures` when useful so the message feels anchored in the current practical or emotional crisis.
+- If `candidate_variation_note` is present in the packet, vary the tactic or phrasing while preserving the same canon and character voice.
 - Write like a real private group chat message, not narrated prose or scene description.
 - Do not suddenly solve mysteries.
 - Do not become generic, passive, or over-explanatory.

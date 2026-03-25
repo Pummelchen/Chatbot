@@ -17,6 +17,7 @@ from lantern_house.domain.contracts import (
 )
 from lantern_house.quality.governance import StoryGovernanceEvaluator
 from lantern_house.quality.pacing import PacingHealthEvaluator
+from lantern_house.services.world_tracking import build_room_occupancy_digest
 from lantern_house.utils.time import isoformat
 
 
@@ -98,6 +99,25 @@ class ContextAssembler:
             limit=4,
             default=[],
         )
+        timeline_facts = _repo_call(
+            self.repository,
+            "list_recent_timeline_facts",
+            hours=12,
+            limit=8,
+            default=[],
+        )
+        object_possessions = _repo_call(
+            self.repository,
+            "list_object_possessions",
+            limit=6,
+            default=[],
+        )
+        viewer_signals = _repo_call(
+            self.repository,
+            "list_active_viewer_signals",
+            limit=5,
+            default=[],
+        )
         highlight_packages = _repo_call(
             self.repository,
             "list_recent_highlight_packages",
@@ -107,6 +127,12 @@ class ContextAssembler:
         monetization_packages = _repo_call(
             self.repository,
             "list_recent_monetization_packages",
+            limit=3,
+            default=[],
+        )
+        broadcast_assets = _repo_call(
+            self.repository,
+            "list_recent_broadcast_assets",
             limit=3,
             default=[],
         )
@@ -124,6 +150,11 @@ class ContextAssembler:
             self.repository,
             "get_latest_ops_telemetry",
             default=None,
+        )
+        positions = _repo_call(
+            self.repository,
+            "list_character_positions",
+            default=[],
         )
 
         pacing_health = self.pacing_evaluator.evaluate(messages=messages, events=events)
@@ -260,8 +291,9 @@ class ContextAssembler:
                     f"{slot.horizon} {slot.label} [{slot.status}]: {slot.notes[0]}",
                     limit=190,
                 )
-                for slot in programming_grid_slots[:4]
-            ],
+                for slot in programming_grid_slots
+                if slot.horizon in {"daily", "weekly"}
+            ][:4],
             load_profile=load_profile or LoadProfileSnapshot(),
             canon_capsule_digest=[
                 _compact_text(
@@ -280,6 +312,42 @@ class ContextAssembler:
                 )
                 for item in canon_court_findings[:3]
             ],
+            timeline_digest=[
+                _compact_text(
+                    f"{item.fact_type}: {item.summary}",
+                    limit=180,
+                )
+                for item in timeline_facts[:4]
+            ],
+            possession_digest=[
+                _compact_text(
+                    f"{item.object_name}: {item.summary}",
+                    limit=180,
+                )
+                for item in object_possessions[:4]
+            ],
+            room_occupancy_digest=[
+                _compact_text(item, limit=160)
+                for item in build_room_occupancy_digest(positions, max_rooms=4)
+            ],
+            season_plan_digest=[
+                _compact_text(
+                    f"{slot.horizon} {slot.label} [{slot.status}]: {slot.objective}",
+                    limit=200,
+                )
+                for slot in programming_grid_slots
+                if slot.horizon.startswith("season")
+            ][:4],
+            viewer_signal_digest=[
+                _compact_text(
+                    (
+                        f"{item.signal_type} / {item.subject} / impact {item.retention_impact}: "
+                        f"{item.summary}"
+                    ),
+                    limit=190,
+                )
+                for item in viewer_signals[:4]
+            ],
             highlight_signals=[
                 _compact_text(
                     f"{item.speaker_slug} / score {item.score}: {item.title} | {item.hook_line}",
@@ -296,6 +364,16 @@ class ContextAssembler:
                     limit=190,
                 )
                 for item in monetization_packages[:2]
+            ],
+            broadcast_asset_signals=[
+                _compact_text(
+                    (
+                        f"{item.speaker_slug} / asset {item.asset_score}: "
+                        f"{item.asset_title} | {item.why_it_matters}"
+                    ),
+                    limit=190,
+                )
+                for item in broadcast_assets[:2]
             ],
             soak_audit_signals=(
                 [
@@ -372,6 +450,24 @@ class ContextAssembler:
         story_engine = self.repository.get_world_state_snapshot()["metadata"].get(
             "story_engine", {}
         )
+        timeline_facts = _repo_call(
+            self.repository,
+            "list_recent_timeline_facts",
+            hours=8,
+            limit=8,
+            default=[],
+        )
+        object_possessions = _repo_call(
+            self.repository,
+            "list_object_possessions",
+            limit=4,
+            default=[],
+        )
+        positions = _repo_call(
+            self.repository,
+            "list_character_positions",
+            default=[],
+        )
 
         personal_directive = directive.get("per_character", {}).get(character_slug, {})
         directive_text = (
@@ -441,6 +537,22 @@ class ContextAssembler:
                 )
                 for capsule in canon_capsules[:2]
             ],
+            timeline_grounding=[
+                *[
+                    _compact_text(item, limit=120)
+                    for item in build_room_occupancy_digest(positions, max_rooms=3)
+                ][:2],
+                *[
+                    _compact_text(f"{fact.fact_type}: {fact.summary}", limit=120)
+                    for fact in timeline_facts[:3]
+                    if fact.subject_slug in {character_slug, "house"}
+                    or fact.location_name == overview["location_name"]
+                ],
+                *[
+                    _compact_text(f"{item.object_name}: {item.summary}", limit=120)
+                    for item in object_possessions[:2]
+                ],
+            ][:5],
             manager_directive=_compact_text(directive_text, limit=220),
             forbidden_boundaries=[_compact_text(item, limit=100) for item in boundaries],
         )

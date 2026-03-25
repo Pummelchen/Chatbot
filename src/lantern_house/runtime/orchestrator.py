@@ -32,6 +32,7 @@ from lantern_house.runtime.recovery import RecoveryService
 from lantern_house.runtime.scheduler import TurnScheduler
 from lantern_house.services.audience import AudienceControlService
 from lantern_house.services.beats import StoryBeatService
+from lantern_house.services.broadcast_assets import BroadcastAssetService
 from lantern_house.services.canon import CanonDistillationService
 from lantern_house.services.canon_court import CanonCourtService
 from lantern_house.services.character import CharacterService
@@ -48,7 +49,11 @@ from lantern_house.services.ops_dashboard import OpsDashboardService
 from lantern_house.services.programming_grid import ProgrammingGridService
 from lantern_house.services.progression import StoryProgressionService
 from lantern_house.services.recaps import RecapService
+from lantern_house.services.season_planner import SeasonPlannerService
 from lantern_house.services.story_gravity import StoryGravityService
+from lantern_house.services.turn_selection import EvaluatedTurnCandidate, TurnSelectionService
+from lantern_house.services.viewer_signals import ViewerSignalIngestionService
+from lantern_house.services.world_tracking import WorldTrackingService
 from lantern_house.utils.time import ensure_utc, utcnow
 
 logger = logging.getLogger(__name__)
@@ -62,19 +67,24 @@ class RuntimeOrchestrator:
         repository: StoryRepository,
         assembler: ContextAssembler,
         audience_control_service: AudienceControlService,
+        viewer_signal_service: ViewerSignalIngestionService,
         beat_service: StoryBeatService,
         hourly_ledger_service: HourlyBeatLedgerService,
         programming_grid_service: ProgrammingGridService,
+        season_planner_service: SeasonPlannerService,
         canon_service: CanonDistillationService,
         canon_court_service: CanonCourtService,
         house_pressure_service: HousePressureService,
+        world_tracking_service: WorldTrackingService,
         story_gravity_service: StoryGravityService,
         god_ai_service: GodAIService,
         manager_service: StoryManagerService,
         character_service: CharacterService,
+        turn_selection_service: TurnSelectionService,
         critic_service: TurnCriticService,
         highlight_service: HighlightPackagingService,
         monetization_service: MonetizationPackagingService,
+        broadcast_asset_service: BroadcastAssetService,
         recap_service: RecapService,
         progression_service: StoryProgressionService,
         load_orchestration_service: LoadOrchestrationService,
@@ -92,19 +102,24 @@ class RuntimeOrchestrator:
         self.repository = repository
         self.assembler = assembler
         self.audience_control_service = audience_control_service
+        self.viewer_signal_service = viewer_signal_service
         self.beat_service = beat_service
         self.hourly_ledger_service = hourly_ledger_service
         self.programming_grid_service = programming_grid_service
+        self.season_planner_service = season_planner_service
         self.canon_service = canon_service
         self.canon_court_service = canon_court_service
         self.house_pressure_service = house_pressure_service
+        self.world_tracking_service = world_tracking_service
         self.story_gravity_service = story_gravity_service
         self.god_ai_service = god_ai_service
         self.manager_service = manager_service
         self.character_service = character_service
+        self.turn_selection_service = turn_selection_service
         self.critic_service = critic_service
         self.highlight_service = highlight_service
         self.monetization_service = monetization_service
+        self.broadcast_asset_service = broadcast_asset_service
         self.recap_service = recap_service
         self.progression_service = progression_service
         self.load_orchestration_service = load_orchestration_service
@@ -124,6 +139,7 @@ class RuntimeOrchestrator:
         self._prefetched_plan: ManagerDirectivePlan | None = None
         self._prefetched_at = None
         self._last_audience_sync_key: tuple[str | None, str] | None = None
+        self._last_viewer_signals: list[Any] = []
         self._roster: list[str] = []
         self._color_map: dict[str, str] = {}
         self._last_good_audience_control = AudienceControlReport()
@@ -252,6 +268,7 @@ class RuntimeOrchestrator:
 
         startup_now = utcnow()
         audience_control = self._refresh_audience_control(now=startup_now, force=True)
+        self._refresh_viewer_signals(now=startup_now, force=True)
         self._last_audience_sync_key = self._sync_audience_rollout(
             audience_control=audience_control,
             last_key=self._last_audience_sync_key,
@@ -259,9 +276,11 @@ class RuntimeOrchestrator:
         )
         self._refresh_hourly_ledger(now=startup_now)
         self._refresh_programming_grid(now=startup_now, force=True)
+        self._refresh_season_planner(now=startup_now, force=True)
         self._refresh_house_pressure(now=startup_now, force=True)
         self._refresh_story_gravity(now=startup_now, force=True)
         self._refresh_canon(now=startup_now)
+        self._refresh_world_tracking(now=startup_now, force=True)
         startup_load = self._capture_load_profile(now=startup_now)
         self._capture_ops_snapshot(load_profile=startup_load, now=startup_now)
         self.fail_safe.call(
@@ -297,6 +316,7 @@ class RuntimeOrchestrator:
                 await self._emit_recap(bucket)
 
         audience_control = self._refresh_audience_control(now=now)
+        viewer_signals = self._refresh_viewer_signals(now=now)
         self._last_audience_sync_key = self._sync_audience_rollout(
             audience_control=audience_control,
             last_key=self._last_audience_sync_key,
@@ -304,6 +324,7 @@ class RuntimeOrchestrator:
         )
         self._refresh_hourly_ledger(now=now)
         self._refresh_programming_grid(now=now)
+        self._refresh_season_planner(now=now)
         self._refresh_house_pressure(now=now)
         self._refresh_story_gravity(now=now)
         self._refresh_canon(now=now)
@@ -410,10 +431,7 @@ class RuntimeOrchestrator:
                         fallback_label="deterministic-manager-fallback",
                     )
                     directive_plan = plan_result.value
-                    if (
-                        load_profile.load_tier in {"high", "critical"}
-                        and not urgent_refresh
-                    ):
+                    if load_profile.load_tier in {"high", "critical"} and not urgent_refresh:
                         directive_plan = self.manager_service.fallback_plan(
                             manager_packet,
                             self._roster,
@@ -535,28 +553,69 @@ class RuntimeOrchestrator:
             expected_inputs=["A writable run_state row in MySQL."],
             retry_advice="Restore database connectivity so runtime phases can update.",
         )
-        turn_result = await self.fail_safe.call_async(
-            "character.generate",
-            lambda: self.character_service.generate(
+        use_multi_candidate = self.turn_selection_service.should_use_multi_candidate(
+            manager_packet=manager_packet,
+            load_tier=load_profile.load_tier,
+            thought_pulse_allowed=thought_pulse_allowed,
+        )
+        candidate_result = await self.fail_safe.call_async(
+            "character.generate_candidates",
+            lambda: self.character_service.generate_candidates(
                 packet=packet,
                 thought_pulse_allowed=thought_pulse_allowed,
+                candidate_count=(
+                    self.config.turn_selection.candidate_count if use_multi_candidate else 1
+                ),
             ),
             context={"speaker_slug": speaker_slug, "phase": "character-request"},
             expected_inputs=[
                 "A valid character context packet and a character service with fallback."
             ],
             retry_advice="Allow the character fallback to keep the scene alive.",
-            fallback=lambda: (
+            fallback=lambda: [
+                (
+                    self.character_service.repair(
+                        packet=packet,
+                        thought_pulse_allowed=thought_pulse_allowed,
+                    ),
+                    None,
+                    True,
+                )
+            ],
+            fallback_label="deterministic-character-fallback",
+        )
+        generated_candidates = candidate_result.value or [
+            (
                 self.character_service.repair(
                     packet=packet,
                     thought_pulse_allowed=thought_pulse_allowed,
                 ),
                 None,
                 True,
-            ),
-            fallback_label="deterministic-character-fallback",
-        )
-        turn_value = turn_result.value or (
+            )
+        ]
+        selected_candidate = generated_candidates[0]
+        if use_multi_candidate and len(generated_candidates) > 1:
+            preview_candidates = [
+                self._preview_candidate(
+                    packet=packet,
+                    directive=directive,
+                    turn=candidate_turn,
+                    stats=candidate_stats,
+                    degraded_mode=candidate_degraded,
+                    candidate_index=index,
+                    speaker_slug=speaker_slug,
+                )
+                for index, (candidate_turn, candidate_stats, candidate_degraded) in enumerate(
+                    generated_candidates
+                )
+            ]
+            selected = self.turn_selection_service.choose_best(
+                manager_packet=manager_packet,
+                candidates=preview_candidates,
+            )
+            selected_candidate = (selected.turn, selected.stats, selected.degraded_mode)
+        turn_value = selected_candidate or (
             self.character_service.repair(
                 packet=packet,
                 thought_pulse_allowed=thought_pulse_allowed,
@@ -612,9 +671,7 @@ class RuntimeOrchestrator:
                 turn = canon_report.revised_turn
                 events = canon_report.revised_events or events
                 if canon_report.revised_questions:
-                    turn = turn.model_copy(
-                        update={"new_questions": canon_report.revised_questions}
-                    )
+                    turn = turn.model_copy(update={"new_questions": canon_report.revised_questions})
         critic_result = self.fail_safe.call(
             "critic.review",
             lambda: self.critic_service.review(
@@ -731,9 +788,7 @@ class RuntimeOrchestrator:
                     now=now,
                 ),
                 context={"speaker_slug": speaker_slug, "message_id": persisted["message_id"]},
-                expected_inputs=[
-                    "A persisted message id and writable canon_court_findings table."
-                ],
+                expected_inputs=["A persisted message id and writable canon_court_findings table."],
                 retry_advice="Restore canon-court persistence so contradiction telemetry resumes.",
             )
 
@@ -771,7 +826,7 @@ class RuntimeOrchestrator:
             retry_advice="Restore highlight persistence so clip packaging can resume.",
         )
         latest_highlight = highlight_result.value
-        self.fail_safe.call(
+        monetization_result = self.fail_safe.call(
             "monetization.maybe_record",
             lambda: self.monetization_service.maybe_record(
                 message_id=persisted["message_id"],
@@ -789,6 +844,7 @@ class RuntimeOrchestrator:
             ],
             retry_advice="Restore monetization persistence so packaging telemetry can resume.",
         )
+        latest_monetization = monetization_result.value
 
         self.fail_safe.call(
             "beats.reconcile_turn",
@@ -827,8 +883,21 @@ class RuntimeOrchestrator:
             expected_inputs=["A valid StoryProgressionPlan and writable MySQL state."],
             retry_advice="Retry progression persistence on the next iteration.",
         )
+        self.fail_safe.call(
+            "world_tracking.capture_turn",
+            lambda: self.world_tracking_service.capture_turn(
+                packet=packet,
+                turn=turn,
+                events=events,
+                now=now,
+            ),
+            context={"speaker_slug": speaker_slug, "phase": "world-tracking"},
+            expected_inputs=["Readable world-tracking state and a valid persisted turn payload."],
+            retry_advice="Retry world tracking on the next iteration.",
+        )
         self._refresh_hourly_ledger(now=now)
         self._refresh_programming_grid(now=now)
+        self._refresh_season_planner(now=now)
         self._refresh_canon(now=now)
 
         self.fail_safe.call(
@@ -865,6 +934,27 @@ class RuntimeOrchestrator:
                 expected_inputs=["A writable run_state row in MySQL."],
                 retry_advice="Restore database connectivity so checkpoints can resume.",
             )
+
+        self.fail_safe.call(
+            "broadcast_assets.maybe_record",
+            lambda: self.broadcast_asset_service.maybe_record(
+                message_id=persisted["message_id"],
+                speaker_slug=speaker_slug,
+                turn=turn,
+                report=critic_report,
+                highlight_package=latest_highlight,
+                monetization_package=latest_monetization,
+                strategic_brief=manager_packet.strategic_brief,
+                viewer_signals=viewer_signals,
+                now=now,
+            ),
+            context={"speaker_slug": speaker_slug, "message_id": persisted["message_id"]},
+            expected_inputs=[
+                "A persisted message id, recent monetization context, "
+                "and writable broadcast asset tables."
+            ],
+            retry_advice="Restore broadcast-asset persistence so export packaging can resume.",
+        )
 
         self._note_runtime_success(now=now, load_profile=load_profile)
 
@@ -1034,6 +1124,23 @@ class RuntimeOrchestrator:
         self._last_good_audience_control = report
         return report
 
+    def _refresh_viewer_signals(self, *, now, force: bool = False) -> list[Any]:
+        result = self.fail_safe.call(
+            "viewer_signals.refresh_if_due",
+            lambda: self.viewer_signal_service.refresh_if_due(now=now, force=force),
+            context={"path": self.config.viewer_signals.source_file_path, "force": force},
+            expected_inputs=[
+                "A readable viewer_signals.yaml file or a recoverable "
+                "persisted viewer signal state."
+            ],
+            retry_advice="Fix viewer_signals.yaml syntax or wait for the next ingestion poll.",
+            fallback=lambda: self._last_viewer_signals,
+            fallback_label="last-active-viewer-signals",
+        )
+        signals = result.value or self._last_viewer_signals
+        self._last_viewer_signals = signals
+        return signals
+
     def _refresh_hourly_ledger(self, *, now) -> None:
         self.fail_safe.call(
             "hourly_ledger.refresh",
@@ -1050,12 +1157,19 @@ class RuntimeOrchestrator:
             "programming_grid.refresh",
             lambda: self.programming_grid_service.refresh(now=now, force=force),
             context={"phase": "programming-grid", "force": force},
-            expected_inputs=[
-                "Readable recent events and a writable programming_grid_slots table."
-            ],
+            expected_inputs=["Readable recent events and a writable programming_grid_slots table."],
             retry_advice=(
                 "Restore repository access so the daily and weekly programming grid can refresh."
             ),
+        )
+
+    def _refresh_season_planner(self, *, now, force: bool = False) -> None:
+        self.fail_safe.call(
+            "season_planner.refresh",
+            lambda: self.season_planner_service.refresh(now=now, force=force),
+            context={"phase": "season-planner", "force": force},
+            expected_inputs=["Readable arcs, events, and programming grid persistence."],
+            retry_advice="Restore repository access so the season planner can refresh.",
         )
 
     def _refresh_house_pressure(self, *, now, force: bool = False) -> None:
@@ -1089,6 +1203,17 @@ class RuntimeOrchestrator:
                 "Readable world, scene, event, and summary state plus writable canon_capsules."
             ],
             retry_advice="Restore repository access so bounded canon memory can refresh.",
+        )
+
+    def _refresh_world_tracking(self, *, now, force: bool = False) -> None:
+        self.fail_safe.call(
+            "world_tracking.refresh",
+            lambda: self.world_tracking_service.refresh(now=now, force=force),
+            context={"phase": "world-tracking", "force": force},
+            expected_inputs=[
+                "Readable character positions, story objects, and writable timeline tables."
+            ],
+            retry_advice="Restore repository access so deterministic world tracking can refresh.",
         )
 
     def _build_manager_packet(
@@ -1133,9 +1258,7 @@ class RuntimeOrchestrator:
                 now=now,
             ),
             context={"phase": "load-profile"},
-            expected_inputs=[
-                "Readable run_state metadata and recent message latencies."
-            ],
+            expected_inputs=["Readable run_state metadata and recent message latencies."],
             retry_advice=(
                 "Restore repository reads so load-aware orchestration can fall back cleanly."
             ),
@@ -1260,7 +1383,9 @@ class RuntimeOrchestrator:
             lambda: self.repository.merge_runtime_metadata(
                 {
                     "recent_failure_count": int(
-                        (self._last_good_run_state or {}).get("metadata", {}).get(
+                        (self._last_good_run_state or {})
+                        .get("metadata", {})
+                        .get(
                             "recent_failure_count",
                             0,
                         )
@@ -1294,6 +1419,73 @@ class RuntimeOrchestrator:
 
     def _fallback_character_states(self) -> list[dict[str, Any]]:
         return [{"slug": slug, "last_spoke_at": None, "silence_streak": 0} for slug in self._roster]
+
+    def _preview_candidate(
+        self,
+        *,
+        packet,
+        directive: dict[str, Any],
+        turn,
+        stats,
+        degraded_mode: bool,
+        candidate_index: int,
+        speaker_slug: str,
+    ) -> EvaluatedTurnCandidate:
+        preview_events = (
+            self.fail_safe.call(
+                "event_extractor.preview_candidate",
+                lambda: self.event_extractor.extract(speaker_slug=speaker_slug, turn=turn),
+                context={"speaker_slug": speaker_slug, "candidate_index": candidate_index},
+                expected_inputs=["A valid CharacterTurn with structured event candidates."],
+                retry_advice="Retry candidate preview extraction or skip that candidate.",
+                fallback=[],
+                fallback_label="empty-candidate-events",
+            ).value
+            or []
+        )
+        preview_flags = (
+            self.fail_safe.call(
+                "continuity_guard.preview_candidate",
+                lambda: self.continuity_guard.review_turn(
+                    packet=packet,
+                    directive=directive,
+                    turn=turn,
+                ),
+                context={"speaker_slug": speaker_slug, "candidate_index": candidate_index},
+                expected_inputs=["A valid packet, directive, and candidate turn."],
+                retry_advice="Retry candidate preview continuity or skip that candidate.",
+                fallback=[],
+                fallback_label="no-candidate-flags",
+            ).value
+            or []
+        )
+        preview_critic = (
+            self.fail_safe.call(
+                "critic.preview_candidate",
+                lambda: self.critic_service.review(
+                    packet=packet,
+                    turn=turn,
+                    flags=preview_flags,
+                ),
+                context={"speaker_slug": speaker_slug, "candidate_index": candidate_index},
+                expected_inputs=["A valid packet, candidate turn, and preview flags."],
+                retry_advice=(
+                    "Retry candidate preview critic scoring or fall back to neutral scoring."
+                ),
+                fallback=TurnCriticReport(),
+                fallback_label="neutral-candidate-critic",
+            ).value
+            or TurnCriticReport()
+        )
+        return EvaluatedTurnCandidate(
+            turn=turn,
+            critic_report=preview_critic,
+            events=preview_events,
+            flags=preview_flags,
+            stats=stats,
+            degraded_mode=degraded_mode,
+            candidate_index=candidate_index,
+        )
 
     def _should_repair_turn(self, *, flags, critic_score: int) -> bool:
         repairable = {"robotic-voice", "chat-register", "reveal-budget", "forbidden-knowledge"}
@@ -1350,9 +1542,12 @@ class RuntimeOrchestrator:
         governance_module = import_module("lantern_house.quality.governance")
         context_module = import_module("lantern_house.context.assembler")
         audience_module = import_module("lantern_house.services.audience")
+        viewer_signals_module = import_module("lantern_house.services.viewer_signals")
         beats_module = import_module("lantern_house.services.beats")
+        broadcast_assets_module = import_module("lantern_house.services.broadcast_assets")
         hourly_ledger_module = import_module("lantern_house.services.hourly_ledger")
         programming_grid_module = import_module("lantern_house.services.programming_grid")
+        season_planner_module = import_module("lantern_house.services.season_planner")
         canon_module = import_module("lantern_house.services.canon")
         canon_court_module = import_module("lantern_house.services.canon_court")
         house_module = import_module("lantern_house.services.house")
@@ -1367,6 +1562,8 @@ class RuntimeOrchestrator:
         manager_module = import_module("lantern_house.services.manager")
         character_module = import_module("lantern_house.services.character")
         critic_module = import_module("lantern_house.services.critic")
+        turn_selection_module = import_module("lantern_house.services.turn_selection")
+        world_tracking_module = import_module("lantern_house.services.world_tracking")
         recap_module = import_module("lantern_house.services.recaps")
         progression_module = import_module("lantern_house.services.progression")
         scheduler_module = import_module("lantern_house.runtime.scheduler")
@@ -1385,6 +1582,10 @@ class RuntimeOrchestrator:
             latest_config.audience,
             self.repository,
         )
+        self.viewer_signal_service = viewer_signals_module.ViewerSignalIngestionService(
+            latest_config.viewer_signals,
+            self.repository,
+        )
         self.beat_service = beats_module.StoryBeatService(self.repository)
         self.hourly_ledger_service = hourly_ledger_module.HourlyBeatLedgerService(
             self.repository,
@@ -1394,16 +1595,22 @@ class RuntimeOrchestrator:
             self.repository,
             latest_config.programming_grid,
         )
+        self.season_planner_service = season_planner_module.SeasonPlannerService(
+            self.repository,
+            latest_config.season_planner,
+        )
         self.canon_service = canon_module.CanonDistillationService(
             self.repository,
             latest_config.canon,
         )
-        self.canon_court_service = canon_court_module.CanonCourtService(
-            latest_config.canon_court
-        )
+        self.canon_court_service = canon_court_module.CanonCourtService(latest_config.canon_court)
         self.house_pressure_service = house_module.HousePressureService(
             self.repository,
             latest_config.house_pressure,
+        )
+        self.world_tracking_service = world_tracking_module.WorldTrackingService(
+            self.repository,
+            latest_config.world_tracking,
         )
         self.story_gravity_service = gravity_module.StoryGravityService(
             self.repository,
@@ -1434,6 +1641,9 @@ class RuntimeOrchestrator:
             latest_config.models.character,
             latest_config.models.repair,
         )
+        self.turn_selection_service = turn_selection_module.TurnSelectionService(
+            latest_config.turn_selection
+        )
         self.critic_service = critic_module.TurnCriticService(latest_config.critic)
         self.highlight_service = highlights_module.HighlightPackagingService(
             self.repository,
@@ -1442,6 +1652,10 @@ class RuntimeOrchestrator:
         self.monetization_service = monetization_module.MonetizationPackagingService(
             self.repository,
             latest_config.monetization,
+        )
+        self.broadcast_asset_service = broadcast_assets_module.BroadcastAssetService(
+            self.repository,
+            latest_config.broadcast_assets,
         )
         self.recap_service = recap_module.RecapService(
             self.repository,
@@ -1470,6 +1684,7 @@ class RuntimeOrchestrator:
             self._color_map or self.repository.get_character_color_map()
         )
         self._last_good_audience_control = AudienceControlReport()
+        self._last_viewer_signals = []
         self._last_good_manager_packet = None
         self._last_good_character_packet_by_slug.clear()
         self._last_load_profile = LoadProfileSnapshot()

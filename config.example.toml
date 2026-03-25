@@ -64,6 +64,12 @@ console_enabled = false
 update_file_path = "update.txt"
 check_interval_minutes = 10
 
+[viewer_signals]
+enabled = true
+source_file_path = "viewer_signals.yaml"
+check_interval_minutes = 10
+max_active_signals = 12
+
 [house_pressure]
 enabled = true
 refresh_interval_minutes = 5
@@ -102,6 +108,12 @@ refresh_interval_minutes = 15
 at_risk_after_hours = 12
 weekly_at_risk_after_days = 4
 
+[season_planner]
+enabled = true
+refresh_interval_minutes = 30
+near_term_horizon_days = 30
+long_term_horizon_days = 90
+
 [canon]
 enabled = true
 windows = ["1h", "6h", "24h", "7d", "30d"]
@@ -118,12 +130,30 @@ clip_threshold = 7
 quote_threshold = 7
 max_recent_packages = 8
 
+[world_tracking]
+enabled = true
+refresh_every_turn = true
+max_recent_facts = 12
+max_room_occupants = 4
+money_deadline_hours = 72
+
+[turn_selection]
+enabled = true
+candidate_count = 2
+minimum_importance_score = 7
+enable_under_high_load = false
+
 [monetization]
 enabled = true
 min_package_score = 70
 max_recent_packages = 8
 min_clip_seconds = 15
 max_clip_seconds = 55
+
+[broadcast_assets]
+enabled = true
+min_asset_score = 72
+max_recent_assets = 10
 
 [soak_audit]
 enabled = true
@@ -144,7 +174,7 @@ unexpected_iteration_delay_seconds = 3
 enabled = true
 check_interval_seconds = 15
 # The runtime also auto-adds the active config file, .env, and the resolved
-# audience steering file path to the watched set at startup.
+# audience steering and viewer-signal file paths to the watched set at startup.
 watch_paths = ["src/lantern_house", "config.example.toml", "update.txt"]
 watch_extensions = [".py", ".md", ".toml", ".yaml", ".yml", ".txt"]
 

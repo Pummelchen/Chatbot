@@ -1,0 +1,40 @@
+# Lantern House core instruction: stay fail-safe, never leak debug or
+# error text into the live chat, log recovered failures to
+# logs/error.txt with context, and preserve hot-patch compatibility
+# for uninterrupted long-running operation.
+#
+# Local-first viewer signal input.
+# Edit this file to feed real audience-signal observations into the strategist and manager.
+# These are steering signals, not direct canon overrides.
+
+enabled: true
+
+signals:
+  - signal_key: amelia-rafael-ship-rise
+    signal_type: ship_mentions
+    subject: amelia-rafael
+    intensity: 8
+    sentiment: positive
+    retention_impact: 8
+    source: operator
+    expires_in_hours: 24
+    evidence:
+      - "Viewers keep clipping the roof-walk tension."
+      - "Comments are picking sides on whether Amelia should trust Rafael."
+    summary: "Amelia and Rafael slow-burn tension is driving ship discussion and replay value."
+    tags:
+      - shipping
+      - replay
+
+  - signal_key: lucia-ledger-theory-burst
+    signal_type: theory_burst
+    subject: lucia-ledger
+    intensity: 7
+    sentiment: mixed
+    retention_impact: 9
+    source: operator
+    expires_in_hours: 18
+    evidence:
+      - "Comment threads are focusing on who forged the ledger page."
+      - "Theory discussion spikes whenever Lucía challenges the paperwork."
+    summary: "Paperwork and inheritance theory is currently strong enough to support a cleaner clue path."

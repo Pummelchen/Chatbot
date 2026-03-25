@@ -427,6 +427,55 @@ class CanonCourtReport(BaseModel):
     requires_repair: bool = False
 
 
+class TimelineFactSnapshot(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    fact_type: str
+    subject_slug: str = ""
+    related_slug: str | None = None
+    location_slug: str | None = None
+    location_name: str = ""
+    object_slug: str | None = None
+    object_name: str = ""
+    summary: str
+    confidence: int = Field(default=5, ge=1, le=10)
+    source: str = "runtime"
+    metadata: dict = Field(default_factory=dict)
+    created_at: datetime | None = None
+
+
+class ObjectPossessionSnapshot(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    object_slug: str
+    object_name: str = ""
+    holder_character_slug: str | None = None
+    location_slug: str | None = None
+    location_name: str = ""
+    possession_status: str = "room"
+    summary: str
+    confidence: int = Field(default=5, ge=1, le=10)
+    metadata: dict = Field(default_factory=dict)
+    last_seen_at: datetime | None = None
+    created_at: datetime | None = None
+
+
+class ViewerSignalSnapshot(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    signal_key: str
+    signal_type: str
+    subject: str
+    intensity: int = Field(default=5, ge=1, le=10)
+    sentiment: str = "mixed"
+    summary: str
+    source: str = "operator"
+    retention_impact: int = Field(default=5, ge=1, le=10)
+    metadata: dict = Field(default_factory=dict)
+    expires_at: datetime | None = None
+    created_at: datetime | None = None
+
+
 class HighlightPackageSnapshot(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
@@ -470,6 +519,29 @@ class MonetizationPackageSnapshot(BaseModel):
     recommended_clip_start_seconds: int = Field(default=0, ge=0, le=300)
     recommended_clip_end_seconds: int = Field(default=25, ge=5, le=300)
     score: int = Field(default=0, ge=0, le=100)
+    metadata: dict = Field(default_factory=dict)
+    created_at: datetime | None = None
+
+
+class BroadcastAssetSnapshot(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    message_id: int | None = None
+    monetization_message_id: int | None = None
+    speaker_slug: str = ""
+    asset_title: str
+    hook_line: str = ""
+    short_description: str = ""
+    long_description: list[str] = Field(default_factory=list)
+    chapter_markers: list[str] = Field(default_factory=list)
+    clip_manifest: list[dict] = Field(default_factory=list)
+    ship_labels: list[str] = Field(default_factory=list)
+    theory_labels: list[str] = Field(default_factory=list)
+    faction_labels: list[str] = Field(default_factory=list)
+    tags: list[str] = Field(default_factory=list)
+    why_it_matters: str = ""
+    comment_seed: str = ""
+    asset_score: int = Field(default=0, ge=0, le=100)
     metadata: dict = Field(default_factory=dict)
     created_at: datetime | None = None
 
@@ -667,8 +739,14 @@ class ManagerContextPacket(BaseModel):
     load_profile: LoadProfileSnapshot = Field(default_factory=LoadProfileSnapshot)
     canon_capsule_digest: list[str] = Field(default_factory=list)
     canon_court_alerts: list[str] = Field(default_factory=list)
+    timeline_digest: list[str] = Field(default_factory=list)
+    possession_digest: list[str] = Field(default_factory=list)
+    room_occupancy_digest: list[str] = Field(default_factory=list)
+    season_plan_digest: list[str] = Field(default_factory=list)
+    viewer_signal_digest: list[str] = Field(default_factory=list)
     highlight_signals: list[str] = Field(default_factory=list)
     monetization_signals: list[str] = Field(default_factory=list)
+    broadcast_asset_signals: list[str] = Field(default_factory=list)
     soak_audit_signals: list[str] = Field(default_factory=list)
     ops_alerts: list[str] = Field(default_factory=list)
     strategic_guidance: list[str] = Field(default_factory=list)
@@ -702,6 +780,7 @@ class CharacterContextPacket(BaseModel):
     relevant_facts: list[str] = Field(default_factory=list)
     recent_events: list[str] = Field(default_factory=list)
     live_pressures: list[str] = Field(default_factory=list)
+    timeline_grounding: list[str] = Field(default_factory=list)
     story_memory_capsule: list[str] = Field(default_factory=list)
     manager_directive: str
     forbidden_boundaries: list[str] = Field(default_factory=list)

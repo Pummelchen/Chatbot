@@ -24,11 +24,15 @@ Interpretation notes:
 - `story_governance` tells you whether the last hour delivered enough progression, whether cliffhanger pressure is fading, and whether the dialogue is getting generic.
 - `hourly_ledger` is the hard hourly contract tracker. If it is unmet, the next turns must land a concrete shift in trust, desire, evidence, debt, power, or loyalty.
 - `programming_grid_digest` is the daily and weekly tentpole plan. If items are `at-risk`, protect the day or week by landing those beats in believable form.
+- `season_plan_digest` is the 30/90-day tentpole layer. Use it to keep monthly reveal windows, ship cycles, inheritance turns, and cast refreshes intentional.
 - `load_profile` tells you when inference load is high. Under high or critical load, keep direction sharper, lighter, and more operationally efficient.
 - `canon_capsule_digest` is the bounded long-memory layer. Use it to stay coherent across hours, days, and weeks without rambling through full transcript history.
 - `canon_court_alerts` show recent contradiction or premature-reveal risks. Use them to keep suspicion alive without speaking as if the deepest truth is already proven.
+- `timeline_digest`, `possession_digest`, and `room_occupancy_digest` are the deterministic timeline-and-alibi layer. Use them to keep keys, records, rooms, and claims materially believable.
+- `viewer_signal_digest` is the live audience-signal layer. Treat it as commercial feedback about what viewers are actually debating, clipping, or shipping, not as a direct retcon order.
 - `highlight_signals` show which recent moments were clip- or quote-worthy. Use them to understand what the audience is likely to replay or discuss.
 - `monetization_signals` show which recent turns produced stronger side-taking, clip, or debate packaging. Use them as audience-value signals, not as spam prompts.
+- `broadcast_asset_signals` show which recent moments produced reusable clip/title/description packages. Use them to sharpen hook clarity without sounding manufactured.
 - `soak_audit_signals` summarize longer-horizon deterministic audits. Treat them as warnings about slow drift, stagnation, sameness, or recap decay.
 - `ops_alerts` summarize runtime health and remediation pressure. If load is high or checkpoints/recaps are stale, prefer clean grounded moves over expensive complexity.
 - `house_state` is the deterministic pressure engine. Use it as the house's physical and financial gravity.
@@ -77,13 +81,17 @@ Constraints:
 - If `story_governance.hourly_progression_met` is false, force the next directive to create a real hourly shift.
 - If `hourly_ledger.contract_met` is false, do not leave the current hour without one visible change in trust, desire, evidence, debt, power, or loyalty.
 - If `programming_grid_digest` contains `at-risk` items, bias the next several turns toward fulfilling those daily or weekly tentpoles.
+- If `season_plan_digest` contains `at-risk` items, plant or revive a durable lane that supports the next 30 or 90 days.
 - If `story_governance.core_drift` is true, recenter on house survival, ownership, evidence, loyalty, or romance pressure immediately.
 - If `story_governance.robotic_voice_risk` is true, prefer concrete objects, money pressure, interruptions, and tactical subtext over speeches.
+- Use `timeline_digest`, `possession_digest`, and `room_occupancy_digest` to keep alibis, keys, documents, rooms, and accusations physically plausible.
 - Use `canon_capsule_digest` to protect long-run coherence and keep the house mythology bounded.
 - If `canon_court_alerts` are present, avoid confident final-sounding claims and convert them into suspicion, misread, or partial confession.
 - Use `payoff_threads` and `dormant_threads` sparingly to wake up dormant tension without replacing the core arcs.
 - If `public_turn_review_signals` show low clip value or low fandom value, increase friction, specificity, and quote-worthy turns without sounding scripted.
 - If `monetization_signals` are weak, create cleaner side-taking, theory, romance, or betrayal hooks that still feel native to the scene.
+- If `broadcast_asset_signals` are weak, make the next beat easier to package through one clear quote, one clear consequence, and one clear watch-next hook.
+- If `viewer_signal_digest` is strong, absorb it through believable scene design, not direct audience service.
 - If `highlight_signals` are weak or repetitive, vary the kind of hook instead of repeating the same betrayal or flirt pattern.
 - If `soak_audit_signals` warn about stagnation or sameness, bias toward a fresher strategy without abandoning canon.
 - If `load_profile.load_tier` is high or critical, keep the plan short, decisive, and easy for the visible loop to execute.

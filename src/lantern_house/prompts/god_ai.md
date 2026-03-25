@@ -21,11 +21,15 @@ Interpretation notes:
 - `manager_context.story_gravity_state` is the persistent north-star layer. Respect it and strengthen it.
 - `manager_context.hourly_ledger` is the hard hourly progression contract. Use it to detect which value axis is underfed.
 - `manager_context.programming_grid_digest` is the day/week tentpole plan. Use it to avoid days that feel shapeless even when individual turns are decent.
+- `manager_context.season_plan_digest` is the 30/90-day programming layer. Use it to keep reveal windows, ship cycles, inheritance turns, and cast refreshes intentional across months.
 - `manager_context.load_profile` tells you how much inference budget the visible loop really has right now. High load means strategy should get simpler and more leverage-heavy.
 - `manager_context.canon_capsule_digest` is the bounded canon memory. Use it to keep strategy coherent across long windows.
 - `manager_context.canon_court_alerts` show recent contradiction or premature-reveal pressure. Use them to reduce strategic overexposure.
+- `manager_context.timeline_digest`, `manager_context.possession_digest`, and `manager_context.room_occupancy_digest` are the deterministic timeline-and-alibi layer. Use them to keep keys, rooms, arrivals, and blame physically plausible.
+- `manager_context.viewer_signal_digest` is the live audience-signal layer. Treat it as evidence of real discussion and retention pressure, not as a command to retcon.
 - `manager_context.highlight_signals` show what the audience can actually clip, quote, and argue about.
 - `manager_context.monetization_signals` show which recent moments packaged well into side-taking, theory, or ship discourse.
+- `manager_context.broadcast_asset_signals` show which recent moments produced reusable title/clip/description packages. Use them to improve clarity and exportability without cheapening the fiction.
 - `manager_context.soak_audit_signals` summarize long-run deterministic stress tests. Treat them as early warnings, not optional flavor.
 - `manager_context.ops_alerts` summarize runtime health and auto-remediation pressure. Strategy should remain operationally survivable under load.
 - `manager_context.pending_beats` are staged moves already available for rollout.

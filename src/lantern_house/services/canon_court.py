@@ -27,6 +27,13 @@ class CanonCourtService:
         "solved",
         "nothing left to hide",
     )
+    _ABSOLUTE_TIMELINE_MARKERS = (
+        "never",
+        "all night",
+        "exactly where",
+        "could not have",
+        "wasn't there",
+    )
 
     def __init__(self, config: CanonCourtConfig) -> None:
         self.config = config
@@ -69,9 +76,7 @@ class CanonCourtService:
                 ContinuityFlagDraft(
                     severity=FlagSeverity.WARNING,
                     flag_type="canon-court",
-                    description=(
-                        "The turn leaned too close to protected truth and was softened."
-                    ),
+                    description=("The turn leaned too close to protected truth and was softened."),
                     related_entity=packet.character_slug,
                 )
             )
@@ -86,9 +91,7 @@ class CanonCourtService:
                         "The turn speaks with finality that would collapse the mystery too fast."
                     ),
                     evidence=[
-                        marker
-                        for marker in self._ABSOLUTE_REVEAL_MARKERS
-                        if marker in lowered
+                        marker for marker in self._ABSOLUTE_REVEAL_MARKERS if marker in lowered
                     ],
                 )
             )
@@ -97,6 +100,33 @@ class CanonCourtService:
                     severity=FlagSeverity.CRITICAL,
                     flag_type="canon-court",
                     description="The turn tried to close a mystery lane too completely.",
+                    related_entity=packet.character_slug,
+                )
+            )
+
+        timeline_hits = _timeline_conflicts(
+            message=lowered,
+            timeline_grounding=packet.timeline_grounding,
+            absolute_markers=self._ABSOLUTE_TIMELINE_MARKERS,
+        )
+        if timeline_hits:
+            findings.append(
+                CanonCourtFindingSnapshot(
+                    issue_type="timeline-certainty",
+                    severity="warning",
+                    action="soften",
+                    summary=(
+                        "The turn speaks too confidently about rooms, keys, or alibis that the "
+                        "tracking layer only supports as last-known facts."
+                    ),
+                    evidence=timeline_hits[:3],
+                )
+            )
+            additional_flags.append(
+                ContinuityFlagDraft(
+                    severity=FlagSeverity.WARNING,
+                    flag_type="timeline-certainty",
+                    description="The turn overstated timeline or possession certainty.",
                     related_entity=packet.character_slug,
                 )
             )
@@ -193,3 +223,25 @@ def _soften_questions(questions: list[str]) -> list[str]:
         else:
             softened.append(question)
     return softened[:3]
+
+
+def _timeline_conflicts(
+    *,
+    message: str,
+    timeline_grounding: list[str],
+    absolute_markers: tuple[str, ...],
+) -> list[str]:
+    if not timeline_grounding or not any(marker in message for marker in absolute_markers):
+        return []
+    hits: list[str] = []
+    for note in timeline_grounding:
+        lowered = note.lower()
+        keywords = [
+            token
+            for token in re.findall(r"[a-z]{4,}", lowered)
+            if token not in {"last", "known", "room", "house"}
+        ]
+        matches = [keyword for keyword in keywords[:4] if keyword in message]
+        if matches:
+            hits.append(", ".join(matches[:3]))
+    return hits[:3]

@@ -30,6 +30,7 @@ from lantern_house.runtime.recovery import RecoveryService
 from lantern_house.runtime.scheduler import TurnScheduler
 from lantern_house.services.audience import AudienceControlService
 from lantern_house.services.beats import StoryBeatService
+from lantern_house.services.broadcast_assets import BroadcastAssetService
 from lantern_house.services.canon import CanonDistillationService
 from lantern_house.services.canon_court import CanonCourtService
 from lantern_house.services.character import CharacterService
@@ -46,10 +47,14 @@ from lantern_house.services.ops_dashboard import OpsDashboardService
 from lantern_house.services.programming_grid import ProgrammingGridService
 from lantern_house.services.progression import StoryProgressionService
 from lantern_house.services.recaps import RecapService
+from lantern_house.services.season_planner import SeasonPlannerService
 from lantern_house.services.seed_loader import StorySeedLoader
 from lantern_house.services.simulation_lab import SimulationLabService
 from lantern_house.services.soak_audit import SoakAuditService
 from lantern_house.services.story_gravity import StoryGravityService
+from lantern_house.services.turn_selection import TurnSelectionService
+from lantern_house.services.viewer_signals import ViewerSignalIngestionService
+from lantern_house.services.world_tracking import WorldTrackingService
 from lantern_house.utils.time import floor_to_hour, utcnow
 
 app = typer.Typer(no_args_is_help=True)
@@ -219,6 +224,25 @@ def dashboard(
     )
 
 
+@app.command("broadcast-assets")
+def broadcast_assets(
+    config: str | None = typer.Option(None, "--config"),
+    limit: int = typer.Option(5, "--limit", min=1, max=20),
+) -> None:
+    cfg = _load(config)
+    _run_cli_command(
+        "broadcast-assets",
+        cfg,
+        lambda: _broadcast_assets(cfg, limit=limit),
+        expected_inputs=[
+            "A migrated database with broadcast_asset_packages "
+            "or a live runtime that has generated them.",
+        ],
+        retry_advice="Run migrations and let the runtime produce asset packages before retrying.",
+        configure_logs_first=True,
+    )
+
+
 def _migrate(config: AppConfig) -> None:
     os.environ["LANTERN_HOUSE_DATABASE_URL"] = config.database.url
     alembic_cfg = AlembicConfig(str(ROOT / "alembic.ini"))
@@ -248,13 +272,17 @@ def _simulate(config: AppConfig, *, hours: int, turns_per_hour: int) -> None:
     if not repository.seed_exists():
         raise RuntimeError("No story seed found. Run `lantern-house seed` before `simulate`.")
     audience_service = AudienceControlService(config.audience, repository)
+    viewer_signal_service = ViewerSignalIngestionService(config.viewer_signals, repository)
     beat_service = StoryBeatService(repository)
     house_pressure_service = HousePressureService(repository, config.house_pressure)
     house_pressure_service.refresh(force=True)
     StoryGravityService(repository, config.story_gravity).refresh(force=True)
     ProgrammingGridService(repository, config.programming_grid).refresh(force=True)
+    SeasonPlannerService(repository, config.season_planner).refresh(force=True)
+    viewer_signal_service.refresh_if_due(force=True)
     audience = audience_service.refresh_if_due(force=True)
     beat_service.sync_audience_rollout(audience, now=utcnow())
+    WorldTrackingService(repository, config.world_tracking).refresh(force=True)
     assembler = ContextAssembler(repository, PacingHealthEvaluator())
     packet = assembler.build_manager_packet(audience_control=audience)
     report = SimulationLabService(config.simulation).evaluate(
@@ -285,14 +313,18 @@ def _soak_audit(config: AppConfig) -> None:
     if not repository.seed_exists():
         raise RuntimeError("No story seed found. Run `lantern-house seed` before `soak-audit`.")
     audience_service = AudienceControlService(config.audience, repository)
+    viewer_signal_service = ViewerSignalIngestionService(config.viewer_signals, repository)
     beat_service = StoryBeatService(repository)
     beat_service.sync_audience_rollout(audience_service.refresh_if_due(force=True), now=utcnow())
+    viewer_signal_service.refresh_if_due(force=True)
     house_pressure_service = HousePressureService(repository, config.house_pressure)
     house_pressure_service.refresh(force=True)
     StoryGravityService(repository, config.story_gravity).refresh(force=True)
     HourlyBeatLedgerService(repository, config.hourly_beat_ledger).refresh(now=utcnow())
     ProgrammingGridService(repository, config.programming_grid).refresh(force=True)
+    SeasonPlannerService(repository, config.season_planner).refresh(force=True)
     CanonDistillationService(repository, config.canon).refresh(now=utcnow())
+    WorldTrackingService(repository, config.world_tracking).refresh(force=True)
     assembler = ContextAssembler(repository, PacingHealthEvaluator())
     packet = assembler.build_manager_packet(audience_control=audience_service.current_report())
     simulation_lab = SimulationLabService(config.simulation)
@@ -339,6 +371,25 @@ def _dashboard(config: AppConfig, *, watch: bool) -> None:
         raise typer.Exit(code=0) from None
 
 
+def _broadcast_assets(config: AppConfig, *, limit: int) -> None:
+    engine = create_engine_from_config(config.database)
+    repository = StoryRepository(SessionFactory(engine))
+    packages = repository.list_recent_broadcast_assets(limit=limit)
+    if not packages:
+        typer.echo("No broadcast assets recorded yet.")
+        return
+    for item in packages:
+        typer.echo(f"{item.asset_title} [{item.asset_score}]")
+        typer.echo(f"  hook: {item.hook_line}")
+        typer.echo(f"  why: {item.why_it_matters}")
+        if item.clip_manifest:
+            clip = item.clip_manifest[0]
+            typer.echo(
+                f"  clip: {clip.get('start_seconds', 0)}-{clip.get('end_seconds', 0)}s | "
+                f"{clip.get('angle', 'reentry')}"
+            )
+
+
 async def _run_async(config: AppConfig, *, once: bool) -> None:
     engine = create_engine_from_config(config.database)
     session_factory = SessionFactory(engine)
@@ -363,9 +414,11 @@ async def _run_async(config: AppConfig, *, once: bool) -> None:
         pacing = PacingHealthEvaluator()
         assembler = ContextAssembler(repository, pacing)
         audience_control_service = AudienceControlService(config.audience, repository)
+        viewer_signal_service = ViewerSignalIngestionService(config.viewer_signals, repository)
         beat_service = StoryBeatService(repository)
         hourly_ledger_service = HourlyBeatLedgerService(repository, config.hourly_beat_ledger)
         programming_grid_service = ProgrammingGridService(repository, config.programming_grid)
+        season_planner_service = SeasonPlannerService(repository, config.season_planner)
         canon_service = CanonDistillationService(repository, config.canon)
         simulation_lab = SimulationLabService(config.simulation)
         soak_audit_service = SoakAuditService(repository, simulation_lab, config.soak_audit)
@@ -374,12 +427,15 @@ async def _run_async(config: AppConfig, *, once: bool) -> None:
             repository=repository,
             assembler=assembler,
             audience_control_service=audience_control_service,
+            viewer_signal_service=viewer_signal_service,
             beat_service=beat_service,
             hourly_ledger_service=hourly_ledger_service,
             programming_grid_service=programming_grid_service,
+            season_planner_service=season_planner_service,
             canon_service=canon_service,
             canon_court_service=CanonCourtService(config.canon_court),
             house_pressure_service=HousePressureService(repository, config.house_pressure),
+            world_tracking_service=WorldTrackingService(repository, config.world_tracking),
             story_gravity_service=StoryGravityService(repository, config.story_gravity),
             god_ai_service=GodAIService(
                 config=god_ai_config,
@@ -396,9 +452,14 @@ async def _run_async(config: AppConfig, *, once: bool) -> None:
                 config.models.character,
                 config.models.repair,
             ),
+            turn_selection_service=TurnSelectionService(config.turn_selection),
             critic_service=TurnCriticService(config.critic),
             highlight_service=HighlightPackagingService(repository, config.highlights),
             monetization_service=MonetizationPackagingService(repository, config.monetization),
+            broadcast_asset_service=BroadcastAssetService(
+                repository,
+                config.broadcast_assets,
+            ),
             recap_service=RecapService(repository, client, config.models.announcer),
             progression_service=StoryProgressionService(),
             load_orchestration_service=LoadOrchestrationService(

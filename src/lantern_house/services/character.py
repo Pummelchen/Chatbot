@@ -67,11 +67,53 @@ class CharacterService:
         packet: CharacterContextPacket,
         thought_pulse_allowed: bool,
     ) -> tuple[CharacterTurn, InvocationStats | None, bool]:
+        turns = await self.generate_candidates(
+            packet=packet,
+            thought_pulse_allowed=thought_pulse_allowed,
+            candidate_count=1,
+        )
+        return turns[0]
+
+    async def generate_candidates(
+        self,
+        *,
+        packet: CharacterContextPacket,
+        thought_pulse_allowed: bool,
+        candidate_count: int = 2,
+    ) -> list[tuple[CharacterTurn, InvocationStats | None, bool]]:
+        attempts = max(1, min(3, candidate_count))
+        candidates: list[tuple[CharacterTurn, InvocationStats | None, bool]] = []
+        for index in range(attempts):
+            turn, stats, degraded = await self._invoke_turn(
+                packet=packet,
+                thought_pulse_allowed=thought_pulse_allowed,
+                variation_index=index,
+                multi_candidate=attempts > 1,
+            )
+            candidates.append((turn, stats, degraded))
+        return candidates
+
+    async def _invoke_turn(
+        self,
+        *,
+        packet: CharacterContextPacket,
+        thought_pulse_allowed: bool,
+        variation_index: int,
+        multi_candidate: bool,
+    ) -> tuple[CharacterTurn, InvocationStats | None, bool]:
         prompt = render_template(
             "lantern_house.prompts",
             "character.md",
             {
-                "CHARACTER_CONTEXT": packet.model_dump(),
+                "CHARACTER_CONTEXT": {
+                    **packet.model_dump(mode="json"),
+                    "candidate_variation_note": (
+                        f"Variation lane {variation_index + 1}: keep the same canon and voice, "
+                        "but choose a different phrasing, leverage point, or emotional tactic."
+                        if multi_candidate
+                        else ""
+                    ),
+                },
                 "THOUGHT_PULSE_ALLOWED": "true" if thought_pulse_allowed else "false",
             },
         )
@@ -79,7 +121,7 @@ class CharacterService:
             payload, stats = await self.llm.generate_json(
                 model=self.model_name,
                 prompt=prompt,
-                temperature=0.9,
+                temperature=0.9 if variation_index == 0 else 0.82,
             )
             payload = self._coerce_payload(payload)
             turn = CharacterTurn.model_validate(payload)
@@ -95,6 +137,7 @@ class CharacterService:
                     "character_slug": packet.character_slug,
                     "model": self.model_name,
                     "location": packet.current_location,
+                    "variation_index": variation_index,
                 },
                 expected_inputs=[
                     "A valid character context packet.",

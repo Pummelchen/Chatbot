@@ -107,6 +107,15 @@ class AudienceConfig(BaseModel):
     check_interval_minutes: int = 10
 
 
+class ViewerSignalsConfig(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    enabled: bool = True
+    source_file_path: str = "viewer_signals.yaml"
+    check_interval_minutes: int = 10
+    max_active_signals: int = 12
+
+
 class HousePressureConfig(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
@@ -166,6 +175,15 @@ class ProgrammingGridConfig(BaseModel):
     weekly_at_risk_after_days: int = 4
 
 
+class SeasonPlannerConfig(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    enabled: bool = True
+    refresh_interval_minutes: int = 30
+    near_term_horizon_days: int = 30
+    long_term_horizon_days: int = 90
+
+
 class CanonConfig(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
@@ -189,6 +207,25 @@ class HighlightsConfig(BaseModel):
     clip_threshold: int = 7
     quote_threshold: int = 7
     max_recent_packages: int = 8
+
+
+class WorldTrackingConfig(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    enabled: bool = True
+    refresh_every_turn: bool = True
+    max_recent_facts: int = 12
+    max_room_occupants: int = 4
+    money_deadline_hours: int = 72
+
+
+class TurnSelectionConfig(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    enabled: bool = True
+    candidate_count: int = 2
+    minimum_importance_score: int = 7
+    enable_under_high_load: bool = False
 
 
 class MonetizationConfig(BaseModel):
@@ -260,6 +297,14 @@ class OpsDashboardConfig(BaseModel):
     stale_strategy_minutes: int = 120
 
 
+class BroadcastAssetsConfig(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    enabled: bool = True
+    min_asset_score: int = 72
+    max_recent_assets: int = 10
+
+
 class AppConfig(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
@@ -273,6 +318,7 @@ class AppConfig(BaseModel):
     story: StoryConfig = Field(default_factory=StoryConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
     audience: AudienceConfig = Field(default_factory=AudienceConfig)
+    viewer_signals: ViewerSignalsConfig = Field(default_factory=ViewerSignalsConfig)
     house_pressure: HousePressureConfig = Field(default_factory=HousePressureConfig)
     story_gravity: StoryGravityConfig = Field(default_factory=StoryGravityConfig)
     critic: CriticConfig = Field(default_factory=CriticConfig)
@@ -280,9 +326,12 @@ class AppConfig(BaseModel):
     simulation: SimulationConfig = Field(default_factory=SimulationConfig)
     hourly_beat_ledger: HourlyBeatLedgerConfig = Field(default_factory=HourlyBeatLedgerConfig)
     programming_grid: ProgrammingGridConfig = Field(default_factory=ProgrammingGridConfig)
+    season_planner: SeasonPlannerConfig = Field(default_factory=SeasonPlannerConfig)
     canon: CanonConfig = Field(default_factory=CanonConfig)
     canon_court: CanonCourtConfig = Field(default_factory=CanonCourtConfig)
     highlights: HighlightsConfig = Field(default_factory=HighlightsConfig)
+    world_tracking: WorldTrackingConfig = Field(default_factory=WorldTrackingConfig)
+    turn_selection: TurnSelectionConfig = Field(default_factory=TurnSelectionConfig)
     monetization: MonetizationConfig = Field(default_factory=MonetizationConfig)
     soak_audit: SoakAuditConfig = Field(default_factory=SoakAuditConfig)
     failsafe: FailSafeConfig = Field(default_factory=FailSafeConfig)
@@ -291,6 +340,7 @@ class AppConfig(BaseModel):
         default_factory=LoadOrchestrationConfig
     )
     ops_dashboard: OpsDashboardConfig = Field(default_factory=OpsDashboardConfig)
+    broadcast_assets: BroadcastAssetsConfig = Field(default_factory=BroadcastAssetsConfig)
     loaded_from: str | None = Field(default=None, exclude=True)
     config_root: str | None = Field(default=None, exclude=True)
 
@@ -331,6 +381,13 @@ def load_config(config_path: str | Path | None = None) -> AppConfig:
                     )
                 }
             ),
+            "viewer_signals": config.viewer_signals.model_copy(
+                update={
+                    "source_file_path": str(
+                        _resolve_runtime_path(base_dir, config.viewer_signals.source_file_path)
+                    )
+                }
+            ),
             "story": config.story.model_copy(update={"seed_file": story_seed_file}),
             "loaded_from": str(resolved_path),
             "config_root": str(base_dir),
@@ -343,6 +400,7 @@ def build_hot_patch_config(config: AppConfig) -> HotPatchConfig:
     extras = [
         config.loaded_from,
         config.audience.update_file_path,
+        config.viewer_signals.source_file_path,
         str(Path(config.config_root) / ".env") if config.config_root else None,
     ]
     for item in extras:

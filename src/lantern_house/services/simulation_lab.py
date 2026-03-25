@@ -220,6 +220,11 @@ class SimulationLabService:
             rationale.append(
                 "Active subscriber steering should produce visible but believable adaptation."
             )
+        if context.viewer_signal_digest:
+            score += 10
+            rationale.append(
+                "Live viewer signals are pointing at concrete theory, ship, or faction energy."
+            )
         if any(
             "audience" in item.lower() or "phase" in item.lower() for item in context.pending_beats
         ):
@@ -283,6 +288,17 @@ class SimulationLabService:
         if context.monetization_signals:
             score += 4
             rationale.append("Recent packaging signals suggest viewers are ready to pick sides.")
+        if context.broadcast_asset_signals:
+            score += 6
+            rationale.append(
+                "Broadcast asset packaging says the audience is rewarding "
+                "clear side-taking and hooks."
+            )
+        if context.season_plan_digest:
+            score += 5
+            rationale.append(
+                "Season planning can justify refreshing pairings without feeling random."
+            )
         next_focus = (
             "Bring in a quieter character with a concrete agenda and let them "
             "disrupt the current rhythm."
@@ -336,6 +352,15 @@ class SimulationLabService:
             )
         if any("[at-risk]" in item.lower() for item in context.programming_grid_digest):
             risks.append("The daily or weekly programming grid is missing at least one tentpole.")
+        if any("[at-risk]" in item.lower() for item in context.season_plan_digest):
+            risks.append(
+                "The season planner is missing a durable reveal, ship, or inheritance setup."
+            )
+        if context.viewer_signal_digest and not context.broadcast_asset_signals:
+            risks.append(
+                "Viewer demand is visible, but the current runtime is not "
+                "turning it into reusable broadcast moments."
+            )
         if context.load_profile.load_tier in {"high", "critical"}:
             risks.append(
                 "Model load is high, so direction should stay sharp and operationally light."

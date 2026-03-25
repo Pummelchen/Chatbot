@@ -117,6 +117,48 @@ class StoryObject(Base):
     metadata_json: Mapped[dict] = mapped_column("metadata", JSON, default=dict, nullable=False)
 
 
+class TimelineFact(Base):
+    __tablename__ = "timeline_facts"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    fact_type: Mapped[str] = mapped_column(String(40), nullable=False)
+    subject_slug: Mapped[str] = mapped_column(String(100), nullable=False, default="")
+    related_slug: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    location_slug: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    location_name: Mapped[str] = mapped_column(String(150), nullable=False, default="")
+    object_slug: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    object_name: Mapped[str] = mapped_column(String(150), nullable=False, default="")
+    summary: Mapped[str] = mapped_column(Text, nullable=False)
+    confidence: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
+    source: Mapped[str] = mapped_column(String(50), nullable=False, default="runtime")
+    metadata_json: Mapped[dict] = mapped_column("metadata", JSON, default=dict, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, nullable=False
+    )
+
+
+class ObjectPossession(Base):
+    __tablename__ = "object_possessions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    object_slug: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
+    object_name: Mapped[str] = mapped_column(String(150), nullable=False)
+    holder_character_slug: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    location_slug: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    location_name: Mapped[str] = mapped_column(String(150), nullable=False, default="")
+    possession_status: Mapped[str] = mapped_column(String(30), nullable=False, default="room")
+    summary: Mapped[str] = mapped_column(Text, nullable=False)
+    confidence: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
+    metadata_json: Mapped[dict] = mapped_column("metadata", JSON, default=dict, nullable=False)
+    last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, onupdate=_utcnow
+    )
+
+
 class CanonFact(Base):
     __tablename__ = "canon_facts"
 
@@ -692,6 +734,34 @@ class MonetizationPackage(Base):
     )
 
 
+class BroadcastAssetPackage(Base):
+    __tablename__ = "broadcast_asset_packages"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    message_id: Mapped[int | None] = mapped_column(ForeignKey("messages.id"), nullable=True)
+    monetization_message_id: Mapped[int | None] = mapped_column(
+        ForeignKey("messages.id"), nullable=True
+    )
+    speaker_slug: Mapped[str] = mapped_column(String(100), nullable=False)
+    asset_title: Mapped[str] = mapped_column(String(220), nullable=False)
+    hook_line: Mapped[str] = mapped_column(Text, nullable=False)
+    short_description: Mapped[str] = mapped_column(Text, nullable=False)
+    long_description: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    chapter_markers: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    clip_manifest: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    ship_labels: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    theory_labels: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    faction_labels: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    tags: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    why_it_matters: Mapped[str] = mapped_column(Text, nullable=False)
+    comment_seed: Mapped[str] = mapped_column(Text, nullable=False)
+    asset_score: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    metadata_json: Mapped[dict] = mapped_column("metadata", JSON, default=dict, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, nullable=False
+    )
+
+
 class DormantThreadRegistry(Base):
     __tablename__ = "dormant_thread_registry"
 
@@ -767,6 +837,29 @@ class FandomSignalCandidate(Base):
     metadata_json: Mapped[dict] = mapped_column("metadata", JSON, default=dict, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow, nullable=False
+    )
+
+
+class ViewerSignal(Base):
+    __tablename__ = "viewer_signals"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    signal_key: Mapped[str] = mapped_column(String(150), unique=True, nullable=False)
+    signal_type: Mapped[str] = mapped_column(String(50), nullable=False)
+    subject: Mapped[str] = mapped_column(String(180), nullable=False)
+    intensity: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
+    sentiment: Mapped[str] = mapped_column(String(30), nullable=False, default="mixed")
+    summary: Mapped[str] = mapped_column(Text, nullable=False)
+    source: Mapped[str] = mapped_column(String(80), nullable=False, default="operator")
+    retention_impact: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="active")
+    metadata_json: Mapped[dict] = mapped_column("metadata", JSON, default=dict, nullable=False)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, onupdate=_utcnow
     )
 
 

@@ -49,7 +49,7 @@ def upgrade() -> None:
     op.create_table(
         "canon_court_findings",
         sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
-        sa.Column("message_id", sa.Integer(), nullable=True),
+        sa.Column("message_id", sa.BigInteger(), nullable=True),
         sa.Column("issue_type", sa.String(length=80), nullable=False),
         sa.Column("severity", sa.String(length=20), nullable=False, server_default="warning"),
         sa.Column("action", sa.String(length=30), nullable=False, server_default="allow"),
@@ -63,8 +63,8 @@ def upgrade() -> None:
     op.create_table(
         "monetization_packages",
         sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
-        sa.Column("message_id", sa.Integer(), nullable=True),
-        sa.Column("highlight_message_id", sa.Integer(), nullable=True),
+        sa.Column("message_id", sa.BigInteger(), nullable=True),
+        sa.Column("highlight_message_id", sa.BigInteger(), nullable=True),
         sa.Column("speaker_slug", sa.String(length=100), nullable=False),
         sa.Column("primary_title", sa.String(length=220), nullable=False),
         sa.Column("alternate_titles", sa.JSON(), nullable=False),
@@ -74,7 +74,7 @@ def upgrade() -> None:
         sa.Column("summary_blurb", sa.Text(), nullable=False),
         sa.Column("recap_blurb", sa.Text(), nullable=False),
         sa.Column("chapter_label", sa.String(length=160), nullable=False, server_default=""),
-        sa.Column("comment_prompt", sa.Text(), nullable=False, server_default=""),
+        sa.Column("comment_prompt", sa.Text(), nullable=False),
         sa.Column("ship_angle", sa.String(length=160), nullable=False, server_default=""),
         sa.Column("theory_angle", sa.String(length=160), nullable=False, server_default=""),
         sa.Column("betrayal_angle", sa.String(length=160), nullable=False, server_default=""),

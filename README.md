@@ -13,9 +13,14 @@ The project targets macOS Apple Silicon with Python 3.12+, MySQL 8.4, and Ollama
 - A deterministic house-pressure engine that keeps the guesthouse generating believable financial, repair, inspection, weather, and fatigue pressure
 - A deterministic hourly beat ledger that tracks whether each clock hour landed a real shift in trust, desire, evidence, debt, power, or loyalty
 - A daily and weekly programming grid that makes sure each day and week land planned tentpoles instead of only decent local turns
+- A season planner that projects 30-day and 90-day reveal windows, ship cycles, inheritance turns, and cast-refresh points above the daily grid
 - Multi-resolution canon capsules for `1h`, `6h`, `24h`, `7d`, and `30d` memory distillation
+- A deterministic timeline, possession, and alibi layer that tracks who was where, which object was last grounded where, room occupancy, money deadlines, and repair state
+- A high-stakes multi-candidate turn selector that generates and reranks alternative public turns only when the moment is strategically important
+- A live viewer-signal ingestion layer driven by `viewer_signals.yaml`, ready for later YouTube/OBS signal sources
 - Automatic highlight packaging that turns strong turns into clip-ready and quote-ready metadata
 - A deeper monetization packaging pipeline that turns strong turns into title, hook, quote, faction, theory, and comment-prompt assets
+- A broadcast-asset pipeline that turns strong turns into reusable clip manifests, descriptions, chapter markers, ship/theory labels, and “why this matters” export packages
 - A deterministic soak-audit harness that stress-tests long-run strategy over `24h`, `72h`, and `7d` horizons
 - A persistent story-gravity layer that keeps the show anchored to the house, its debt, hidden records, ownership conflict, and unstable bonds
 - A staged audience-rollout beat system that converts `update.txt` votes into prerequisite beats instead of instant retcons
@@ -39,6 +44,7 @@ The system avoids shoving the entire transcript into every prompt. Instead it pe
 - Character turns receive identity, current emotional state, active goals, relevant recent messages, relationship snapshots, location facts, and manager instructions.
 - The manager receives unresolved questions, arc status, dormant payoff threads, recent event highlights, continuity warnings, pacing health, and recent summaries.
 - The manager also receives the latest hourly ledger status, canon capsule digests, highlight signals, and soak-audit warnings.
+- The manager also receives season-plan signals, viewer-signal digests, broadcast-asset packaging signals, and timeline/possession/alibi summaries.
 - Recaps are generated from stored events and prior summaries rather than transcript replay.
 
 The manager operates in micro-steps. It sets the scene objective, controls reveal pace, assigns soft goals, tracks pacing health, and authorizes rare thought pulses.
@@ -76,6 +82,7 @@ Two new systems now keep the story from flattening over very long runs:
 - A soak-audit harness uses those deterministic strategy rankings across `24h`, `72h`, and `7d` horizons to detect slow-death failure modes like repetition, recap decay, clip drought, ship stagnation, and strategy lock-in.
 - A background God-AI planner uses `gemma3:12b` plus the simulation ranking to persist strategic briefs with north-star objective, arc ranking, reveal permissions, urgency scores, recap priorities, clip value, and fandom value for the live manager without blocking the chat loop.
 - The visible hot path is protected by prefetching manager directives in the background, by a lightweight critic, by load-aware inference budgeting, and by a small repair-model pass that can salvage weak turns before persistence.
+- On important turns only, the live loop can generate two 1B candidates and rerank them against hourly needs, clip value, fandom tension, and strategic urgency before persistence.
 
 ## Live Update Control
 
@@ -88,6 +95,8 @@ The repo root now includes [update.txt](/Users/andreborchert/Library/CloudStorag
 - Cast, location, conflict, mystery, recap, and freeform vote sections are all supported.
 
 Major requests are phased in gradually over the configured rollout window, which defaults to 24 hours. If viewers vote for something large like "A and B should have a baby," the manager is expected to build the emotional and practical path first instead of jumping straight to the end-state.
+
+The repo root also includes [viewer_signals.yaml](/Users/andreborchert/Library/CloudStorage/Dropbox/Chatbot/viewer_signals.yaml), a local-first signal file for real audience observations such as ship spikes, theory bursts, clip replays, faction splits, or recap drop-off. These signals steer the strategist and manager, but do not directly retcon canon.
 
 ## Seeded Ensemble
 
@@ -132,7 +141,8 @@ ollama pull gemma3:12b
 - resume from persisted `run_state` if the project was already running before
 
 5. Edit `update.txt` whenever you want to steer the live story. The manager will absorb the changes on its next 10-minute audience-control check.
-6. If you keep multiple runtime configs, run `./start.sh --config /absolute/path/to/runtime.toml`. Hot patching now keeps tracking that active config file instead of snapping back to the default example config.
+6. Edit `viewer_signals.yaml` whenever you want to feed real audience-signal observations into the strategist and manager.
+7. If you keep multiple runtime configs, run `./start.sh --config /absolute/path/to/runtime.toml`. Hot patching now keeps tracking that active config file instead of snapping back to the default example config.
 
 Manual CLI startup is still available if you want more control:
 
@@ -150,6 +160,7 @@ lantern-house run
 - `lantern-house run`: start the live terminal chat runtime
 - `lantern-house simulate`: run the accelerated deterministic simulation lab against the current world state
 - `lantern-house soak-audit`: run the long-horizon deterministic soak audit against the current world state
+- `lantern-house broadcast-assets`: inspect the most recent reusable broadcast/clip export packages
 - `lantern-house dashboard`: show the current ops telemetry snapshot for runtime, load, checkpoint freshness, recap freshness, and active strategy
 - `lantern-house recap-now`: generate recap blocks immediately
 - `lantern-house healthcheck`: verify database and Ollama availability
@@ -174,6 +185,7 @@ All CLI commands now fail with concise operator messages plus logged context in 
 - The background God-AI planner can persist long-horizon strategic briefs during live operation, while `run --once` skips that loop to keep smoke runs fast.
 - The strategist stack now also persists simulation runs, ranked strategy candidates, dormant-thread registry rows, public-turn review telemetry, recap-quality scores, clip-value scores, and fandom-signal candidates.
 - The strategist stack now also persists hourly progress ledgers, programming-grid slots, canon capsules, canon-court findings, highlight packages, monetization packages, ops telemetry, and soak-audit runs.
+- The strategist stack now also persists timeline facts, object-possession snapshots, viewer-signal observations, and broadcast-asset export packages.
 - The live loop wraps critical subsystems in a fail-safe executor. Unexpected failures are logged with context, routed to conservative fallbacks or last-good state, and never printed into the public chat stream.
 - Repeated failures enter a cooldown window instead of hammering the same broken dependency every turn.
 - New persistence layers are hot-patch-safe: if live code lands before migrations do, the new repository paths degrade to empty/no-op behavior and keep the stream alive until the database is upgraded.
@@ -182,6 +194,10 @@ All CLI commands now fail with concise operator messages plus logged context in 
 - `story.seed_file` now works as a real setting: it can point either to a packaged seed resource name or a local YAML file path for custom world variants.
 - Degraded mode can keep the simulation alive when a model request fails, but it does so conservatively.
 - Manager and God-AI planners now use shorter retry budgets because both have deterministic fallbacks; this keeps fallback guidance timely instead of minutes late.
+- On strategically important turns, the live loop can generate multiple 1B candidates, preview them through extraction and criticism, and rerank them before persistence.
+- Deterministic world tracking now grounds room occupancy, alibis, house deadlines, and important-object possession so mystery turns stay anchored to explicit state.
+- The season planner adds `30d` and `90d` tentpoles above the daily and weekly grid, and viewer-signal ingestion can steer those horizons without directly retconning canon.
+- The broadcast-asset pipeline turns high-value turns into reusable export packages with title, hook, description, chapter markers, clip window, ship/theory labels, and a comment seed.
 - Recap prompts are compacted into bounded event digests so 12h and 24h summaries stay stable during true 24/7 operation.
 - Low-quality unresolved-question fragments are filtered before they enter canon memory.
 - If a model turn drifts into robotic or prose-like register, the runtime repairs it before persisting public output.

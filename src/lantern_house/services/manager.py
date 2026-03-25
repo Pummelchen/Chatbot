@@ -118,6 +118,8 @@ class StoryManagerService:
         strategic = context.strategic_guidance
         strategic_brief = context.strategic_brief
         programming_grid = context.programming_grid_digest
+        season_plan = context.season_plan_digest
+        viewer_signals = context.viewer_signal_digest
         objective = (
             "Disturb the fragile calm with one practical problem "
             "and one emotionally loaded question."
@@ -140,6 +142,11 @@ class StoryManagerService:
         if programming_grid and any("[at-risk]" in item.lower() for item in programming_grid):
             objective = (
                 "Protect the day plan by landing one overdue tentpole without losing realism."
+            )
+        if season_plan and any("[at-risk]" in item.lower() for item in season_plan):
+            objective = (
+                "Protect the longer season arc by seeding a durable reveal, ship, or inheritance "
+                "move without forcing instant payoff."
             )
         if not governance.hourly_progression_met:
             hourly_objective = (
@@ -182,6 +189,11 @@ class StoryManagerService:
                 "without solving the deeper issue."
             )
             desired[0] = signal.recommended_move or signal.summary or desired[0]
+        if viewer_signals:
+            desired[1] = (
+                "Translate current viewer energy into believable side-taking, theory, or ship "
+                "fuel without acknowledging the audience."
+            )
         if context.pacing_health.mystery_stalled:
             desired[0] = (
                 "Force a more specific question about the vanished owner, "
@@ -212,6 +224,11 @@ class StoryManagerService:
             desired[1] = (
                 "Give the next exchange one cleaner quote, side-taking fault line, or "
                 "debate-friendly turn."
+            )
+        if context.broadcast_asset_signals:
+            desired[1] = (
+                "Make the next turn legible enough to clip, title, and debate without sounding "
+                "like manufactured content."
             )
         if context.soak_audit_signals:
             desired[0] = f"Follow the latest soak warning: {context.soak_audit_signals[0]}"
@@ -266,6 +283,9 @@ class StoryManagerService:
                 + context.public_turn_review_signals[:1]
                 + context.highlight_signals[:1]
                 + context.monetization_signals[:1]
+                + context.broadcast_asset_signals[:1]
+                + context.viewer_signal_digest[:1]
+                + context.season_plan_digest[:1]
                 + context.soak_audit_signals[:1]
                 + context.ops_alerts[:1]
                 + strategic[:2]

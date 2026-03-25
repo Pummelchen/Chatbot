@@ -17,6 +17,7 @@ from lantern_house.db.session import SessionFactory
 from lantern_house.domain.contracts import (
     BeatPlanItem,
     BeatSnapshot,
+    BroadcastAssetSnapshot,
     CanonCapsuleSnapshot,
     CanonCourtFindingSnapshot,
     CharacterTurn,
@@ -30,6 +31,7 @@ from lantern_house.domain.contracts import (
     ManagerDirectivePlan,
     MessageView,
     MonetizationPackageSnapshot,
+    ObjectPossessionSnapshot,
     OpsTelemetrySnapshot,
     ProgrammingGridSlotSnapshot,
     RelationshipSnapshot,
@@ -41,7 +43,9 @@ from lantern_house.domain.contracts import (
     StrategicBriefPlan,
     StrategicBriefSnapshot,
     SummaryView,
+    TimelineFactSnapshot,
     TurnCriticReport,
+    ViewerSignalSnapshot,
 )
 from lantern_house.domain.enums import MessageKind, SummaryWindow
 from lantern_house.utils.time import ensure_utc, floor_to_hour, isoformat, utcnow
@@ -198,6 +202,98 @@ class StoryRepository:
             return [
                 {"slug": slug, "last_spoke_at": last_spoke_at, "silence_streak": silence_streak}
                 for slug, last_spoke_at, silence_streak in session.execute(stmt).all()
+            ]
+
+    def list_locations(self) -> list[dict[str, Any]]:
+        with self.session_factory.session_scope() as session:
+            rows = session.scalars(select(models.Location).order_by(models.Location.id)).all()
+            return [
+                {
+                    "slug": row.slug,
+                    "name": row.name,
+                    "description": row.description,
+                    "public_facts": row.public_facts,
+                }
+                for row in rows
+            ]
+
+    def list_story_objects(self) -> list[dict[str, Any]]:
+        with self.session_factory.session_scope() as session:
+            possession_lookup = {
+                row.object_slug: row
+                for row in session.scalars(select(models.ObjectPossession)).all()
+            }
+            stmt = (
+                select(models.StoryObject, models.Location)
+                .join(
+                    models.Location,
+                    models.Location.id == models.StoryObject.location_id,
+                    isouter=True,
+                )
+                .order_by(models.StoryObject.id)
+            )
+            rows = session.execute(stmt).all()
+            objects: list[dict[str, Any]] = []
+            for story_object, location in rows:
+                possession = possession_lookup.get(story_object.slug)
+                objects.append(
+                    {
+                        "slug": story_object.slug,
+                        "name": story_object.name,
+                        "description": story_object.description,
+                        "location_slug": (
+                            possession.location_slug
+                            if possession and possession.location_slug
+                            else location.slug
+                            if location
+                            else None
+                        ),
+                        "location_name": (
+                            possession.location_name
+                            if possession and possession.location_name
+                            else location.name
+                            if location
+                            else ""
+                        ),
+                        "holder_character_slug": (
+                            possession.holder_character_slug if possession else None
+                        ),
+                        "possession_status": (
+                            possession.possession_status if possession else "room"
+                        ),
+                        "summary": possession.summary if possession else "",
+                        "significance": story_object.significance,
+                        "seeded": possession is None,
+                    }
+                )
+            return objects
+
+    def list_character_positions(self) -> list[dict[str, Any]]:
+        with self.session_factory.session_scope() as session:
+            stmt = (
+                select(models.Character, models.CharacterState, models.Location)
+                .join(
+                    models.CharacterState,
+                    models.Character.id == models.CharacterState.character_id,
+                )
+                .join(
+                    models.Location,
+                    models.Location.id == models.CharacterState.current_location_id,
+                    isouter=True,
+                )
+                .order_by(models.Character.id)
+            )
+            rows = session.execute(stmt).all()
+            return [
+                {
+                    "slug": character.slug,
+                    "full_name": character.full_name,
+                    "location_slug": location.slug if location else None,
+                    "location_name": location.name if location else "Unknown",
+                    "last_spoke_at": state.last_spoke_at,
+                    "stress_level": state.stress_level,
+                }
+                for character, state, location in rows
             ]
 
     def get_character_overview(self, slug: str) -> dict[str, Any]:
@@ -765,7 +861,7 @@ class StoryRepository:
                         due_by=due_by,
                         metadata=metadata,
                     )
-                    )
+                )
                 if len(completed) >= limit:
                     break
             return completed
@@ -790,9 +886,7 @@ class StoryRepository:
             active_rows = session.scalars(
                 select(models.RolloutRequest).where(models.RolloutRequest.status == "active")
             ).all()
-            active_lookup = {
-                (row.fingerprint or "none", row.summary): row for row in active_rows
-            }
+            active_lookup = {(row.fingerprint or "none", row.summary): row for row in active_rows}
             active_summaries = set(requests if active else [])
             for row in active_rows:
                 if (row.fingerprint or "none") == fingerprint and row.summary in active_summaries:
@@ -1042,6 +1136,287 @@ class StoryRepository:
                 created_at=row.created_at,
                 expires_at=row.expires_at,
             )
+
+    def record_timeline_facts(
+        self,
+        *,
+        facts: list[TimelineFactSnapshot],
+        now=None,
+    ) -> list[TimelineFactSnapshot]:
+        now = ensure_utc(now or utcnow())
+        if not facts:
+            return []
+        try:
+            with self.session_factory.session_scope() as session:
+                persisted: list[TimelineFactSnapshot] = []
+                recent_cutoff = now - timedelta(minutes=45)
+                for fact in facts:
+                    row = session.scalar(
+                        select(models.TimelineFact).where(
+                            models.TimelineFact.fact_type == fact.fact_type,
+                            models.TimelineFact.subject_slug == fact.subject_slug,
+                            models.TimelineFact.related_slug == fact.related_slug,
+                            models.TimelineFact.location_slug == fact.location_slug,
+                            models.TimelineFact.object_slug == fact.object_slug,
+                            models.TimelineFact.summary == fact.summary,
+                            models.TimelineFact.created_at >= recent_cutoff,
+                        )
+                    )
+                    if row is None:
+                        row = models.TimelineFact(
+                            fact_type=fact.fact_type,
+                            subject_slug=fact.subject_slug,
+                            related_slug=fact.related_slug,
+                            location_slug=fact.location_slug,
+                            location_name=fact.location_name,
+                            object_slug=fact.object_slug,
+                            object_name=fact.object_name,
+                            summary=fact.summary,
+                            confidence=fact.confidence,
+                            source=fact.source,
+                            metadata_json=fact.metadata,
+                            created_at=now,
+                        )
+                        session.add(row)
+                    else:
+                        row.location_name = fact.location_name or row.location_name
+                        row.object_name = fact.object_name or row.object_name
+                        row.confidence = max(row.confidence, fact.confidence)
+                        row.metadata_json = _deep_merge_dicts(row.metadata_json, fact.metadata)
+                    persisted.append(fact.model_copy(update={"created_at": row.created_at or now}))
+                return persisted
+        except SQLAlchemyError as exc:
+            _log_recovered_db_failure(
+                "repository.record_timeline_facts",
+                exc,
+                context={"fact_count": len(facts)},
+                expected_inputs=["A migrated timeline_facts table."],
+                retry_advice="Run migrations so timeline tracking persistence can resume.",
+                fallback_used="return-unpersisted-timeline-facts",
+            )
+            return [fact.model_copy(update={"created_at": now}) for fact in facts]
+
+    def list_recent_timeline_facts(
+        self,
+        *,
+        hours: int = 24,
+        limit: int = 12,
+    ) -> list[TimelineFactSnapshot]:
+        threshold = ensure_utc(utcnow()) - timedelta(hours=max(1, hours))
+        try:
+            with self.session_factory.session_scope() as session:
+                rows = session.scalars(
+                    select(models.TimelineFact)
+                    .where(models.TimelineFact.created_at >= threshold)
+                    .order_by(desc(models.TimelineFact.created_at))
+                    .limit(limit)
+                ).all()
+                return [
+                    TimelineFactSnapshot(
+                        fact_type=row.fact_type,
+                        subject_slug=row.subject_slug,
+                        related_slug=row.related_slug,
+                        location_slug=row.location_slug,
+                        location_name=row.location_name,
+                        object_slug=row.object_slug,
+                        object_name=row.object_name,
+                        summary=row.summary,
+                        confidence=row.confidence,
+                        source=row.source,
+                        metadata=row.metadata_json,
+                        created_at=row.created_at,
+                    )
+                    for row in rows
+                ]
+        except SQLAlchemyError as exc:
+            _log_recovered_db_failure(
+                "repository.list_recent_timeline_facts",
+                exc,
+                context={"hours": hours, "limit": limit},
+                expected_inputs=["A migrated timeline_facts table."],
+                retry_advice="Run migrations so timeline reads can resume.",
+                fallback_used="empty-timeline-facts",
+            )
+            return []
+
+    def sync_object_possessions(
+        self,
+        *,
+        snapshots: list[ObjectPossessionSnapshot],
+        now=None,
+    ) -> list[ObjectPossessionSnapshot]:
+        now = ensure_utc(now or utcnow())
+        if not snapshots:
+            return []
+        try:
+            with self.session_factory.session_scope() as session:
+                for snapshot in snapshots:
+                    row = session.scalar(
+                        select(models.ObjectPossession).where(
+                            models.ObjectPossession.object_slug == snapshot.object_slug
+                        )
+                    )
+                    if row is None:
+                        row = models.ObjectPossession(
+                            object_slug=snapshot.object_slug,
+                            object_name=snapshot.object_name,
+                            created_at=now,
+                        )
+                        session.add(row)
+                    row.object_name = snapshot.object_name or row.object_name
+                    row.holder_character_slug = snapshot.holder_character_slug
+                    row.location_slug = snapshot.location_slug
+                    row.location_name = snapshot.location_name
+                    row.possession_status = snapshot.possession_status
+                    row.summary = snapshot.summary
+                    row.confidence = snapshot.confidence
+                    row.metadata_json = snapshot.metadata
+                    row.last_seen_at = ensure_utc(snapshot.last_seen_at or now)
+                    row.updated_at = now
+                return [
+                    snapshot.model_copy(update={"created_at": now, "last_seen_at": now})
+                    for snapshot in snapshots
+                ]
+        except SQLAlchemyError as exc:
+            _log_recovered_db_failure(
+                "repository.sync_object_possessions",
+                exc,
+                context={"snapshot_count": len(snapshots)},
+                expected_inputs=["A migrated object_possessions table."],
+                retry_advice="Run migrations so object-possession persistence can resume.",
+                fallback_used="return-unpersisted-object-possessions",
+            )
+            return [
+                snapshot.model_copy(update={"created_at": now, "last_seen_at": now})
+                for snapshot in snapshots
+            ]
+
+    def list_object_possessions(self, *, limit: int = 8) -> list[ObjectPossessionSnapshot]:
+        try:
+            with self.session_factory.session_scope() as session:
+                rows = session.scalars(
+                    select(models.ObjectPossession)
+                    .order_by(desc(models.ObjectPossession.updated_at))
+                    .limit(limit)
+                ).all()
+                return [
+                    ObjectPossessionSnapshot(
+                        object_slug=row.object_slug,
+                        object_name=row.object_name,
+                        holder_character_slug=row.holder_character_slug,
+                        location_slug=row.location_slug,
+                        location_name=row.location_name,
+                        possession_status=row.possession_status,
+                        summary=row.summary,
+                        confidence=row.confidence,
+                        metadata=row.metadata_json,
+                        last_seen_at=row.last_seen_at,
+                        created_at=row.created_at,
+                    )
+                    for row in rows
+                ]
+        except SQLAlchemyError as exc:
+            _log_recovered_db_failure(
+                "repository.list_object_possessions",
+                exc,
+                context={"limit": limit},
+                expected_inputs=["A migrated object_possessions table."],
+                retry_advice="Run migrations so possession reads can resume.",
+                fallback_used="empty-object-possessions",
+            )
+            return []
+
+    def sync_viewer_signals(
+        self,
+        *,
+        signals: list[ViewerSignalSnapshot],
+        now=None,
+    ) -> list[ViewerSignalSnapshot]:
+        now = ensure_utc(now or utcnow())
+        try:
+            with self.session_factory.session_scope() as session:
+                active_keys = {signal.signal_key for signal in signals}
+                existing = session.scalars(select(models.ViewerSignal)).all()
+                existing_by_key = {row.signal_key: row for row in existing}
+                for signal in signals:
+                    row = existing_by_key.get(signal.signal_key)
+                    if row is None:
+                        row = models.ViewerSignal(signal_key=signal.signal_key, created_at=now)
+                        session.add(row)
+                    row.signal_type = signal.signal_type
+                    row.subject = signal.subject
+                    row.intensity = signal.intensity
+                    row.sentiment = signal.sentiment
+                    row.summary = signal.summary
+                    row.source = signal.source
+                    row.retention_impact = signal.retention_impact
+                    row.status = "active"
+                    row.metadata_json = signal.metadata
+                    row.expires_at = signal.expires_at
+                    row.updated_at = now
+                for key, row in existing_by_key.items():
+                    if key in active_keys:
+                        continue
+                    row.status = "expired"
+                    row.updated_at = now
+                return [signal.model_copy(update={"created_at": now}) for signal in signals]
+        except SQLAlchemyError as exc:
+            _log_recovered_db_failure(
+                "repository.sync_viewer_signals",
+                exc,
+                context={"signal_count": len(signals)},
+                expected_inputs=["A migrated viewer_signals table."],
+                retry_advice="Run migrations so viewer-signal persistence can resume.",
+                fallback_used="return-unpersisted-viewer-signals",
+            )
+            return [signal.model_copy(update={"created_at": now}) for signal in signals]
+
+    def list_active_viewer_signals(self, *, limit: int = 8, now=None) -> list[ViewerSignalSnapshot]:
+        now = ensure_utc(now or utcnow())
+        try:
+            with self.session_factory.session_scope() as session:
+                rows = session.scalars(
+                    select(models.ViewerSignal)
+                    .where(
+                        models.ViewerSignal.status == "active",
+                        or_(
+                            models.ViewerSignal.expires_at.is_(None),
+                            models.ViewerSignal.expires_at >= now,
+                        ),
+                    )
+                    .order_by(
+                        desc(models.ViewerSignal.retention_impact),
+                        desc(models.ViewerSignal.intensity),
+                        desc(models.ViewerSignal.updated_at),
+                    )
+                    .limit(limit)
+                ).all()
+                return [
+                    ViewerSignalSnapshot(
+                        signal_key=row.signal_key,
+                        signal_type=row.signal_type,
+                        subject=row.subject,
+                        intensity=row.intensity,
+                        sentiment=row.sentiment,
+                        summary=row.summary,
+                        source=row.source,
+                        retention_impact=row.retention_impact,
+                        metadata=row.metadata_json,
+                        expires_at=row.expires_at,
+                        created_at=row.created_at,
+                    )
+                    for row in rows
+                ]
+        except SQLAlchemyError as exc:
+            _log_recovered_db_failure(
+                "repository.list_active_viewer_signals",
+                exc,
+                context={"limit": limit},
+                expected_inputs=["A migrated viewer_signals table."],
+                retry_advice="Run migrations so viewer-signal reads can resume.",
+                fallback_used="empty-viewer-signals",
+            )
+            return []
 
     def record_strategic_brief(
         self,
@@ -1523,9 +1898,7 @@ class StoryRepository:
                         bucket_end_at=bucket_end_at,
                         usefulness=_clamp(_int_or_default(payload.get("usefulness"), 5), 0, 10),
                         clarity=_clamp(_int_or_default(payload.get("clarity"), 5), 0, 10),
-                        theory_value=_clamp(
-                            _int_or_default(payload.get("theory_value"), 5), 0, 10
-                        ),
+                        theory_value=_clamp(_int_or_default(payload.get("theory_value"), 5), 0, 10),
                         emotional_readability=_clamp(
                             _int_or_default(payload.get("emotional_readability"), 5),
                             0,
@@ -1787,10 +2160,7 @@ class StoryRepository:
                     row.metadata_json = slot.metadata
                     row.window_end_at = ensure_utc(slot.window_end_at or now)
                     row.updated_at = now
-                return [
-                    slot.model_copy(update={"updated_at": now})
-                    for slot in slots
-                ]
+                return [slot.model_copy(update={"updated_at": now}) for slot in slots]
         except SQLAlchemyError as exc:
             _log_recovered_db_failure(
                 "repository.sync_programming_grid_slots",
@@ -2275,6 +2645,95 @@ class StoryRepository:
             )
             return []
 
+    def record_broadcast_asset(
+        self,
+        *,
+        package: BroadcastAssetSnapshot,
+        now=None,
+    ) -> BroadcastAssetSnapshot:
+        now = ensure_utc(now or utcnow())
+        try:
+            with self.session_factory.session_scope() as session:
+                row = models.BroadcastAssetPackage(
+                    message_id=package.message_id,
+                    monetization_message_id=package.monetization_message_id,
+                    speaker_slug=package.speaker_slug,
+                    asset_title=package.asset_title,
+                    hook_line=package.hook_line,
+                    short_description=package.short_description,
+                    long_description=package.long_description,
+                    chapter_markers=package.chapter_markers,
+                    clip_manifest=package.clip_manifest,
+                    ship_labels=package.ship_labels,
+                    theory_labels=package.theory_labels,
+                    faction_labels=package.faction_labels,
+                    tags=package.tags,
+                    why_it_matters=package.why_it_matters,
+                    comment_seed=package.comment_seed,
+                    asset_score=package.asset_score,
+                    metadata_json=package.metadata,
+                    created_at=now,
+                )
+                session.add(row)
+                session.flush()
+                return package.model_copy(update={"created_at": now})
+        except SQLAlchemyError as exc:
+            _log_recovered_db_failure(
+                "repository.record_broadcast_asset",
+                exc,
+                context={"speaker_slug": package.speaker_slug, "asset_score": package.asset_score},
+                expected_inputs=["A migrated broadcast_asset_packages table."],
+                retry_advice="Run migrations so broadcast-asset persistence can resume.",
+                fallback_used="return-unpersisted-broadcast-asset",
+            )
+            return package.model_copy(update={"created_at": now})
+
+    def list_recent_broadcast_assets(
+        self,
+        *,
+        limit: int = 8,
+    ) -> list[BroadcastAssetSnapshot]:
+        try:
+            with self.session_factory.session_scope() as session:
+                rows = session.scalars(
+                    select(models.BroadcastAssetPackage)
+                    .order_by(desc(models.BroadcastAssetPackage.created_at))
+                    .limit(limit)
+                ).all()
+                return [
+                    BroadcastAssetSnapshot(
+                        message_id=row.message_id,
+                        monetization_message_id=row.monetization_message_id,
+                        speaker_slug=row.speaker_slug,
+                        asset_title=row.asset_title,
+                        hook_line=row.hook_line,
+                        short_description=row.short_description,
+                        long_description=row.long_description,
+                        chapter_markers=row.chapter_markers,
+                        clip_manifest=row.clip_manifest,
+                        ship_labels=row.ship_labels,
+                        theory_labels=row.theory_labels,
+                        faction_labels=row.faction_labels,
+                        tags=row.tags,
+                        why_it_matters=row.why_it_matters,
+                        comment_seed=row.comment_seed,
+                        asset_score=row.asset_score,
+                        metadata=row.metadata_json,
+                        created_at=row.created_at,
+                    )
+                    for row in rows
+                ]
+        except SQLAlchemyError as exc:
+            _log_recovered_db_failure(
+                "repository.list_recent_broadcast_assets",
+                exc,
+                context={"limit": limit},
+                expected_inputs=["A migrated broadcast_asset_packages table."],
+                retry_advice="Run migrations so broadcast-asset reads can resume.",
+                fallback_used="empty-broadcast-assets",
+            )
+            return []
+
     def add_continuity_flags(self, flags: list[ContinuityFlagDraft]) -> None:
         if not flags:
             return
@@ -2536,9 +2995,7 @@ class StoryRepository:
         return lookup
 
     @staticmethod
-    def _build_relationship(
-        *, pair_key: tuple[int, int], summary: str, now
-    ) -> models.Relationship:
+    def _build_relationship(*, pair_key: tuple[int, int], summary: str, now) -> models.Relationship:
         return models.Relationship(
             character_a_id=pair_key[0],
             character_b_id=pair_key[1],
@@ -2661,10 +3118,7 @@ def _estimate_mystery_progression(turn: CharacterTurn) -> int:
 
 def _estimate_daily_uniqueness(turn: CharacterTurn, report: TurnCriticReport) -> int:
     specificity = int(any(char.isdigit() for char in turn.public_message)) + int(
-        any(
-            token in turn.public_message.lower()
-            for token in ("ledger", "key", "boiler", "roof")
-        )
+        any(token in turn.public_message.lower() for token in ("ledger", "key", "boiler", "roof"))
     )
     return _clamp(report.novelty + specificity, 0, 10)
 
