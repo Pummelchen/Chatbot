@@ -41,9 +41,14 @@ class OllamaClient:
         await self._client.aclose()
 
     async def healthcheck(self) -> dict:
-        response = await self._client.get("/api/tags")
-        response.raise_for_status()
-        return response.json()
+        try:
+            response = await self._client.get("/api/tags")
+            response.raise_for_status()
+            return response.json()
+        except (httpx.HTTPError, json.JSONDecodeError) as exc:
+            raise OllamaClientError(
+                f"Ollama healthcheck failed for {self.config.base_url}: {exc}"
+            ) from exc
 
     async def ensure_models(self, models: list[str]) -> None:
         available = await self.healthcheck()
@@ -61,7 +66,7 @@ class OllamaClient:
 
     async def warm_model(self, model: str) -> None:
         try:
-            await self._client.post(
+            response = await self._client.post(
                 "/api/generate",
                 json={
                     "model": model,
@@ -70,6 +75,7 @@ class OllamaClient:
                     "keep_alive": self.config.keep_alive,
                 },
             )
+            response.raise_for_status()
         except httpx.HTTPError as exc:
             logger.warning("ollama warmup failed for %s: %s", model, exc)
 
@@ -136,11 +142,16 @@ class OllamaClient:
         raise OllamaClientError(f"Ollama generation failed for {model}: {last_error}")
 
     async def _pull_model(self, model: str) -> None:
-        response = await self._client.post(
-            "/api/pull",
-            json={"name": model, "stream": False},
-        )
-        response.raise_for_status()
+        try:
+            response = await self._client.post(
+                "/api/pull",
+                json={"name": model, "stream": False},
+            )
+            response.raise_for_status()
+        except httpx.HTTPError as exc:
+            raise OllamaClientError(
+                f"Ollama model pull failed for {model} at {self.config.base_url}: {exc}"
+            ) from exc
 
     def _extract_json(self, raw: str) -> dict:
         cleaned = raw.strip()

@@ -16,6 +16,7 @@ from lantern_house.domain.contracts import (
     ManagerContextPacket,
     MessageView,
     PacingHealthReport,
+    StoryGovernanceReport,
     SummaryView,
 )
 from lantern_house.domain.enums import EventType
@@ -252,6 +253,36 @@ def test_manager_fallback_uses_audience_control_requests() -> None:
     )
     assert "audience-voted change" in plan.objective.lower()
     assert "baby path" in plan.desired_developments[0].lower()
+
+
+def test_manager_fallback_keeps_audience_steering_when_progression_is_missing() -> None:
+    service = StoryManagerService(
+        llm=None,
+        model_name="gemma3:4b",
+        runtime_config=RuntimeConfig(active_character_min=2, active_character_max=3),
+    )
+    context = ManagerContextPacket(
+        title="Lantern House",
+        scene_objective="Hold the line.",
+        scene_location="Front Desk",
+        emotional_temperature=6,
+        cast_guidance=["amelia / Amelia Vale: Anglo anchor. Family pressure: legacy."],
+        pacing_health=PacingHealthReport(score=70),
+        audience_control=AudienceControlReport(
+            active=True,
+            file_status="active",
+            requests=["Build a believable baby path for Amelia and Rafael."],
+            directives=["Roll out gradually over 24 hours."],
+        ),
+        story_governance=StoryGovernanceReport(hourly_progression_met=False),
+    )
+    plan = service._fallback(
+        context=context,
+        roster=["amelia", "rafael", "arjun"],
+    )
+    assert "audience-voted change" in plan.objective.lower()
+    assert "irreversible shift" in plan.objective.lower()
+    assert any("baby path" in item.lower() for item in plan.desired_developments)
 
 
 def test_story_governance_detects_hourly_progression_gap_and_voice_risk() -> None:

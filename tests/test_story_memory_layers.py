@@ -295,6 +295,30 @@ def test_soak_audit_scores_long_run_risks() -> None:
     assert snapshot.strategy_lock_risk >= 20
 
 
+def test_soak_audit_force_runs_even_when_background_loop_disabled() -> None:
+    repo = SoakRepo()
+    packet = ManagerContextPacket(
+        title="Lantern House",
+        scene_objective="Hold the lobby together.",
+        scene_location="Front Desk",
+        emotional_temperature=6,
+        pacing_health=PacingHealthReport(score=60),
+    )
+    service = SoakAuditService(
+        repo,
+        FixedSimulationLab(),
+        SoakAuditConfig(
+            enabled=False,
+            horizons_hours=[24, 72],
+            turns_per_hour=90,
+            refresh_interval_minutes=30,
+        ),
+    )
+    snapshot = service.refresh_if_due(packet, now=utcnow(), force=True)
+    assert snapshot is not None
+    assert snapshot.recommended_direction
+
+
 def test_character_repair_model_salvages_turn() -> None:
     service = CharacterService(RepairLLM(), "gemma3:1b", "gemma3:1b")
     packet = CharacterContextPacket(

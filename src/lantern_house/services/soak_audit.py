@@ -32,7 +32,7 @@ class SoakAuditService:
         now=None,
         force: bool = False,
     ) -> SoakAuditSnapshot | None:
-        if not self.config.enabled:
+        if not self.config.enabled and not force:
             return self.repository.get_latest_soak_audit()
         now = ensure_utc(now or utcnow())
         latest = self.repository.get_latest_soak_audit()

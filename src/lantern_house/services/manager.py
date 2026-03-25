@@ -121,26 +121,23 @@ class StoryManagerService:
             "Disturb the fragile calm with one practical problem "
             "and one emotionally loaded question."
         )
+        audience_objective = None
+        audience_move = None
         if strategic_brief and strategic_brief.current_north_star_objective:
             objective = strategic_brief.current_north_star_objective
         if audience.active and audience.requests:
-            objective = (
+            audience_objective = (
                 "Seed the leading audience-voted change in a believable way without "
                 "forcing instant payoff."
             )
+        hourly_objective = None
         if not context.hourly_ledger.contract_met:
-            objective = (
+            hourly_objective = (
                 "Before this clock hour closes, land one concrete shift in trust, desire, "
                 "evidence, debt pressure, power, or loyalty."
             )
-            if audience.active and audience.requests:
-                objective = (
-                    "Seed the leading audience-voted change while still landing one "
-                    "concrete hourly shift in trust, desire, evidence, debt pressure, "
-                    "power, or loyalty."
-                )
         if not governance.hourly_progression_met:
-            objective = (
+            hourly_objective = (
                 "Force one irreversible shift this hour in trust, evidence, money pressure, "
                 "or romantic risk."
             )
@@ -149,6 +146,15 @@ class StoryManagerService:
                 "Recenter the house around survival pressure, ownership conflict, "
                 "hidden records, and unstable attraction."
             )
+        if audience_objective and hourly_objective:
+            objective = (
+                f"{audience_objective} Also, "
+                f"{hourly_objective[0].lower()}{hourly_objective[1:]}"
+            )
+        elif hourly_objective:
+            objective = hourly_objective
+        elif audience_objective:
+            objective = audience_objective
         desired = [
             "Surface a clue linked to the debt or the sealed lantern wing.",
             "Sharpen an old romantic or loyalty fault line without resolving it.",
@@ -158,7 +164,8 @@ class StoryManagerService:
         if context.hourly_ledger.recommended_push:
             desired[0] = context.hourly_ledger.recommended_push[0]
         if audience.active and audience.requests:
-            desired[0] = f"Begin gradual integration of: {audience.requests[0]}"
+            audience_move = f"Begin gradual integration of: {audience.requests[0]}"
+            desired[0] = audience_move
         if context.payoff_threads:
             desired[0] = f"Revive this dormant hook in a grounded way: {context.payoff_threads[0]}"
         if context.house_state.active_pressures:
@@ -202,6 +209,8 @@ class StoryManagerService:
             forbidden = ["Do not solve the central mystery outright."]
         if audience.active and audience.tone_dials.get("romance", 0) >= 7:
             desired[1] = "Push slow-burn attraction, jealousy, or private domestic longing."
+        if audience_move and not any(audience_move.lower() == item.lower() for item in desired):
+            desired[1] = audience_move
         per_character = {
             slug: CharacterGoal(
                 goal=(
