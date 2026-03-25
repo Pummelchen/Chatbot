@@ -11,6 +11,22 @@
 ## Recommended Startup Sequence
 
 ```bash
+./start.sh
+```
+
+`./start.sh` is the preferred operator entrypoint. It creates or repairs the virtual environment, installs dependencies when needed, ensures the configured MySQL database exists, ensures Ollama and the configured models are available, runs `migrate`, runs idempotent `seed`, performs `healthcheck`, and then starts the resumable live runtime under a restart supervisor.
+
+Useful variants:
+
+```bash
+./start.sh --once
+./start.sh --config /absolute/path/to/runtime.toml
+./start.sh --no-restart
+```
+
+If you want manual control instead of the supervisor, the old CLI sequence still works:
+
+```bash
 source .venv/bin/activate
 lantern-house healthcheck
 lantern-house migrate
@@ -35,6 +51,7 @@ If you are moving from an older story bible to the current globally optimized ca
 ## Operational Behavior
 
 - The runtime keeps a persistent `run_state` row with the last tick, message, recap hour, and degraded-mode markers.
+- `start.sh` relies on that persisted `run_state`, recap state, checkpoints, and canon memory so a restart resumes the live story instead of reseeding or starting over.
 - The runtime also keeps a persistent `house_state` row that models financial pressure, repair backlog, inspections, weather strain, fatigue, and reputation risk.
 - The runtime also keeps a persistent hourly beat ledger so each clock hour can be audited for real progression.
 - The runtime also keeps multi-window canon capsules so long memory stays bounded and queryable.

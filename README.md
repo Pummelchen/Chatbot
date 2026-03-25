@@ -105,41 +105,34 @@ ollama pull gemma3:4b
 ollama pull gemma3:12b
 ```
 
-3. Create a database:
-
-```sql
-CREATE DATABASE lantern_house CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-```
-
-4. Create a virtual environment and install dependencies:
+3. Copy `.env.example` to `.env`, then adjust credentials or edit `config.example.toml`.
+4. Start everything with the bootstrap supervisor:
 
 ```bash
-python3.12 -m venv .venv
+./start.sh
+```
+
+`start.sh` will:
+
+- create or repair `.venv`
+- install dependencies when needed
+- ensure the configured MySQL database exists
+- ensure Ollama is reachable and the configured models are present
+- run `migrate`, `seed`, and `healthcheck`
+- start the live runtime with auto-restart supervision
+- resume from persisted `run_state` if the project was already running before
+
+5. Edit `update.txt` whenever you want to steer the live story. The manager will absorb the changes on its next 10-minute audience-control check.
+6. If you keep multiple runtime configs, run `./start.sh --config /absolute/path/to/runtime.toml`. Hot patching now keeps tracking that active config file instead of snapping back to the default example config.
+
+Manual CLI startup is still available if you want more control:
+
+```bash
 source .venv/bin/activate
-pip install -e ".[dev]"
-```
-
-5. Copy `.env.example` to `.env`, then adjust credentials or use `config.example.toml`.
-6. Run migrations:
-
-```bash
 lantern-house migrate
-```
-
-7. Seed the story world:
-
-```bash
 lantern-house seed
-```
-
-8. Start the runtime:
-
-```bash
 lantern-house run
 ```
-
-9. Edit `update.txt` whenever you want to steer the live story. The manager will absorb the changes on its next 10-minute audience-control check.
-10. If you keep multiple runtime configs, pass `--config /absolute/path/to/runtime.toml`. Hot patching now keeps tracking that active config file instead of snapping back to the default example config.
 
 ## CLI Commands
 
@@ -163,6 +156,7 @@ All CLI commands now fail with concise operator messages plus logged context in 
 - Runtime state is persisted on every turn and checkpointed independently on a background interval.
 - Default recovery protection includes per-turn checkpoint snapshots plus a 60-second heartbeat.
 - Recovery logic resumes from persisted run state after restart and flags unclean shutdowns for the manager.
+- `./start.sh` is the preferred operator entrypoint. It bootstraps dependencies, initializes missing infrastructure, and then hands off to the resumable runtime supervisor.
 - After the first directive, manager refreshes can happen off the hot path so steady-state chat flow does not stop every time the planner updates.
 - The manager also carries a persisted `audience_control` block sourced from `update.txt`, including tone dials, vote requests, rollout stage, and the last successful parse.
 - Audience steering is also compiled into persisted rollout beats so major vote requests land as staged prerequisites over time.
