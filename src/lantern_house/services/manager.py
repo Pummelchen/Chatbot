@@ -117,6 +117,7 @@ class StoryManagerService:
         pending_beats = context.pending_beats
         strategic = context.strategic_guidance
         strategic_brief = context.strategic_brief
+        programming_grid = context.programming_grid_digest
         objective = (
             "Disturb the fragile calm with one practical problem "
             "and one emotionally loaded question."
@@ -135,6 +136,10 @@ class StoryManagerService:
             hourly_objective = (
                 "Before this clock hour closes, land one concrete shift in trust, desire, "
                 "evidence, debt pressure, power, or loyalty."
+            )
+        if programming_grid and any("[at-risk]" in item.lower() for item in programming_grid):
+            objective = (
+                "Protect the day plan by landing one overdue tentpole without losing realism."
             )
         if not governance.hourly_progression_met:
             hourly_objective = (
@@ -161,6 +166,8 @@ class StoryManagerService:
         ]
         if pending_beats:
             desired[0] = f"Land this prepared beat in a grounded way: {pending_beats[0]}"
+        if programming_grid:
+            desired[0] = f"Serve this daily or weekly tentpole: {programming_grid[0]}"
         if context.hourly_ledger.recommended_push:
             desired[0] = context.hourly_ledger.recommended_push[0]
         if audience.active and audience.requests:
@@ -201,8 +208,17 @@ class StoryManagerService:
             desired[1] = (
                 "Restore clip value with a sharper interruption, confession, or leverage line."
             )
+        if context.monetization_signals:
+            desired[1] = (
+                "Give the next exchange one cleaner quote, side-taking fault line, or "
+                "debate-friendly turn."
+            )
         if context.soak_audit_signals:
             desired[0] = f"Follow the latest soak warning: {context.soak_audit_signals[0]}"
+        if context.canon_court_alerts:
+            desired[0] = (
+                "Keep suspicion alive without speaking as if the central truth is already proven."
+            )
         if strategic_brief and strategic_brief.reveals_forbidden_for_now:
             forbidden = strategic_brief.reveals_forbidden_for_now[:2]
         else:
@@ -249,7 +265,9 @@ class StoryManagerService:
                 + context.recap_quality_alerts[:1]
                 + context.public_turn_review_signals[:1]
                 + context.highlight_signals[:1]
+                + context.monetization_signals[:1]
                 + context.soak_audit_signals[:1]
+                + context.ops_alerts[:1]
                 + strategic[:2]
                 + audience.directives[:2]
             )[:4],

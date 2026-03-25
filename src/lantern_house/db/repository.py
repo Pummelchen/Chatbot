@@ -4,11 +4,13 @@
 # for uninterrupted long-running operation.
 from __future__ import annotations
 
+import logging
 import re
 from datetime import datetime, timedelta
 from typing import Any
 
 from sqlalchemy import and_, desc, func, or_, select, update
+from sqlalchemy.exc import SQLAlchemyError
 
 from lantern_house.db import models
 from lantern_house.db.session import SessionFactory
@@ -16,6 +18,7 @@ from lantern_house.domain.contracts import (
     BeatPlanItem,
     BeatSnapshot,
     CanonCapsuleSnapshot,
+    CanonCourtFindingSnapshot,
     CharacterTurn,
     ContinuityFlagDraft,
     DormantThreadSnapshot,
@@ -26,6 +29,9 @@ from lantern_house.domain.contracts import (
     HouseStateSnapshot,
     ManagerDirectivePlan,
     MessageView,
+    MonetizationPackageSnapshot,
+    OpsTelemetrySnapshot,
+    ProgrammingGridSlotSnapshot,
     RelationshipSnapshot,
     SimulationLabReport,
     SoakAuditSnapshot,
@@ -42,6 +48,7 @@ from lantern_house.utils.time import ensure_utc, floor_to_hour, isoformat, utcno
 
 _MAX_UNRESOLVED_QUESTIONS = 12
 _MAX_ARCHIVED_THREADS = 24
+logger = logging.getLogger(__name__)
 
 
 class StoryRepository:
@@ -80,6 +87,7 @@ class StoryRepository:
             metadata = dict(run_state.metadata_json)
             metadata["runtime_phase"] = "startup"
             metadata["last_start_at"] = isoformat(now)
+            metadata["restart_count"] = int(metadata.get("restart_count", 0)) + 1
             run_state.status = "starting"
             run_state.last_checkpoint_at = now
             run_state.metadata_json = metadata
@@ -290,6 +298,24 @@ class StoryRepository:
                     kind=row.message_kind,
                     created_at=row.created_at,
                 )
+                for row in rows
+            ]
+
+    def list_recent_message_metrics(self, *, limit: int = 12) -> list[dict[str, Any]]:
+        with self.session_factory.session_scope() as session:
+            rows = session.scalars(
+                select(models.Message)
+                .where(models.Message.latency_ms.is_not(None))
+                .order_by(desc(models.Message.created_at))
+                .limit(limit)
+            ).all()
+            return [
+                {
+                    "tick_no": row.tick_no,
+                    "speaker_slug": row.speaker_slug,
+                    "latency_ms": row.latency_ms or 0,
+                    "created_at": row.created_at,
+                }
                 for row in rows
             ]
 
@@ -1726,6 +1752,99 @@ class StoryRepository:
                 metadata=row.metadata_json,
             )
 
+    def sync_programming_grid_slots(
+        self,
+        *,
+        slots: list[ProgrammingGridSlotSnapshot],
+        now=None,
+    ) -> list[ProgrammingGridSlotSnapshot]:
+        now = ensure_utc(now or utcnow())
+        try:
+            with self.session_factory.session_scope() as session:
+                for slot in slots:
+                    window_start_at = ensure_utc(slot.window_start_at or now)
+                    row = session.scalar(
+                        select(models.ProgrammingGridSlot).where(
+                            models.ProgrammingGridSlot.horizon == slot.horizon,
+                            models.ProgrammingGridSlot.slot_key == slot.slot_key,
+                            models.ProgrammingGridSlot.window_start_at == window_start_at,
+                        )
+                    )
+                    if row is None:
+                        row = models.ProgrammingGridSlot(
+                            horizon=slot.horizon,
+                            slot_key=slot.slot_key,
+                            window_start_at=window_start_at,
+                            created_at=now,
+                        )
+                        session.add(row)
+                    row.label = slot.label
+                    row.objective = slot.objective
+                    row.target_axis = slot.target_axis
+                    row.status = slot.status
+                    row.priority = slot.priority
+                    row.notes = slot.notes
+                    row.metadata_json = slot.metadata
+                    row.window_end_at = ensure_utc(slot.window_end_at or now)
+                    row.updated_at = now
+                return [
+                    slot.model_copy(update={"updated_at": now})
+                    for slot in slots
+                ]
+        except SQLAlchemyError as exc:
+            _log_recovered_db_failure(
+                "repository.sync_programming_grid_slots",
+                exc,
+                context={"slot_count": len(slots)},
+                expected_inputs=["A migrated programming_grid_slots table."],
+                retry_advice="Run migrations so programming-grid persistence can resume.",
+                fallback_used="return-unpersisted-grid-slots",
+            )
+            return [slot.model_copy(update={"updated_at": now}) for slot in slots]
+
+    def list_programming_grid_slots(
+        self,
+        *,
+        horizon: str | None = None,
+        limit: int = 10,
+    ) -> list[ProgrammingGridSlotSnapshot]:
+        try:
+            with self.session_factory.session_scope() as session:
+                stmt = select(models.ProgrammingGridSlot).order_by(
+                    desc(models.ProgrammingGridSlot.window_start_at),
+                    desc(models.ProgrammingGridSlot.priority),
+                )
+                if horizon:
+                    stmt = stmt.where(models.ProgrammingGridSlot.horizon == horizon)
+                rows = session.scalars(stmt.limit(limit)).all()
+                return [
+                    ProgrammingGridSlotSnapshot(
+                        horizon=row.horizon,
+                        slot_key=row.slot_key,
+                        label=row.label,
+                        objective=row.objective,
+                        target_axis=row.target_axis,
+                        status=row.status,
+                        priority=row.priority,
+                        notes=row.notes,
+                        metadata=row.metadata_json,
+                        window_start_at=row.window_start_at,
+                        window_end_at=row.window_end_at,
+                        updated_at=row.updated_at,
+                    )
+                    for row in rows
+                ]
+        except SQLAlchemyError as exc:
+            _log_recovered_db_failure(
+                "repository.list_programming_grid_slots",
+                exc,
+                context={"horizon": horizon, "limit": limit},
+                expected_inputs=["A migrated programming_grid_slots table."],
+                retry_advice="Run migrations so programming-grid reads can resume.",
+                fallback_used="empty-programming-grid",
+            )
+            return []
+
     def list_recent_public_turn_reviews(self, *, limit: int = 8) -> list[dict[str, Any]]:
         with self.session_factory.session_scope() as session:
             rows = session.scalars(
@@ -1749,6 +1868,91 @@ class StoryRepository:
                 }
                 for row in rows
             ]
+
+    def record_canon_court_findings(
+        self,
+        *,
+        findings: list[CanonCourtFindingSnapshot],
+        message_id: int | None = None,
+        now=None,
+    ) -> list[CanonCourtFindingSnapshot]:
+        if not findings:
+            return []
+        now = ensure_utc(now or utcnow())
+        try:
+            with self.session_factory.session_scope() as session:
+                persisted: list[CanonCourtFindingSnapshot] = []
+                for finding in findings:
+                    row = models.CanonCourtFinding(
+                        message_id=message_id or finding.message_id,
+                        issue_type=finding.issue_type,
+                        severity=finding.severity,
+                        action=finding.action,
+                        summary=finding.summary,
+                        evidence=finding.evidence,
+                        metadata_json=finding.metadata,
+                        created_at=now,
+                    )
+                    session.add(row)
+                    session.flush()
+                    persisted.append(
+                        finding.model_copy(
+                            update={
+                                "message_id": row.message_id,
+                                "created_at": now,
+                            }
+                        )
+                    )
+                return persisted
+        except SQLAlchemyError as exc:
+            _log_recovered_db_failure(
+                "repository.record_canon_court_findings",
+                exc,
+                context={"finding_count": len(findings), "message_id": message_id},
+                expected_inputs=["A migrated canon_court_findings table."],
+                retry_advice="Run migrations so canon-court persistence can resume.",
+                fallback_used="return-unpersisted-canon-findings",
+            )
+            return [
+                finding.model_copy(update={"message_id": message_id, "created_at": now})
+                for finding in findings
+            ]
+
+    def list_recent_canon_court_findings(
+        self,
+        *,
+        limit: int = 8,
+    ) -> list[CanonCourtFindingSnapshot]:
+        try:
+            with self.session_factory.session_scope() as session:
+                rows = session.scalars(
+                    select(models.CanonCourtFinding)
+                    .order_by(desc(models.CanonCourtFinding.created_at))
+                    .limit(limit)
+                ).all()
+                return [
+                    CanonCourtFindingSnapshot(
+                        issue_type=row.issue_type,
+                        severity=row.severity,
+                        action=row.action,
+                        summary=row.summary,
+                        evidence=row.evidence,
+                        metadata=row.metadata_json,
+                        message_id=row.message_id,
+                        created_at=row.created_at,
+                    )
+                    for row in rows
+                ]
+        except SQLAlchemyError as exc:
+            _log_recovered_db_failure(
+                "repository.list_recent_canon_court_findings",
+                exc,
+                context={"limit": limit},
+                expected_inputs=["A migrated canon_court_findings table."],
+                retry_advice="Run migrations so canon-court reads can resume.",
+                fallback_used="empty-canon-findings",
+            )
+            return []
 
     def save_canon_capsule(
         self,
@@ -1974,6 +2178,103 @@ class StoryRepository:
             session.flush()
             return package.model_copy(update={"created_at": now})
 
+    def record_monetization_package(
+        self,
+        *,
+        package: MonetizationPackageSnapshot,
+        now=None,
+    ) -> MonetizationPackageSnapshot:
+        now = ensure_utc(now or utcnow())
+        try:
+            with self.session_factory.session_scope() as session:
+                row = models.MonetizationPackage(
+                    message_id=package.message_id,
+                    highlight_message_id=package.highlight_message_id,
+                    speaker_slug=package.speaker_slug,
+                    primary_title=package.primary_title,
+                    alternate_titles=package.alternate_titles,
+                    short_title_options=package.short_title_options,
+                    hook_line=package.hook_line,
+                    quote_line=package.quote_line,
+                    summary_blurb=package.summary_blurb,
+                    recap_blurb=package.recap_blurb,
+                    chapter_label=package.chapter_label,
+                    comment_prompt=package.comment_prompt,
+                    ship_angle=package.ship_angle,
+                    theory_angle=package.theory_angle,
+                    betrayal_angle=package.betrayal_angle,
+                    faction_labels=package.faction_labels,
+                    tags=package.tags,
+                    recommended_clip_start_seconds=package.recommended_clip_start_seconds,
+                    recommended_clip_end_seconds=package.recommended_clip_end_seconds,
+                    score=package.score,
+                    metadata_json=package.metadata,
+                    created_at=now,
+                )
+                session.add(row)
+                session.flush()
+                return package.model_copy(update={"created_at": now})
+        except SQLAlchemyError as exc:
+            _log_recovered_db_failure(
+                "repository.record_monetization_package",
+                exc,
+                context={"speaker_slug": package.speaker_slug, "score": package.score},
+                expected_inputs=["A migrated monetization_packages table."],
+                retry_advice="Run migrations so monetization packaging persistence can resume.",
+                fallback_used="return-unpersisted-monetization-package",
+            )
+            return package.model_copy(update={"created_at": now})
+
+    def list_recent_monetization_packages(
+        self,
+        *,
+        limit: int = 8,
+    ) -> list[MonetizationPackageSnapshot]:
+        try:
+            with self.session_factory.session_scope() as session:
+                rows = session.scalars(
+                    select(models.MonetizationPackage)
+                    .order_by(desc(models.MonetizationPackage.created_at))
+                    .limit(limit)
+                ).all()
+                return [
+                    MonetizationPackageSnapshot(
+                        message_id=row.message_id,
+                        highlight_message_id=row.highlight_message_id,
+                        speaker_slug=row.speaker_slug,
+                        primary_title=row.primary_title,
+                        alternate_titles=row.alternate_titles,
+                        short_title_options=row.short_title_options,
+                        hook_line=row.hook_line,
+                        quote_line=row.quote_line,
+                        summary_blurb=row.summary_blurb,
+                        recap_blurb=row.recap_blurb,
+                        chapter_label=row.chapter_label,
+                        comment_prompt=row.comment_prompt,
+                        ship_angle=row.ship_angle,
+                        theory_angle=row.theory_angle,
+                        betrayal_angle=row.betrayal_angle,
+                        faction_labels=row.faction_labels,
+                        tags=row.tags,
+                        recommended_clip_start_seconds=row.recommended_clip_start_seconds,
+                        recommended_clip_end_seconds=row.recommended_clip_end_seconds,
+                        score=row.score,
+                        metadata=row.metadata_json,
+                        created_at=row.created_at,
+                    )
+                    for row in rows
+                ]
+        except SQLAlchemyError as exc:
+            _log_recovered_db_failure(
+                "repository.list_recent_monetization_packages",
+                exc,
+                context={"limit": limit},
+                expected_inputs=["A migrated monetization_packages table."],
+                retry_advice="Run migrations so monetization package reads can resume.",
+                fallback_used="empty-monetization-packages",
+            )
+            return []
+
     def add_continuity_flags(self, flags: list[ContinuityFlagDraft]) -> None:
         if not flags:
             return
@@ -2063,6 +2364,82 @@ class StoryRepository:
             run_state.metadata_json = metadata
             run_state.last_checkpoint_at = now
             return checkpoint
+
+    def record_ops_telemetry(
+        self,
+        *,
+        snapshot: OpsTelemetrySnapshot,
+        now=None,
+    ) -> OpsTelemetrySnapshot:
+        now = ensure_utc(now or utcnow())
+        try:
+            with self.session_factory.session_scope() as session:
+                row = models.OpsTelemetry(
+                    runtime_status=snapshot.runtime_status,
+                    phase=snapshot.phase,
+                    degraded_mode=snapshot.degraded_mode,
+                    load_tier=snapshot.load_tier,
+                    average_latency_ms=snapshot.average_latency_ms,
+                    checkpoint_age_seconds=snapshot.checkpoint_age_seconds,
+                    recap_age_minutes=snapshot.recap_age_minutes,
+                    strategy_age_minutes=snapshot.strategy_age_minutes,
+                    drift_risk=snapshot.drift_risk,
+                    progression_contract_open=snapshot.progression_contract_open,
+                    restart_count=snapshot.restart_count,
+                    active_strategy=snapshot.active_strategy,
+                    auto_remediations=snapshot.auto_remediations,
+                    metadata_json=snapshot.metadata,
+                    created_at=now,
+                )
+                session.add(row)
+                session.flush()
+                return snapshot.model_copy(update={"created_at": now})
+        except SQLAlchemyError as exc:
+            _log_recovered_db_failure(
+                "repository.record_ops_telemetry",
+                exc,
+                context={"load_tier": snapshot.load_tier, "phase": snapshot.phase},
+                expected_inputs=["A migrated ops_telemetry table."],
+                retry_advice="Run migrations so ops telemetry persistence can resume.",
+                fallback_used="return-unpersisted-ops-snapshot",
+            )
+            return snapshot.model_copy(update={"created_at": now})
+
+    def get_latest_ops_telemetry(self) -> OpsTelemetrySnapshot | None:
+        try:
+            with self.session_factory.session_scope() as session:
+                row = session.scalar(
+                    select(models.OpsTelemetry).order_by(desc(models.OpsTelemetry.created_at))
+                )
+                if row is None:
+                    return None
+                return OpsTelemetrySnapshot(
+                    runtime_status=row.runtime_status,
+                    phase=row.phase,
+                    degraded_mode=row.degraded_mode,
+                    load_tier=row.load_tier,
+                    average_latency_ms=row.average_latency_ms,
+                    checkpoint_age_seconds=row.checkpoint_age_seconds,
+                    recap_age_minutes=row.recap_age_minutes,
+                    strategy_age_minutes=row.strategy_age_minutes,
+                    drift_risk=row.drift_risk,
+                    progression_contract_open=row.progression_contract_open,
+                    restart_count=row.restart_count,
+                    active_strategy=row.active_strategy,
+                    auto_remediations=row.auto_remediations,
+                    metadata=row.metadata_json,
+                    created_at=row.created_at,
+                )
+        except SQLAlchemyError as exc:
+            _log_recovered_db_failure(
+                "repository.get_latest_ops_telemetry",
+                exc,
+                context={},
+                expected_inputs=["A migrated ops_telemetry table."],
+                retry_advice="Run migrations so ops telemetry reads can resume.",
+                fallback_used="no-ops-telemetry",
+            )
+            return None
 
     def _get_run_state_model(self, session) -> models.RunState:
         run_state = session.scalar(
@@ -2362,3 +2739,27 @@ def _beat_sort_key(beat: BeatSnapshot, *, now) -> tuple[int, datetime, int, int]
     status_priority = {"active": 0, "ready": 1, "planned": 2}.get(status, 3)
     due_by = ensure_utc(beat.due_by) if beat.due_by else datetime.max.replace(tzinfo=now.tzinfo)
     return (status_priority, due_by, -beat.significance, beat.id or 0)
+
+
+def _log_recovered_db_failure(
+    operation: str,
+    error: Exception,
+    *,
+    context: dict[str, Any],
+    expected_inputs: list[str],
+    retry_advice: str,
+    fallback_used: str,
+) -> None:
+    logger.error(
+        "Recovered database-layer failure: %s",
+        error,
+        extra={
+            "operation": operation,
+            "recoverable": True,
+            "expected_inputs": expected_inputs,
+            "retry_advice": retry_advice,
+            "context": context,
+            "fallback_used": fallback_used,
+            "exception_type": type(error).__name__,
+        },
+    )

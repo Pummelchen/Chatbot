@@ -8,7 +8,7 @@ Lantern House is split into seven major layers:
 1. `db`: SQLAlchemy models, sessions, repositories, migrations
 2. `context`: selective retrieval and prompt-packet assembly
 3. `quality`: pacing and story-governance evaluators, continuity guardrails
-4. `services`: manager, character, audience-control, house pressure, hourly ledger, canon distillation, highlight packaging, soak audit, story gravity, beat planning, critic, progression, recap, event extraction, simulation, God-AI strategy, seeding
+4. `services`: manager, character, audience-control, house pressure, hourly ledger, programming grid, canon distillation, canon court, highlight packaging, monetization packaging, load orchestration, ops dashboard, soak audit, story gravity, beat planning, critic, progression, recap, event extraction, simulation, God-AI strategy, seeding
 5. `runtime`: scheduler, orchestrator, recovery, long-running loop
 6. `rendering`: terminal presentation for public output
 7. `prompts`: editable role instructions for manager, characters, announcer, and God-AI strategy
@@ -21,15 +21,15 @@ Each loop iteration follows the same pattern:
 2. Check whether full-clock-hour recaps are due.
 3. Refresh the audience-control file state when its poll interval is due.
 4. Sync subscriber-vote rollout requests and rollout beats.
-5. Refresh deterministic house pressure, the hourly beat ledger, canon capsules, and persistent story-gravity state.
+5. Refresh deterministic house pressure, the hourly beat ledger, the daily/weekly programming grid, canon capsules, and persistent story-gravity state.
 6. Optionally apply any safe hot-patch file changes and rebuild runtime services in-place.
 7. Evaluate pacing, continuity, story-governance health, recap quality, and recent public-turn review signals.
 8. Refresh the manager directive when required, blocking only for the first directive and otherwise using a prefetched background plan.
 9. Select the next speaker based on scene state, weights, recency, and burst/lull logic.
 10. Build a selective character context packet.
 11. Generate a structured turn from Ollama.
-12. Run the continuity guard and the lightweight turn critic before persistence.
-13. Extract events, reconcile beats, advance arc state, refresh the hourly ledger and canon capsules, persist the result, and persist turn-review plus highlight telemetry.
+12. Run the continuity guard, canon court, and lightweight turn critic before persistence.
+13. Extract events, reconcile beats, advance arc state, refresh the hourly ledger, programming grid, and canon capsules, persist the result, and persist turn-review plus highlight and monetization telemetry.
 14. Render the public message to the terminal.
 15. Sleep for a variable delay before the next turn.
 
@@ -39,6 +39,7 @@ Parallel background loops:
 - House-pressure engine: keeps grounded operational pressure alive and turns it into reusable beats.
 - Audience-rollout engine: converts `update.txt` steering into staged rollout requests and rollout beats.
 - Soak-audit harness: runs long-horizon deterministic stress checks so the strategist sees drift and stagnation before the live loop feels it.
+- Ops telemetry: captures runtime/load/checkpoint/recap/strategy health so the operator and auto-remediation rules can see whether the live system is decaying.
 - Checkpoint loop: writes periodic restart-safe snapshots independent of turn persistence.
 
 ## Persistence Strategy
@@ -58,9 +59,13 @@ The system persists:
 - Strategic briefs produced by the background God-AI planner
 - Simulation lab runs and ranked strategy candidates
 - Hourly progress ledgers
+- Programming-grid slots
 - Canon capsules
+- Canon-court findings
 - Highlight packages
+- Monetization packages
 - Soak-audit runs
+- Ops telemetry
 - Rollout requests and rollout beats compiled from `update.txt`
 - Public-turn reviews, clip-value scores, fandom-signal candidates, and recap-quality scores
 - Dormant-thread registry rows
@@ -93,15 +98,19 @@ Anti-drift is explicit and layered:
 - The manager is given pacing health and continuity warnings.
 - The manager is also given a story-governance report covering hourly progression, core-tension drift, cliffhanger pressure, and robotic-voice risk.
 - The manager is also given a persisted hourly ledger that acts as a hard contract for each clock hour.
+- The manager is also given a persisted daily and weekly programming grid so day-level and week-level tentpoles do not silently collapse while hourly turns still look fine.
 - The manager is also given bounded canon capsules instead of needing broad transcript replay for longer windows.
+- The canon court can soften or block contradiction-prone turns before they are persisted as public truth.
 - The manager also receives a normalized audience-control report built from `update.txt`, including tone dials, vote requests, rollout stage, and staged rollout beats.
-- The manager also receives house-pressure summaries, story-gravity state, dormant-thread registry snapshots, recap-quality alerts, public-turn review signals, highlight packages, soak-audit warnings, simulation rankings, and the latest strategic brief when available.
+- The manager also receives house-pressure summaries, story-gravity state, dormant-thread registry snapshots, recap-quality alerts, public-turn review signals, highlight packages, monetization signals, soak-audit warnings, ops alerts, simulation rankings, and the latest strategic brief when available.
 - Repetition, romance stalls, mystery stalls, and low-progression windows are scored.
 - Unresolved-question memory is bounded and overflow is pushed into dormant payoff threads.
 - Forbidden-knowledge boundaries are injected into character packets.
 - Prose-like or robotic public turns can be repaired by a small dedicated model before they are committed, with deterministic fallback if repair fails.
 - A deterministic simulation lab ranks likely next directions, and a background God-AI planner converts that into structured strategic guidance without blocking the live loop.
+- A load-aware orchestration layer budgets repair/model/planner work against recent latency so the visible cadence stays stable under pressure.
 - A fail-safe executor wraps critical runtime calls, caches last-good values, and applies cooldowns after repeated failures so the loop keeps going conservatively instead of thrashing.
+- New governance tables degrade to no-op/empty reads if code is hot-patched ahead of migrations, so live upgrades do not immediately destabilize the stream.
 - A hot-patch controller can soft-reload runtime/service/prompt/config code paths in place. SQLAlchemy ORM model modules are intentionally excluded from live reload because they are not safe to redefine mid-process.
 - Thought pulses are budgeted and cooldown-limited.
 - Recaps are generated from bounded event digests and prior summaries, not raw transcript replay.

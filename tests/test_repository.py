@@ -14,8 +14,12 @@ from lantern_house.db.repository import StoryRepository
 from lantern_house.db.session import SessionFactory
 from lantern_house.domain.contracts import (
     CanonCapsuleSnapshot,
+    CanonCourtFindingSnapshot,
     HighlightPackageSnapshot,
     HourlyProgressLedgerSnapshot,
+    MonetizationPackageSnapshot,
+    OpsTelemetrySnapshot,
+    ProgrammingGridSlotSnapshot,
     SoakAuditSnapshot,
 )
 from lantern_house.utils.time import utcnow
@@ -119,6 +123,28 @@ def test_repository_can_persist_story_memory_layers() -> None:
     assert ledger.contract_met is True
     assert ledger.dominant_axis == "evidence"
 
+    repository.sync_programming_grid_slots(
+        slots=[
+            ProgrammingGridSlotSnapshot(
+                horizon="daily",
+                slot_key="clue-turn",
+                label="Clue turn",
+                objective="Land one clue today.",
+                target_axis="evidence",
+                status="at-risk",
+                priority=9,
+                notes=["No clue turn has landed yet."],
+                window_start_at=now.replace(hour=0, minute=0, second=0, microsecond=0),
+                window_end_at=now.replace(hour=0, minute=0, second=0, microsecond=0)
+                + timedelta(days=1),
+            )
+        ],
+        now=now,
+    )
+    grid_slots = repository.list_programming_grid_slots(limit=1)
+    assert grid_slots[0].slot_key == "clue-turn"
+    assert grid_slots[0].status == "at-risk"
+
     repository.save_canon_capsule(
         snapshot=CanonCapsuleSnapshot(
             window_key="24h",
@@ -153,6 +179,27 @@ def test_repository_can_persist_story_memory_layers() -> None:
     assert highlights[0].speaker_slug == "amelia"
     assert highlights[0].score == 82
 
+    repository.record_monetization_package(
+        package=MonetizationPackageSnapshot(
+            message_id=1,
+            highlight_message_id=1,
+            speaker_slug="amelia",
+            primary_title="Amelia just gave viewers a new side to pick",
+            hook_line="Tell me the truth before payroll tells it for you.",
+            quote_line="Tell me the truth before payroll tells it for you.",
+            summary_blurb="A money threat became personal.",
+            recap_blurb="The house crisis became public and personal.",
+            chapter_label="Daily recap hook",
+            comment_prompt="Whose side are you on right now?",
+            tags=["lantern-house", "ship-war"],
+            score=88,
+        ),
+        now=now,
+    )
+    monetization = repository.list_recent_monetization_packages(limit=1)
+    assert monetization[0].score == 88
+    assert monetization[0].speaker_slug == "amelia"
+
     repository.record_soak_audit_run(
         snapshot=SoakAuditSnapshot(
             horizons_hours=[24, 72, 168],
@@ -172,6 +219,44 @@ def test_repository_can_persist_story_memory_layers() -> None:
     audit = repository.get_latest_soak_audit()
     assert audit is not None
     assert audit.recommended_direction == "mystery-evidence-first"
+
+    repository.record_canon_court_findings(
+        findings=[
+            CanonCourtFindingSnapshot(
+                issue_type="premature-finality",
+                severity="critical",
+                action="repair",
+                summary="The turn spoke with too much finality.",
+                evidence=["case closed"],
+            )
+        ],
+        message_id=1,
+        now=now,
+    )
+    findings = repository.list_recent_canon_court_findings(limit=1)
+    assert findings[0].issue_type == "premature-finality"
+
+    repository.record_ops_telemetry(
+        snapshot=OpsTelemetrySnapshot(
+            runtime_status="running",
+            phase="loop-ready",
+            degraded_mode=False,
+            load_tier="medium",
+            average_latency_ms=2100,
+            checkpoint_age_seconds=30,
+            recap_age_minutes=10,
+            strategy_age_minutes=20,
+            drift_risk=35,
+            progression_contract_open=False,
+            restart_count=1,
+            active_strategy="mystery-evidence-first",
+            auto_remediations=["force-hourly-progression"],
+        ),
+        now=now,
+    )
+    telemetry = repository.get_latest_ops_telemetry()
+    assert telemetry is not None
+    assert telemetry.active_strategy == "mystery-evidence-first"
 
 
 def _repository_with_scene() -> StoryRepository:

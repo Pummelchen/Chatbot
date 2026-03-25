@@ -157,12 +157,29 @@ class HourlyBeatLedgerConfig(BaseModel):
     enforce_progression_window_hours: int = 1
 
 
+class ProgrammingGridConfig(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    enabled: bool = True
+    refresh_interval_minutes: int = 15
+    at_risk_after_hours: int = 12
+    weekly_at_risk_after_days: int = 4
+
+
 class CanonConfig(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     enabled: bool = True
     windows: list[str] = Field(default_factory=lambda: ["1h", "6h", "24h", "7d", "30d"])
     max_items_per_section: int = 4
+
+
+class CanonCourtConfig(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    enabled: bool = True
+    max_findings_per_turn: int = 4
+    force_repair_on_block: bool = True
 
 
 class HighlightsConfig(BaseModel):
@@ -172,6 +189,16 @@ class HighlightsConfig(BaseModel):
     clip_threshold: int = 7
     quote_threshold: int = 7
     max_recent_packages: int = 8
+
+
+class MonetizationConfig(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    enabled: bool = True
+    min_package_score: int = 70
+    max_recent_packages: int = 8
+    min_clip_seconds: int = 15
+    max_clip_seconds: int = 55
 
 
 class SoakAuditConfig(BaseModel):
@@ -212,6 +239,27 @@ class HotPatchConfig(BaseModel):
     )
 
 
+class LoadOrchestrationConfig(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    enabled: bool = True
+    high_latency_ms: int = 7000
+    critical_latency_ms: int = 15000
+    recent_message_window: int = 10
+    high_failure_streak: int = 2
+    critical_failure_streak: int = 4
+
+
+class OpsDashboardConfig(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    enabled: bool = True
+    telemetry_interval_seconds: int = 30
+    stale_checkpoint_seconds: int = 150
+    stale_recap_minutes: int = 70
+    stale_strategy_minutes: int = 120
+
+
 class AppConfig(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
@@ -231,11 +279,18 @@ class AppConfig(BaseModel):
     god_ai: GodAIConfig = Field(default_factory=GodAIConfig)
     simulation: SimulationConfig = Field(default_factory=SimulationConfig)
     hourly_beat_ledger: HourlyBeatLedgerConfig = Field(default_factory=HourlyBeatLedgerConfig)
+    programming_grid: ProgrammingGridConfig = Field(default_factory=ProgrammingGridConfig)
     canon: CanonConfig = Field(default_factory=CanonConfig)
+    canon_court: CanonCourtConfig = Field(default_factory=CanonCourtConfig)
     highlights: HighlightsConfig = Field(default_factory=HighlightsConfig)
+    monetization: MonetizationConfig = Field(default_factory=MonetizationConfig)
     soak_audit: SoakAuditConfig = Field(default_factory=SoakAuditConfig)
     failsafe: FailSafeConfig = Field(default_factory=FailSafeConfig)
     hot_patch: HotPatchConfig = Field(default_factory=HotPatchConfig)
+    load_orchestration: LoadOrchestrationConfig = Field(
+        default_factory=LoadOrchestrationConfig
+    )
+    ops_dashboard: OpsDashboardConfig = Field(default_factory=OpsDashboardConfig)
     loaded_from: str | None = Field(default=None, exclude=True)
     config_root: str | None = Field(default=None, exclude=True)
 

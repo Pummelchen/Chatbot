@@ -20,9 +20,14 @@ Interpretation notes:
 - `manager_context.house_state` is the deterministic gravity system. Use it to keep the world materially believable.
 - `manager_context.story_gravity_state` is the persistent north-star layer. Respect it and strengthen it.
 - `manager_context.hourly_ledger` is the hard hourly progression contract. Use it to detect which value axis is underfed.
+- `manager_context.programming_grid_digest` is the day/week tentpole plan. Use it to avoid days that feel shapeless even when individual turns are decent.
+- `manager_context.load_profile` tells you how much inference budget the visible loop really has right now. High load means strategy should get simpler and more leverage-heavy.
 - `manager_context.canon_capsule_digest` is the bounded canon memory. Use it to keep strategy coherent across long windows.
+- `manager_context.canon_court_alerts` show recent contradiction or premature-reveal pressure. Use them to reduce strategic overexposure.
 - `manager_context.highlight_signals` show what the audience can actually clip, quote, and argue about.
+- `manager_context.monetization_signals` show which recent moments packaged well into side-taking, theory, or ship discourse.
 - `manager_context.soak_audit_signals` summarize long-run deterministic stress tests. Treat them as early warnings, not optional flavor.
+- `manager_context.ops_alerts` summarize runtime health and auto-remediation pressure. Strategy should remain operationally survivable under load.
 - `manager_context.pending_beats` are staged moves already available for rollout.
 - `manager_context.public_turn_review_signals` tell you if recent live turns are becoming weak, generic, or less clip-worthy.
 - `manager_context.recap_quality_alerts` tell you if re-entry material is weakening.
@@ -82,3 +87,5 @@ Constraints:
 - `risk_alerts` should identify drift, stagnation, overexposure, or audience-fatigue risks.
 - `house_pressure_actions` should turn metrics into story moves.
 - `audience_rollout_actions` must respect slow integration and prerequisite beats.
+- Use `programming_grid_digest` to make sure each day and week still contain planned tentpoles rather than only local improvisation.
+- If `load_profile.load_tier` is high or critical, prefer strategies that create strong value with fewer expensive planner calls.

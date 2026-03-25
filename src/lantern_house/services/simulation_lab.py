@@ -53,6 +53,12 @@ class SimulationLabService:
     def _score_house_pressure(self, context: ManagerContextPacket) -> SimulationCandidateScore:
         score = 50
         rationale: list[str] = []
+        if any(
+            "[at-risk]" in item.lower() and "house" in item.lower()
+            for item in context.programming_grid_digest
+        ):
+            score += 12
+            rationale.append("The daily or weekly plan still needs a grounded house tentpole.")
         state = context.house_state
         if not context.hourly_ledger.contract_met:
             score += 10
@@ -106,6 +112,12 @@ class SimulationLabService:
     def _score_mystery(self, context: ManagerContextPacket) -> SimulationCandidateScore:
         score = 48
         rationale: list[str] = []
+        if any(
+            "[at-risk]" in item.lower() and "clue" in item.lower()
+            for item in context.programming_grid_digest
+        ):
+            score += 10
+            rationale.append("The programming grid still needs a clue or mystery-ladder beat.")
         if (
             not context.hourly_ledger.contract_met
             and context.hourly_ledger.evidence_shift_count == 0
@@ -152,6 +164,12 @@ class SimulationLabService:
     def _score_romance(self, context: ManagerContextPacket) -> SimulationCandidateScore:
         score = 46
         rationale: list[str] = []
+        if any(
+            "[at-risk]" in item.lower() and "romance" in item.lower()
+            for item in context.programming_grid_digest
+        ):
+            score += 10
+            rationale.append("The day plan still needs a romance escalation beat.")
         if not context.hourly_ledger.contract_met and context.hourly_ledger.desire_shift_count == 0:
             score += 8
             rationale.append("The hourly ledger still needs desire movement to keep ships alive.")
@@ -213,6 +231,11 @@ class SimulationLabService:
         if context.canon_capsule_digest:
             score += 4
             rationale.append("Bounded canon capsules make rollout safer over longer horizons.")
+        if context.load_profile.load_tier in {"high", "critical"}:
+            score -= 6
+            rationale.append(
+                "Load pressure means audience rollout should stay operationally cheap."
+            )
         next_focus = (
             context.pending_beats[0]
             if context.pending_beats
@@ -257,6 +280,9 @@ class SimulationLabService:
         if context.highlight_signals:
             score += 4
             rationale.append("Fresh pairings can vary the kind of moment viewers clip and quote.")
+        if context.monetization_signals:
+            score += 4
+            rationale.append("Recent packaging signals suggest viewers are ready to pick sides.")
         next_focus = (
             "Bring in a quieter character with a concrete agenda and let them "
             "disrupt the current rhythm."
@@ -307,6 +333,12 @@ class SimulationLabService:
         if context.house_state.staff_fatigue >= 7:
             risks.append(
                 "Staff fatigue is high enough to justify mistakes, slips, and brittle reactions."
+            )
+        if any("[at-risk]" in item.lower() for item in context.programming_grid_digest):
+            risks.append("The daily or weekly programming grid is missing at least one tentpole.")
+        if context.load_profile.load_tier in {"high", "critical"}:
+            risks.append(
+                "Model load is high, so direction should stay sharp and operationally light."
             )
         if context.soak_audit_signals:
             risks.extend(context.soak_audit_signals[:1])

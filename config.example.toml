@@ -96,16 +96,34 @@ meaningful_significance_threshold = 6
 refresh_every_turn = true
 enforce_progression_window_hours = 1
 
+[programming_grid]
+enabled = true
+refresh_interval_minutes = 15
+at_risk_after_hours = 12
+weekly_at_risk_after_days = 4
+
 [canon]
 enabled = true
 windows = ["1h", "6h", "24h", "7d", "30d"]
 max_items_per_section = 4
+
+[canon_court]
+enabled = true
+max_findings_per_turn = 4
+force_repair_on_block = true
 
 [highlights]
 enabled = true
 clip_threshold = 7
 quote_threshold = 7
 max_recent_packages = 8
+
+[monetization]
+enabled = true
+min_package_score = 70
+max_recent_packages = 8
+min_clip_seconds = 15
+max_clip_seconds = 55
 
 [soak_audit]
 enabled = true
@@ -129,3 +147,18 @@ check_interval_seconds = 15
 # audience steering file path to the watched set at startup.
 watch_paths = ["src/lantern_house", "config.example.toml", "update.txt"]
 watch_extensions = [".py", ".md", ".toml", ".yaml", ".yml", ".txt"]
+
+[load_orchestration]
+enabled = true
+high_latency_ms = 7000
+critical_latency_ms = 15000
+recent_message_window = 10
+high_failure_streak = 2
+critical_failure_streak = 4
+
+[ops_dashboard]
+enabled = true
+telemetry_interval_seconds = 30
+stale_checkpoint_seconds = 150
+stale_recap_minutes = 70
+stale_strategy_minutes = 120

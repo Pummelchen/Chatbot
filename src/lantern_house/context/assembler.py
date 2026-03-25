@@ -10,7 +10,9 @@ from lantern_house.domain.contracts import (
     CharacterContextPacket,
     HourlyProgressLedgerSnapshot,
     HouseStateSnapshot,
+    LoadProfileSnapshot,
     ManagerContextPacket,
+    OpsTelemetrySnapshot,
     StoryGravityStateSnapshot,
 )
 from lantern_house.quality.governance import StoryGovernanceEvaluator
@@ -34,6 +36,8 @@ class ContextAssembler:
         *,
         audience_control: AudienceControlReport | None = None,
         include_strategic: bool = True,
+        load_profile: LoadProfileSnapshot | None = None,
+        ops_snapshot: OpsTelemetrySnapshot | None = None,
     ) -> ManagerContextPacket:
         world = self.repository.get_world_state_snapshot()
         scene = self.repository.get_scene_snapshot()
@@ -77,15 +81,33 @@ class ContextAssembler:
             "get_latest_hourly_progress_ledger",
             default=None,
         )
+        programming_grid_slots = _repo_call(
+            self.repository,
+            "list_programming_grid_slots",
+            limit=6,
+            default=[],
+        )
         canon_capsules = _repo_call(
             self.repository,
             "list_canon_capsules",
+            default=[],
+        )
+        canon_court_findings = _repo_call(
+            self.repository,
+            "list_recent_canon_court_findings",
+            limit=4,
             default=[],
         )
         highlight_packages = _repo_call(
             self.repository,
             "list_recent_highlight_packages",
             limit=4,
+            default=[],
+        )
+        monetization_packages = _repo_call(
+            self.repository,
+            "list_recent_monetization_packages",
+            limit=3,
             default=[],
         )
         soak_audit = _repo_call(
@@ -97,6 +119,11 @@ class ContextAssembler:
             _repo_call(self.repository, "get_latest_strategic_brief", default=None)
             if include_strategic
             else None
+        )
+        latest_ops_snapshot = ops_snapshot or _repo_call(
+            self.repository,
+            "get_latest_ops_telemetry",
+            default=None,
         )
 
         pacing_health = self.pacing_evaluator.evaluate(messages=messages, events=events)
@@ -228,6 +255,14 @@ class ContextAssembler:
                 for beat in pending_beats
             ],
             hourly_ledger=hourly_ledger or HourlyProgressLedgerSnapshot(),
+            programming_grid_digest=[
+                _compact_text(
+                    f"{slot.horizon} {slot.label} [{slot.status}]: {slot.notes[0]}",
+                    limit=190,
+                )
+                for slot in programming_grid_slots[:4]
+            ],
+            load_profile=load_profile or LoadProfileSnapshot(),
             canon_capsule_digest=[
                 _compact_text(
                     (
@@ -238,12 +273,29 @@ class ContextAssembler:
                 )
                 for capsule in canon_capsules[:3]
             ],
+            canon_court_alerts=[
+                _compact_text(
+                    f"{item.severity.upper()} {item.issue_type}: {item.summary}",
+                    limit=180,
+                )
+                for item in canon_court_findings[:3]
+            ],
             highlight_signals=[
                 _compact_text(
                     f"{item.speaker_slug} / score {item.score}: {item.title} | {item.hook_line}",
                     limit=190,
                 )
                 for item in highlight_packages[:3]
+            ],
+            monetization_signals=[
+                _compact_text(
+                    (
+                        f"{item.speaker_slug} / score {item.score}: {item.primary_title} | "
+                        f"{item.comment_prompt}"
+                    ),
+                    limit=190,
+                )
+                for item in monetization_packages[:2]
             ],
             soak_audit_signals=(
                 [
@@ -260,6 +312,22 @@ class ContextAssembler:
                 if soak_audit
                 else []
             ),
+            ops_alerts=[
+                _compact_text(
+                    (
+                        f"{latest_ops_snapshot.load_tier} load / checkpoint "
+                        f"{latest_ops_snapshot.checkpoint_age_seconds}s / recap "
+                        f"{latest_ops_snapshot.recap_age_minutes}m"
+                    ),
+                    limit=180,
+                ),
+                *[
+                    _compact_text(item, limit=160)
+                    for item in latest_ops_snapshot.auto_remediations[:2]
+                ],
+            ]
+            if latest_ops_snapshot
+            else [],
             strategic_guidance=[
                 _compact_text(strategic_brief.current_north_star_objective, limit=180),
                 _compact_text(strategic_brief.viewer_value_thesis, limit=180),

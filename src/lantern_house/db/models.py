@@ -527,6 +527,37 @@ class HourlyProgressLedger(Base):
     )
 
 
+class ProgrammingGridSlot(Base):
+    __tablename__ = "programming_grid_slots"
+    __table_args__ = (
+        UniqueConstraint(
+            "horizon",
+            "slot_key",
+            "window_start_at",
+            name="uq_programming_grid_slot_window",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    horizon: Mapped[str] = mapped_column(String(20), nullable=False)
+    slot_key: Mapped[str] = mapped_column(String(80), nullable=False)
+    label: Mapped[str] = mapped_column(String(120), nullable=False)
+    objective: Mapped[str] = mapped_column(Text, nullable=False)
+    target_axis: Mapped[str] = mapped_column(String(40), nullable=False, default="mixed")
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="planned")
+    priority: Mapped[int] = mapped_column(Integer, nullable=False, default=5)
+    notes: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    metadata_json: Mapped[dict] = mapped_column("metadata", JSON, default=dict, nullable=False)
+    window_start_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    window_end_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, onupdate=_utcnow
+    )
+
+
 class PublicTurnReview(Base):
     __tablename__ = "public_turn_reviews"
 
@@ -542,6 +573,22 @@ class PublicTurnReview(Base):
     clip_value: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
     fandom_discussion_value: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
     novelty: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, nullable=False
+    )
+
+
+class CanonCourtFinding(Base):
+    __tablename__ = "canon_court_findings"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    message_id: Mapped[int | None] = mapped_column(ForeignKey("messages.id"), nullable=True)
+    issue_type: Mapped[str] = mapped_column(String(80), nullable=False)
+    severity: Mapped[str] = mapped_column(String(20), nullable=False, default="warning")
+    action: Mapped[str] = mapped_column(String(30), nullable=False, default="allow")
+    summary: Mapped[str] = mapped_column(Text, nullable=False)
+    evidence: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    metadata_json: Mapped[dict] = mapped_column("metadata", JSON, default=dict, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow, nullable=False
     )
@@ -603,6 +650,42 @@ class HighlightPackage(Base):
     recommended_clip_seconds: Mapped[int] = mapped_column(Integer, default=25, nullable=False)
     source_window_minutes: Mapped[int] = mapped_column(Integer, default=4, nullable=False)
     score: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    metadata_json: Mapped[dict] = mapped_column("metadata", JSON, default=dict, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, nullable=False
+    )
+
+
+class MonetizationPackage(Base):
+    __tablename__ = "monetization_packages"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    message_id: Mapped[int | None] = mapped_column(ForeignKey("messages.id"), nullable=True)
+    highlight_message_id: Mapped[int | None] = mapped_column(
+        ForeignKey("messages.id"), nullable=True
+    )
+    speaker_slug: Mapped[str] = mapped_column(String(100), nullable=False)
+    primary_title: Mapped[str] = mapped_column(String(220), nullable=False)
+    alternate_titles: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    short_title_options: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    hook_line: Mapped[str] = mapped_column(Text, nullable=False)
+    quote_line: Mapped[str] = mapped_column(Text, nullable=False)
+    summary_blurb: Mapped[str] = mapped_column(Text, nullable=False)
+    recap_blurb: Mapped[str] = mapped_column(Text, nullable=False)
+    chapter_label: Mapped[str] = mapped_column(String(160), nullable=False, default="")
+    comment_prompt: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    ship_angle: Mapped[str] = mapped_column(String(160), nullable=False, default="")
+    theory_angle: Mapped[str] = mapped_column(String(160), nullable=False, default="")
+    betrayal_angle: Mapped[str] = mapped_column(String(160), nullable=False, default="")
+    faction_labels: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    tags: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    recommended_clip_start_seconds: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0
+    )
+    recommended_clip_end_seconds: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=25
+    )
+    score: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     metadata_json: Mapped[dict] = mapped_column("metadata", JSON, default=dict, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow, nullable=False
@@ -702,6 +785,29 @@ class SoakAuditRun(Base):
     recommended_direction: Mapped[str] = mapped_column(Text, nullable=False)
     audit_notes: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
     candidate_pressure: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    metadata_json: Mapped[dict] = mapped_column("metadata", JSON, default=dict, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, nullable=False
+    )
+
+
+class OpsTelemetry(Base):
+    __tablename__ = "ops_telemetry"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    runtime_status: Mapped[str] = mapped_column(String(20), nullable=False)
+    phase: Mapped[str] = mapped_column(String(50), nullable=False, default="unknown")
+    degraded_mode: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    load_tier: Mapped[str] = mapped_column(String(20), nullable=False, default="low")
+    average_latency_ms: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    checkpoint_age_seconds: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    recap_age_minutes: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    strategy_age_minutes: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    drift_risk: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    progression_contract_open: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    restart_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    active_strategy: Mapped[str] = mapped_column(String(160), nullable=False, default="")
+    auto_remediations: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
     metadata_json: Mapped[dict] = mapped_column("metadata", JSON, default=dict, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow, nullable=False

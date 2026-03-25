@@ -17,8 +17,10 @@ from lantern_house.context.assembler import ContextAssembler
 from lantern_house.db.repository import StoryRepository
 from lantern_house.domain.contracts import (
     AudienceControlReport,
+    LoadProfileSnapshot,
     ManagerContextPacket,
     ManagerDirectivePlan,
+    OpsTelemetrySnapshot,
     StoryProgressionPlan,
     TurnCriticReport,
 )
@@ -31,6 +33,7 @@ from lantern_house.runtime.scheduler import TurnScheduler
 from lantern_house.services.audience import AudienceControlService
 from lantern_house.services.beats import StoryBeatService
 from lantern_house.services.canon import CanonDistillationService
+from lantern_house.services.canon_court import CanonCourtService
 from lantern_house.services.character import CharacterService
 from lantern_house.services.critic import TurnCriticService
 from lantern_house.services.event_extractor import EventExtractor
@@ -38,7 +41,11 @@ from lantern_house.services.god_ai import GodAIService
 from lantern_house.services.highlights import HighlightPackagingService
 from lantern_house.services.hourly_ledger import HourlyBeatLedgerService
 from lantern_house.services.house import HousePressureService
+from lantern_house.services.load_orchestration import LoadOrchestrationService
 from lantern_house.services.manager import StoryManagerService
+from lantern_house.services.monetization import MonetizationPackagingService
+from lantern_house.services.ops_dashboard import OpsDashboardService
+from lantern_house.services.programming_grid import ProgrammingGridService
 from lantern_house.services.progression import StoryProgressionService
 from lantern_house.services.recaps import RecapService
 from lantern_house.services.story_gravity import StoryGravityService
@@ -57,7 +64,9 @@ class RuntimeOrchestrator:
         audience_control_service: AudienceControlService,
         beat_service: StoryBeatService,
         hourly_ledger_service: HourlyBeatLedgerService,
+        programming_grid_service: ProgrammingGridService,
         canon_service: CanonDistillationService,
+        canon_court_service: CanonCourtService,
         house_pressure_service: HousePressureService,
         story_gravity_service: StoryGravityService,
         god_ai_service: GodAIService,
@@ -65,8 +74,11 @@ class RuntimeOrchestrator:
         character_service: CharacterService,
         critic_service: TurnCriticService,
         highlight_service: HighlightPackagingService,
+        monetization_service: MonetizationPackagingService,
         recap_service: RecapService,
         progression_service: StoryProgressionService,
+        load_orchestration_service: LoadOrchestrationService,
+        ops_dashboard_service: OpsDashboardService,
         scheduler: TurnScheduler,
         recovery_service: RecoveryService,
         event_extractor: EventExtractor,
@@ -82,7 +94,9 @@ class RuntimeOrchestrator:
         self.audience_control_service = audience_control_service
         self.beat_service = beat_service
         self.hourly_ledger_service = hourly_ledger_service
+        self.programming_grid_service = programming_grid_service
         self.canon_service = canon_service
+        self.canon_court_service = canon_court_service
         self.house_pressure_service = house_pressure_service
         self.story_gravity_service = story_gravity_service
         self.god_ai_service = god_ai_service
@@ -90,8 +104,11 @@ class RuntimeOrchestrator:
         self.character_service = character_service
         self.critic_service = critic_service
         self.highlight_service = highlight_service
+        self.monetization_service = monetization_service
         self.recap_service = recap_service
         self.progression_service = progression_service
+        self.load_orchestration_service = load_orchestration_service
+        self.ops_dashboard_service = ops_dashboard_service
         self.scheduler = scheduler
         self.recovery_service = recovery_service
         self.event_extractor = event_extractor
@@ -113,6 +130,8 @@ class RuntimeOrchestrator:
         self._last_good_manager_packet: ManagerContextPacket | None = None
         self._last_good_character_packet_by_slug: dict[str, Any] = {}
         self._last_good_run_state: dict[str, Any] | None = None
+        self._last_load_profile = LoadProfileSnapshot()
+        self._last_ops_snapshot: OpsTelemetrySnapshot | None = None
 
     def attach_hot_patch_controller(self, controller: HotPatchController) -> None:
         self.hot_patch_controller = controller
@@ -154,6 +173,7 @@ class RuntimeOrchestrator:
                 except asyncio.CancelledError:
                     raise
                 except Exception as exc:
+                    self._note_runtime_failure(now=utcnow(), reason=str(exc))
                     log_call_failure(
                         "runtime.iteration",
                         exc,
@@ -238,9 +258,12 @@ class RuntimeOrchestrator:
             now=startup_now,
         )
         self._refresh_hourly_ledger(now=startup_now)
+        self._refresh_programming_grid(now=startup_now, force=True)
         self._refresh_house_pressure(now=startup_now, force=True)
         self._refresh_story_gravity(now=startup_now, force=True)
         self._refresh_canon(now=startup_now)
+        startup_load = self._capture_load_profile(now=startup_now)
+        self._capture_ops_snapshot(load_profile=startup_load, now=startup_now)
         self.fail_safe.call(
             "runtime.set_loop_ready",
             lambda: self.repository.set_runtime_status(
@@ -280,9 +303,13 @@ class RuntimeOrchestrator:
             now=now,
         )
         self._refresh_hourly_ledger(now=now)
+        self._refresh_programming_grid(now=now)
         self._refresh_house_pressure(now=now)
         self._refresh_story_gravity(now=now)
         self._refresh_canon(now=now)
+        load_profile = self._capture_load_profile(now=now)
+        ops_snapshot = self._capture_ops_snapshot(load_profile=load_profile, now=now)
+        self._apply_ops_remediations(snapshot=ops_snapshot, now=now)
 
         directive_result = self.fail_safe.call(
             "manager.get_latest_directive",
@@ -309,7 +336,11 @@ class RuntimeOrchestrator:
                 )
             self._pending_manager_task = None
 
-        manager_packet = self._build_manager_packet(audience_control=audience_control)
+        manager_packet = self._build_manager_packet(
+            audience_control=audience_control,
+            load_profile=load_profile,
+            ops_snapshot=ops_snapshot,
+        )
         if manager_packet is None:
             return await self._pause_after_failed_iteration(once=once)
 
@@ -346,6 +377,7 @@ class RuntimeOrchestrator:
                     directive is None
                     or manager_packet.pacing_health.score < 42
                     or manager_packet.story_governance.viewer_value_score < 45
+                    or load_profile.load_tier == "critical"
                 )
                 if urgent_refresh or self._pending_manager_task is None:
                     self.fail_safe.call(
@@ -378,6 +410,14 @@ class RuntimeOrchestrator:
                         fallback_label="deterministic-manager-fallback",
                     )
                     directive_plan = plan_result.value
+                    if (
+                        load_profile.load_tier in {"high", "critical"}
+                        and not urgent_refresh
+                    ):
+                        directive_plan = self.manager_service.fallback_plan(
+                            manager_packet,
+                            self._roster,
+                        )
                     if directive_plan is not None:
                         directive_result = self.fail_safe.call(
                             "manager.record_directive",
@@ -403,6 +443,7 @@ class RuntimeOrchestrator:
             self._pending_manager_task is None
             and self._prefetched_plan is None
             and directive is not None
+            and load_profile.load_tier not in {"high", "critical"}
             and self.scheduler.should_prefetch_manager(
                 run_state=run_state,
                 directive=directive,
@@ -549,6 +590,31 @@ class RuntimeOrchestrator:
             fallback_label="no-continuity-flags",
         )
         flags = flags_result.value or []
+        canon_court_result = self.fail_safe.call(
+            "canon_court.review",
+            lambda: self.canon_court_service.review(
+                packet=packet,
+                turn=turn,
+                events=events,
+            ),
+            context={"speaker_slug": speaker_slug},
+            expected_inputs=["A valid packet, turn, and extracted event list."],
+            retry_advice=(
+                "Retry canon adjudication or continue conservatively without contradiction repair."
+            ),
+            fallback=None,
+            fallback_label="skip-canon-court",
+        )
+        canon_report = canon_court_result.value
+        if canon_report is not None:
+            flags.extend(canon_report.additional_flags)
+            if canon_report.revised_turn is not None and not canon_report.requires_repair:
+                turn = canon_report.revised_turn
+                events = canon_report.revised_events or events
+                if canon_report.revised_questions:
+                    turn = turn.model_copy(
+                        update={"new_questions": canon_report.revised_questions}
+                    )
         critic_result = self.fail_safe.call(
             "critic.review",
             lambda: self.critic_service.review(
@@ -564,40 +630,53 @@ class RuntimeOrchestrator:
         )
         critic_report = critic_result.value or TurnCriticReport()
         repair_applied = False
-        if self._should_repair_turn(flags=flags, critic_score=critic_report.score):
+        must_repair = bool(canon_report and canon_report.requires_repair)
+        if must_repair or self._should_repair_turn(flags=flags, critic_score=critic_report.score):
             repair_applied = True
-            repair_result = await self.fail_safe.call_async(
-                "character.repair_with_model",
-                lambda: self.character_service.repair_with_model(
-                    packet=packet,
-                    original_turn=turn,
-                    critic_report=critic_report,
-                    thought_pulse_allowed=thought_pulse_allowed,
-                ),
-                context={"speaker_slug": speaker_slug, "phase": "character-repair"},
-                expected_inputs=["A valid packet, original turn, and critic report for repair."],
-                retry_advice=(
-                    "Retry with a valid repaired turn or let deterministic fallback keep "
-                    "the stream safe."
-                ),
-                fallback=lambda: (
+            if load_profile.load_tier in {"high", "critical"} and not must_repair:
+                repaired_value = (
                     self.character_service.repair(
                         packet=packet,
                         thought_pulse_allowed=thought_pulse_allowed,
                     ),
                     None,
                     True,
-                ),
-                fallback_label="deterministic-character-fallback",
-            )
-            repaired_value = repair_result.value or (
-                self.character_service.repair(
-                    packet=packet,
-                    thought_pulse_allowed=thought_pulse_allowed,
-                ),
-                None,
-                True,
-            )
+                )
+            else:
+                repair_result = await self.fail_safe.call_async(
+                    "character.repair_with_model",
+                    lambda: self.character_service.repair_with_model(
+                        packet=packet,
+                        original_turn=turn,
+                        critic_report=critic_report,
+                        thought_pulse_allowed=thought_pulse_allowed,
+                    ),
+                    context={"speaker_slug": speaker_slug, "phase": "character-repair"},
+                    expected_inputs=[
+                        "A valid packet, original turn, and critic report for repair."
+                    ],
+                    retry_advice=(
+                        "Retry with a valid repaired turn or let deterministic fallback keep "
+                        "the stream safe."
+                    ),
+                    fallback=lambda: (
+                        self.character_service.repair(
+                            packet=packet,
+                            thought_pulse_allowed=thought_pulse_allowed,
+                        ),
+                        None,
+                        True,
+                    ),
+                    fallback_label="deterministic-character-fallback",
+                )
+                repaired_value = repair_result.value or (
+                    self.character_service.repair(
+                        packet=packet,
+                        thought_pulse_allowed=thought_pulse_allowed,
+                    ),
+                    None,
+                    True,
+                )
             turn, repair_stats, repair_degraded = repaired_value
             degraded_mode = degraded_mode or repair_degraded
             if stats is None:
@@ -643,6 +722,21 @@ class RuntimeOrchestrator:
         if persisted is None:
             return await self._pause_after_failed_iteration(once=once)
 
+        if canon_report and canon_report.findings:
+            self.fail_safe.call(
+                "repository.record_canon_court_findings",
+                lambda: self.repository.record_canon_court_findings(
+                    findings=canon_report.findings,
+                    message_id=persisted["message_id"],
+                    now=now,
+                ),
+                context={"speaker_slug": speaker_slug, "message_id": persisted["message_id"]},
+                expected_inputs=[
+                    "A persisted message id and writable canon_court_findings table."
+                ],
+                retry_advice="Restore canon-court persistence so contradiction telemetry resumes.",
+            )
+
         self.fail_safe.call(
             "repository.record_public_turn_review",
             lambda: self.repository.record_public_turn_review(
@@ -660,7 +754,7 @@ class RuntimeOrchestrator:
             ],
             retry_advice="Restore review persistence so critique telemetry can resume.",
         )
-        self.fail_safe.call(
+        highlight_result = self.fail_safe.call(
             "highlights.maybe_record",
             lambda: self.highlight_service.maybe_record(
                 message_id=persisted["message_id"],
@@ -675,6 +769,25 @@ class RuntimeOrchestrator:
                 "A persisted message id, critic report, and writable highlight package tables."
             ],
             retry_advice="Restore highlight persistence so clip packaging can resume.",
+        )
+        latest_highlight = highlight_result.value
+        self.fail_safe.call(
+            "monetization.maybe_record",
+            lambda: self.monetization_service.maybe_record(
+                message_id=persisted["message_id"],
+                speaker_slug=speaker_slug,
+                turn=turn,
+                report=critic_report,
+                strategic_brief=manager_packet.strategic_brief,
+                highlight_package=latest_highlight,
+                programming_grid_digest=manager_packet.programming_grid_digest,
+                now=now,
+            ),
+            context={"speaker_slug": speaker_slug, "message_id": persisted["message_id"]},
+            expected_inputs=[
+                "A persisted message id, critic report, and writable monetization tables."
+            ],
+            retry_advice="Restore monetization persistence so packaging telemetry can resume.",
         )
 
         self.fail_safe.call(
@@ -715,6 +828,7 @@ class RuntimeOrchestrator:
             retry_advice="Retry progression persistence on the next iteration.",
         )
         self._refresh_hourly_ledger(now=now)
+        self._refresh_programming_grid(now=now)
         self._refresh_canon(now=now)
 
         self.fail_safe.call(
@@ -751,6 +865,8 @@ class RuntimeOrchestrator:
                 expected_inputs=["A writable run_state row in MySQL."],
                 retry_advice="Restore database connectivity so checkpoints can resume.",
             )
+
+        self._note_runtime_success(now=now, load_profile=load_profile)
 
         if once:
             return True
@@ -835,6 +951,12 @@ class RuntimeOrchestrator:
     async def _god_ai_loop(self) -> None:
         force = True
         while not self._stop_event.is_set():
+            load_profile = self._capture_load_profile(now=utcnow())
+            if load_profile.load_tier in {"high", "critical"} and not force:
+                try:
+                    await asyncio.wait_for(self._stop_event.wait(), timeout=60)
+                except TimeoutError:
+                    continue
             refresh_result = await self.fail_safe.call_async(
                 "god_ai.refresh_background",
                 lambda force_now=force: self.god_ai_service.refresh_if_due(
@@ -923,6 +1045,19 @@ class RuntimeOrchestrator:
             ),
         )
 
+    def _refresh_programming_grid(self, *, now, force: bool = False) -> None:
+        self.fail_safe.call(
+            "programming_grid.refresh",
+            lambda: self.programming_grid_service.refresh(now=now, force=force),
+            context={"phase": "programming-grid", "force": force},
+            expected_inputs=[
+                "Readable recent events and a writable programming_grid_slots table."
+            ],
+            retry_advice=(
+                "Restore repository access so the daily and weekly programming grid can refresh."
+            ),
+        )
+
     def _refresh_house_pressure(self, *, now, force: bool = False) -> None:
         self.fail_safe.call(
             "house.refresh",
@@ -960,10 +1095,16 @@ class RuntimeOrchestrator:
         self,
         *,
         audience_control: AudienceControlReport,
+        load_profile: LoadProfileSnapshot | None = None,
+        ops_snapshot: OpsTelemetrySnapshot | None = None,
     ) -> ManagerContextPacket | None:
         result = self.fail_safe.call(
             "context.build_manager_packet",
-            lambda: self.assembler.build_manager_packet(audience_control=audience_control),
+            lambda: self.assembler.build_manager_packet(
+                audience_control=audience_control,
+                load_profile=load_profile,
+                ops_snapshot=ops_snapshot,
+            ),
             context={"phase": "manager-context"},
             expected_inputs=[
                 "Readable world_state, scene_state, summaries, events, and character state."
@@ -979,6 +1120,53 @@ class RuntimeOrchestrator:
         if packet is not None:
             self._last_good_manager_packet = packet
         return packet
+
+    def _capture_load_profile(self, *, now) -> LoadProfileSnapshot:
+        pending_jobs = int(self._pending_manager_task is not None) + int(
+            self._god_ai_task is not None
+        )
+        result = self.fail_safe.call(
+            "load_orchestration.build_profile",
+            lambda: self.load_orchestration_service.build_profile(
+                pending_manager_prefetch=self._pending_manager_task is not None,
+                pending_background_jobs=pending_jobs,
+                now=now,
+            ),
+            context={"phase": "load-profile"},
+            expected_inputs=[
+                "Readable run_state metadata and recent message latencies."
+            ],
+            retry_advice=(
+                "Restore repository reads so load-aware orchestration can fall back cleanly."
+            ),
+            fallback=lambda: self._last_load_profile,
+            fallback_label="last-load-profile",
+        )
+        profile = result.value or self._last_load_profile
+        self._last_load_profile = profile
+        return profile
+
+    def _capture_ops_snapshot(
+        self,
+        *,
+        load_profile: LoadProfileSnapshot,
+        now,
+    ) -> OpsTelemetrySnapshot | None:
+        result = self.fail_safe.call(
+            "ops_dashboard.capture",
+            lambda: self.ops_dashboard_service.capture(load_profile=load_profile, now=now),
+            context={"phase": "ops-dashboard", "load_tier": load_profile.load_tier},
+            expected_inputs=[
+                "Readable run_state, strategy state, and a writable ops_telemetry table."
+            ],
+            retry_advice="Restore repository access so operational telemetry can refresh.",
+            fallback=lambda: self._last_ops_snapshot,
+            fallback_label="last-ops-snapshot",
+        )
+        snapshot = result.value or self._last_ops_snapshot
+        if snapshot is not None:
+            self._last_ops_snapshot = snapshot
+        return snapshot
 
     def _build_character_packet(self, *, speaker_slug: str, directive: dict) -> Any | None:
         result = self.fail_safe.call(
@@ -1020,6 +1208,10 @@ class RuntimeOrchestrator:
 
     async def _sleep_between_turns(self, *, manager_packet: ManagerContextPacket) -> None:
         delay = self.scheduler.compute_delay_seconds(health=manager_packet.pacing_health)
+        if self._last_load_profile.load_tier == "critical":
+            delay = max(0.4, delay - 0.6)
+        elif self._last_load_profile.load_tier == "high":
+            delay = max(0.5, delay - 0.3)
         self.fail_safe.call(
             "runtime.set_sleep_phase",
             lambda: self.repository.set_runtime_status(
@@ -1041,6 +1233,64 @@ class RuntimeOrchestrator:
             return True
         await asyncio.sleep(max(1, self.config.failsafe.unexpected_iteration_delay_seconds))
         return False
+
+    def _apply_ops_remediations(self, *, snapshot: OpsTelemetrySnapshot | None, now) -> None:
+        if snapshot is None:
+            return
+        actions = set(snapshot.auto_remediations)
+        if "force-checkpoint" in actions:
+            self.fail_safe.call(
+                "runtime.ops_force_checkpoint",
+                lambda: self.repository.write_checkpoint(reason="ops-remediation", phase="ops"),
+                context={"phase": "ops-remediation"},
+                expected_inputs=["A writable run_state row in MySQL."],
+                retry_advice="Restore database connectivity so ops checkpoints can resume.",
+            )
+        if (
+            "refresh-strategic-brief" in actions
+            and self.config.god_ai.enabled
+            and self._god_ai_task is None
+            and not self._stop_event.is_set()
+        ):
+            self._god_ai_task = asyncio.create_task(self._god_ai_loop())
+
+    def _note_runtime_failure(self, *, now, reason: str) -> None:
+        self.fail_safe.call(
+            "runtime.note_failure",
+            lambda: self.repository.merge_runtime_metadata(
+                {
+                    "recent_failure_count": int(
+                        (self._last_good_run_state or {}).get("metadata", {}).get(
+                            "recent_failure_count",
+                            0,
+                        )
+                    )
+                    + 1,
+                    "last_failure_at": now.isoformat(),
+                    "last_failure_reason": reason[:220],
+                },
+                now=now,
+            ),
+            context={"reason": reason[:120]},
+            expected_inputs=["A writable run_state row in MySQL."],
+            retry_advice="Restore database connectivity so runtime failure metadata can update.",
+        )
+
+    def _note_runtime_success(self, *, now, load_profile: LoadProfileSnapshot) -> None:
+        self.fail_safe.call(
+            "runtime.note_success",
+            lambda: self.repository.merge_runtime_metadata(
+                {
+                    "recent_failure_count": 0,
+                    "last_success_at": now.isoformat(),
+                    "load_profile": load_profile.model_dump(mode="json"),
+                },
+                now=now,
+            ),
+            context={"load_tier": load_profile.load_tier},
+            expected_inputs=["A writable run_state row in MySQL."],
+            retry_advice="Restore database connectivity so runtime success metadata can update.",
+        )
 
     def _fallback_character_states(self) -> list[dict[str, Any]]:
         return [{"slug": slug, "last_spoke_at": None, "silence_streak": 0} for slug in self._roster]
@@ -1102,10 +1352,15 @@ class RuntimeOrchestrator:
         audience_module = import_module("lantern_house.services.audience")
         beats_module = import_module("lantern_house.services.beats")
         hourly_ledger_module = import_module("lantern_house.services.hourly_ledger")
+        programming_grid_module = import_module("lantern_house.services.programming_grid")
         canon_module = import_module("lantern_house.services.canon")
+        canon_court_module = import_module("lantern_house.services.canon_court")
         house_module = import_module("lantern_house.services.house")
         gravity_module = import_module("lantern_house.services.story_gravity")
         highlights_module = import_module("lantern_house.services.highlights")
+        monetization_module = import_module("lantern_house.services.monetization")
+        load_module = import_module("lantern_house.services.load_orchestration")
+        ops_module = import_module("lantern_house.services.ops_dashboard")
         simulation_module = import_module("lantern_house.services.simulation_lab")
         soak_audit_module = import_module("lantern_house.services.soak_audit")
         god_ai_module = import_module("lantern_house.services.god_ai")
@@ -1135,9 +1390,16 @@ class RuntimeOrchestrator:
             self.repository,
             latest_config.hourly_beat_ledger,
         )
+        self.programming_grid_service = programming_grid_module.ProgrammingGridService(
+            self.repository,
+            latest_config.programming_grid,
+        )
         self.canon_service = canon_module.CanonDistillationService(
             self.repository,
             latest_config.canon,
+        )
+        self.canon_court_service = canon_court_module.CanonCourtService(
+            latest_config.canon_court
         )
         self.house_pressure_service = house_module.HousePressureService(
             self.repository,
@@ -1177,12 +1439,24 @@ class RuntimeOrchestrator:
             self.repository,
             latest_config.highlights,
         )
+        self.monetization_service = monetization_module.MonetizationPackagingService(
+            self.repository,
+            latest_config.monetization,
+        )
         self.recap_service = recap_module.RecapService(
             self.repository,
             self.llm_client,
             latest_config.models.announcer,
         )
         self.progression_service = progression_module.StoryProgressionService()
+        self.load_orchestration_service = load_module.LoadOrchestrationService(
+            self.repository,
+            latest_config.load_orchestration,
+        )
+        self.ops_dashboard_service = ops_module.OpsDashboardService(
+            self.repository,
+            latest_config.ops_dashboard,
+        )
         self.scheduler = scheduler_module.TurnScheduler(
             runtime_config=latest_config.runtime,
             timing_config=latest_config.timing,
@@ -1198,6 +1472,8 @@ class RuntimeOrchestrator:
         self._last_good_audience_control = AudienceControlReport()
         self._last_good_manager_packet = None
         self._last_good_character_packet_by_slug.clear()
+        self._last_load_profile = LoadProfileSnapshot()
+        self._last_ops_snapshot = None
 
         if self.hot_patch_controller is not None and changed_modules:
             hotpatch_module = import_module("lantern_house.runtime.hotpatch")

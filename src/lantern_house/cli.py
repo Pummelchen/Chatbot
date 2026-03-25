@@ -7,6 +7,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import time
 from collections.abc import Callable
 from pathlib import Path
 
@@ -30,6 +31,7 @@ from lantern_house.runtime.scheduler import TurnScheduler
 from lantern_house.services.audience import AudienceControlService
 from lantern_house.services.beats import StoryBeatService
 from lantern_house.services.canon import CanonDistillationService
+from lantern_house.services.canon_court import CanonCourtService
 from lantern_house.services.character import CharacterService
 from lantern_house.services.critic import TurnCriticService
 from lantern_house.services.event_extractor import EventExtractor
@@ -37,7 +39,11 @@ from lantern_house.services.god_ai import GodAIService
 from lantern_house.services.highlights import HighlightPackagingService
 from lantern_house.services.hourly_ledger import HourlyBeatLedgerService
 from lantern_house.services.house import HousePressureService
+from lantern_house.services.load_orchestration import LoadOrchestrationService
 from lantern_house.services.manager import StoryManagerService
+from lantern_house.services.monetization import MonetizationPackagingService
+from lantern_house.services.ops_dashboard import OpsDashboardService
+from lantern_house.services.programming_grid import ProgrammingGridService
 from lantern_house.services.progression import StoryProgressionService
 from lantern_house.services.recaps import RecapService
 from lantern_house.services.seed_loader import StorySeedLoader
@@ -195,6 +201,24 @@ def soak_audit(config: str | None = typer.Option(None, "--config")) -> None:
     )
 
 
+@app.command()
+def dashboard(
+    config: str | None = typer.Option(None, "--config"),
+    watch: bool = typer.Option(False, "--watch", help="Refresh dashboard output every 5 seconds."),
+) -> None:
+    cfg = _load(config)
+    _run_cli_command(
+        "dashboard",
+        cfg,
+        lambda: _dashboard(cfg, watch=watch),
+        expected_inputs=[
+            "A migrated database with run_state and telemetry tables.",
+        ],
+        retry_advice="Run migrate and let the runtime produce telemetry before using dashboard.",
+        configure_logs_first=True,
+    )
+
+
 def _migrate(config: AppConfig) -> None:
     os.environ["LANTERN_HOUSE_DATABASE_URL"] = config.database.url
     alembic_cfg = AlembicConfig(str(ROOT / "alembic.ini"))
@@ -228,6 +252,7 @@ def _simulate(config: AppConfig, *, hours: int, turns_per_hour: int) -> None:
     house_pressure_service = HousePressureService(repository, config.house_pressure)
     house_pressure_service.refresh(force=True)
     StoryGravityService(repository, config.story_gravity).refresh(force=True)
+    ProgrammingGridService(repository, config.programming_grid).refresh(force=True)
     audience = audience_service.refresh_if_due(force=True)
     beat_service.sync_audience_rollout(audience, now=utcnow())
     assembler = ContextAssembler(repository, PacingHealthEvaluator())
@@ -266,6 +291,7 @@ def _soak_audit(config: AppConfig) -> None:
     house_pressure_service.refresh(force=True)
     StoryGravityService(repository, config.story_gravity).refresh(force=True)
     HourlyBeatLedgerService(repository, config.hourly_beat_ledger).refresh(now=utcnow())
+    ProgrammingGridService(repository, config.programming_grid).refresh(force=True)
     CanonDistillationService(repository, config.canon).refresh(now=utcnow())
     assembler = ContextAssembler(repository, PacingHealthEvaluator())
     packet = assembler.build_manager_packet(audience_control=audience_service.current_report())
@@ -290,6 +316,27 @@ def _soak_audit(config: AppConfig) -> None:
     )
     for note in snapshot.audit_notes:
         typer.echo(f"- {note}")
+
+
+def _dashboard(config: AppConfig, *, watch: bool) -> None:
+    engine = create_engine_from_config(config.database)
+    session_factory = SessionFactory(engine)
+    repository = StoryRepository(session_factory)
+    service = OpsDashboardService(repository, config.ops_dashboard)
+
+    def emit() -> None:
+        typer.echo(service.render_text())
+
+    if not watch:
+        emit()
+        return
+    try:
+        while True:
+            emit()
+            typer.echo("")
+            time.sleep(5)
+    except KeyboardInterrupt:
+        raise typer.Exit(code=0) from None
 
 
 async def _run_async(config: AppConfig, *, once: bool) -> None:
@@ -318,6 +365,7 @@ async def _run_async(config: AppConfig, *, once: bool) -> None:
         audience_control_service = AudienceControlService(config.audience, repository)
         beat_service = StoryBeatService(repository)
         hourly_ledger_service = HourlyBeatLedgerService(repository, config.hourly_beat_ledger)
+        programming_grid_service = ProgrammingGridService(repository, config.programming_grid)
         canon_service = CanonDistillationService(repository, config.canon)
         simulation_lab = SimulationLabService(config.simulation)
         soak_audit_service = SoakAuditService(repository, simulation_lab, config.soak_audit)
@@ -328,7 +376,9 @@ async def _run_async(config: AppConfig, *, once: bool) -> None:
             audience_control_service=audience_control_service,
             beat_service=beat_service,
             hourly_ledger_service=hourly_ledger_service,
+            programming_grid_service=programming_grid_service,
             canon_service=canon_service,
+            canon_court_service=CanonCourtService(config.canon_court),
             house_pressure_service=HousePressureService(repository, config.house_pressure),
             story_gravity_service=StoryGravityService(repository, config.story_gravity),
             god_ai_service=GodAIService(
@@ -348,8 +398,14 @@ async def _run_async(config: AppConfig, *, once: bool) -> None:
             ),
             critic_service=TurnCriticService(config.critic),
             highlight_service=HighlightPackagingService(repository, config.highlights),
+            monetization_service=MonetizationPackagingService(repository, config.monetization),
             recap_service=RecapService(repository, client, config.models.announcer),
             progression_service=StoryProgressionService(),
+            load_orchestration_service=LoadOrchestrationService(
+                repository,
+                config.load_orchestration,
+            ),
+            ops_dashboard_service=OpsDashboardService(repository, config.ops_dashboard),
             scheduler=TurnScheduler(
                 runtime_config=config.runtime,
                 timing_config=config.timing,

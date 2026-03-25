@@ -369,6 +369,23 @@ class HourlyProgressLedgerSnapshot(BaseModel):
     metadata: dict = Field(default_factory=dict)
 
 
+class ProgrammingGridSlotSnapshot(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    horizon: str
+    slot_key: str
+    label: str
+    objective: str
+    target_axis: str
+    status: str = "planned"
+    priority: int = Field(default=5, ge=1, le=10)
+    notes: list[str] = Field(default_factory=list)
+    metadata: dict = Field(default_factory=dict)
+    window_start_at: datetime | None = None
+    window_end_at: datetime | None = None
+    updated_at: datetime | None = None
+
+
 class CanonCapsuleSnapshot(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
@@ -383,6 +400,31 @@ class CanonCapsuleSnapshot(BaseModel):
     recap_hooks: list[str] = Field(default_factory=list)
     metadata: dict = Field(default_factory=dict)
     created_at: datetime | None = None
+
+
+class CanonCourtFindingSnapshot(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    issue_type: str
+    severity: str = "warning"
+    action: str = "allow"
+    summary: str
+    evidence: list[str] = Field(default_factory=list)
+    metadata: dict = Field(default_factory=dict)
+    message_id: int | None = None
+    created_at: datetime | None = None
+
+
+class CanonCourtReport(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    status: str = "clean"
+    findings: list[CanonCourtFindingSnapshot] = Field(default_factory=list)
+    additional_flags: list[ContinuityFlagDraft] = Field(default_factory=list)
+    revised_turn: CharacterTurn | None = None
+    revised_events: list[EventCandidate] = Field(default_factory=list)
+    revised_questions: list[str] = Field(default_factory=list)
+    requires_repair: bool = False
 
 
 class HighlightPackageSnapshot(BaseModel):
@@ -405,6 +447,48 @@ class HighlightPackageSnapshot(BaseModel):
     created_at: datetime | None = None
 
 
+class MonetizationPackageSnapshot(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    message_id: int | None = None
+    highlight_message_id: int | None = None
+    speaker_slug: str = ""
+    primary_title: str
+    alternate_titles: list[str] = Field(default_factory=list)
+    short_title_options: list[str] = Field(default_factory=list)
+    hook_line: str = ""
+    quote_line: str = ""
+    summary_blurb: str = ""
+    recap_blurb: str = ""
+    chapter_label: str = ""
+    comment_prompt: str = ""
+    ship_angle: str = ""
+    theory_angle: str = ""
+    betrayal_angle: str = ""
+    faction_labels: list[str] = Field(default_factory=list)
+    tags: list[str] = Field(default_factory=list)
+    recommended_clip_start_seconds: int = Field(default=0, ge=0, le=300)
+    recommended_clip_end_seconds: int = Field(default=25, ge=5, le=300)
+    score: int = Field(default=0, ge=0, le=100)
+    metadata: dict = Field(default_factory=dict)
+    created_at: datetime | None = None
+
+
+class LoadProfileSnapshot(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    load_tier: str = "low"
+    average_latency_ms: int = Field(default=0, ge=0)
+    p95_latency_ms: int = Field(default=0, ge=0)
+    recent_failures: int = Field(default=0, ge=0)
+    degraded_mode: bool = False
+    pending_manager_prefetch: bool = False
+    background_pressure: int = Field(default=0, ge=0, le=10)
+    recommended_actions: list[str] = Field(default_factory=list)
+    metadata: dict = Field(default_factory=dict)
+    created_at: datetime | None = None
+
+
 class SoakAuditSnapshot(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
@@ -420,6 +504,26 @@ class SoakAuditSnapshot(BaseModel):
     recommended_direction: str = ""
     audit_notes: list[str] = Field(default_factory=list)
     candidate_pressure: list[str] = Field(default_factory=list)
+    metadata: dict = Field(default_factory=dict)
+    created_at: datetime | None = None
+
+
+class OpsTelemetrySnapshot(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    runtime_status: str = "unknown"
+    phase: str = "unknown"
+    degraded_mode: bool = False
+    load_tier: str = "low"
+    average_latency_ms: int = Field(default=0, ge=0)
+    checkpoint_age_seconds: int = Field(default=0, ge=0)
+    recap_age_minutes: int = Field(default=0, ge=0)
+    strategy_age_minutes: int = Field(default=0, ge=0)
+    drift_risk: int = Field(default=0, ge=0, le=100)
+    progression_contract_open: bool = False
+    restart_count: int = Field(default=0, ge=0)
+    active_strategy: str = ""
+    auto_remediations: list[str] = Field(default_factory=list)
     metadata: dict = Field(default_factory=dict)
     created_at: datetime | None = None
 
@@ -559,9 +663,14 @@ class ManagerContextPacket(BaseModel):
     hourly_ledger: HourlyProgressLedgerSnapshot = Field(
         default_factory=HourlyProgressLedgerSnapshot
     )
+    programming_grid_digest: list[str] = Field(default_factory=list)
+    load_profile: LoadProfileSnapshot = Field(default_factory=LoadProfileSnapshot)
     canon_capsule_digest: list[str] = Field(default_factory=list)
+    canon_court_alerts: list[str] = Field(default_factory=list)
     highlight_signals: list[str] = Field(default_factory=list)
+    monetization_signals: list[str] = Field(default_factory=list)
     soak_audit_signals: list[str] = Field(default_factory=list)
+    ops_alerts: list[str] = Field(default_factory=list)
     strategic_guidance: list[str] = Field(default_factory=list)
     simulation_ranking: list[str] = Field(default_factory=list)
     strategic_brief: StrategicBriefSnapshot | None = None
@@ -598,4 +707,5 @@ class CharacterContextPacket(BaseModel):
     forbidden_boundaries: list[str] = Field(default_factory=list)
 
 
+CanonCourtReport.model_rebuild()
 AudienceControlReport.model_rebuild()

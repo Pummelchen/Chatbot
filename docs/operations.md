@@ -31,6 +31,7 @@ source .venv/bin/activate
 lantern-house healthcheck
 lantern-house migrate
 lantern-house seed
+lantern-house dashboard
 lantern-house simulate --hours 24 --turns-per-hour 90
 lantern-house soak-audit
 lantern-house run
@@ -54,7 +55,9 @@ If you are moving from an older story bible to the current globally optimized ca
 - `start.sh` relies on that persisted `run_state`, recap state, checkpoints, and canon memory so a restart resumes the live story instead of reseeding or starting over.
 - The runtime also keeps a persistent `house_state` row that models financial pressure, repair backlog, inspections, weather strain, fatigue, and reputation risk.
 - The runtime also keeps a persistent hourly beat ledger so each clock hour can be audited for real progression.
+- The runtime also keeps a persistent daily and weekly programming grid so the manager and strategist can see whether the day and week are landing planned tentpoles.
 - The runtime also keeps multi-window canon capsules so long memory stays bounded and queryable.
+- The runtime also keeps canon-court findings and monetization packages so contradiction risk and reusable YouTube packaging stay visible as structured telemetry.
 - The runtime also keeps a persistent `story_gravity_state` row that tracks the north star, active axes, dormant threads, recap focus, and drift score.
 - The runtime writes a structured checkpoint snapshot into `run_state.metadata` on every configured flush and on a background heartbeat.
 - Default settings checkpoint every minute even if the scene is stalled, and also snapshot on every turn.
@@ -63,11 +66,13 @@ If you are moving from an older story bible to the current globally optimized ca
 - Manager refreshes are interval-based with health-triggered overrides, and after the first directive they are prefetched in the background instead of blocking every visible turn.
 - A background God-AI planner uses `gemma3:12b` plus the deterministic simulation lab to persist strategic briefs during live operation.
 - The strategist stack also persists simulation runs, strategy rankings, recap-quality scores, public-turn reviews, clip-value scores, fandom signals, dormant-thread registry rows, highlight packages, and soak-audit runs.
+- The strategist stack also persists programming-grid slots, canon-court findings, monetization packages, and ops-telemetry snapshots.
 - `run --once` intentionally skips the God-AI background loop so smoke tests stay fast and deterministic.
 - `soak-audit` is the deterministic long-run health command. It uses the same strategy engine as the God-AI stack, but stretches it across `24h`, `72h`, and `7d` horizons to catch slow drift before it hits the live audience.
 - Audience-control state from `update.txt` is persisted in `run_state.metadata.audience_control`, so the last good live-vote interpretation survives the next manager step and can survive malformed file edits.
 - The manager also receives a story-governance report that checks hourly progression, core-story drift, cliffhanger pressure, and robotic-voice risk.
 - The manager also receives pending house-pressure and audience-rollout beats, so practical pressure and vote steering are both staged explicitly.
+- The manager also receives programming-grid, monetization, canon-court, load, and ops signals so it can trade off story ambition against runtime health.
 - Arc progression is persisted from structured event hits, and unresolved-question memory is capped so long unattended runs do not inflate prompts.
 - Recap generation uses compact event digests rather than replaying every event in the raw 12h or 24h window.
 - Logs are written to `logs/lantern_house.log`.
@@ -87,6 +92,7 @@ If you are moving from an older story bible to the current globally optimized ca
 - If a generated chat turn reads like robotic dialogue or prose narration, the runtime first tries the configured small repair model and then falls back to a continuity-safe deterministic line if repair fails.
 - Critical runtime calls are wrapped in a fail-safe executor that can reuse last-good state, fall back conservatively, and apply cooldowns after repeated failures.
 - Hot-patch failures are logged and ignored; the process keeps running on the previous healthy runtime bundle.
+- New governance-table reads and writes degrade to empty or no-op behavior if code is deployed before migrations land, so live hot patches do not immediately crash the stream on missing-table errors.
 - Internal errors, retries, and recovery notices must never be emitted into the public chat stream.
 - Internal errors, retries, and recovery notices should also stay out of the live operator console unless `logging.console_enabled=true` is set explicitly.
 - Live reload intentionally excludes SQLAlchemy ORM model modules and database schema changes; those still require a controlled migration window.
@@ -96,4 +102,5 @@ If you are moving from an older story bible to the current globally optimized ca
 - Add more arcs or revise secrets in `src/lantern_house/seeds/story_bible.yaml`
 - Tune prompt behavior in `src/lantern_house/prompts`
 - Adjust pacing thresholds in configuration
+- Tune daily/weekly tentpoles, load thresholds, canon-court behavior, monetization packaging, and ops dashboard rules in `config.example.toml`
 - Replace the terminal renderer with a stream adapter later without rewriting the domain layer

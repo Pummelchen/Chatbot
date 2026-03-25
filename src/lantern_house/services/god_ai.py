@@ -197,6 +197,11 @@ class GodAIService:
             if audience.active and audience.requests
             else "No active subscriber vote is overriding the house's native momentum."
         )
+        grid_line = (
+            f"Programming grid risk: {context.programming_grid_digest[0]}"
+            if context.programming_grid_digest
+            else "Programming grid is on track."
+        )
         arc_ranking = [
             summary.split("(", 1)[0].strip() for summary in context.current_arc_summaries[:3]
         ]
@@ -214,7 +219,7 @@ class GodAIService:
             viewer_value_thesis=(
                 "Maximize retention by keeping the house believable, pressurized, shippable, "
                 "and easy to re-enter through one concrete progression per hour. "
-                f"{audience_line}"
+                f"{audience_line} {grid_line}"
             ),
             urgency=max(5, min(10, 11 - context.story_governance.viewer_value_score // 10)),
             arc_priority_ranking=arc_ranking,
@@ -300,6 +305,7 @@ class GodAIService:
             recommendations=[
                 *context.story_governance.recommendations[:2],
                 *context.pacing_health.recommendations[:2],
+                *context.ops_alerts[:1],
                 *winner.rationale[:2],
             ][:5],
             risk_alerts=simulation.systemic_risks[:4],

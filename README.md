@@ -12,12 +12,17 @@ The project targets macOS Apple Silicon with Python 3.12+, MySQL 8.4, and Ollama
 - A production-minded orchestrator with recovery, pacing checks, recap scheduling, and context retrieval
 - A deterministic house-pressure engine that keeps the guesthouse generating believable financial, repair, inspection, weather, and fatigue pressure
 - A deterministic hourly beat ledger that tracks whether each clock hour landed a real shift in trust, desire, evidence, debt, power, or loyalty
+- A daily and weekly programming grid that makes sure each day and week land planned tentpoles instead of only decent local turns
 - Multi-resolution canon capsules for `1h`, `6h`, `24h`, `7d`, and `30d` memory distillation
 - Automatic highlight packaging that turns strong turns into clip-ready and quote-ready metadata
+- A deeper monetization packaging pipeline that turns strong turns into title, hook, quote, faction, theory, and comment-prompt assets
 - A deterministic soak-audit harness that stress-tests long-run strategy over `24h`, `72h`, and `7d` horizons
 - A persistent story-gravity layer that keeps the show anchored to the house, its debt, hidden records, ownership conflict, and unstable bonds
 - A staged audience-rollout beat system that converts `update.txt` votes into prerequisite beats instead of instant retcons
 - A lightweight public-turn critic plus a deterministic simulation lab and a background God-AI strategist that persists structured strategic briefs
+- A canon-court layer that softens or blocks contradiction-prone turns before they hit persistence
+- A load-aware orchestration layer that keeps the visible loop smooth by budgeting planner and repair work against real runtime latency
+- A terminal ops dashboard and telemetry layer for 24/7 oversight plus auto-remediation hints
 - A small repair-model path for weak public turns, with deterministic fallback if repair fails
 - An adaptive fail-safe runtime that keeps last-good state, backs off repeated failures, and writes structured recovery context to `logs/error.txt`
 - A hot-patch loader that can soft-reload changed runtime, service, prompt, and config files without stopping the live stream
@@ -47,6 +52,7 @@ The runtime now includes a dedicated story-governance layer in addition to pacin
 - It warns when recent dialogue is starting to look generic or repeated.
 - It pressures the manager to restore cliffhanger energy before the stream goes flat.
 - It keeps unresolved-question memory bounded and revives dormant payoff threads instead of letting prompts bloat over time.
+- It enforces a daily and weekly programming grid so every 24h and 7d window still contains planned house, clue, romance, and alliance tentpoles.
 - It advances persistent story-arc pressure and reveal stages from structured events, so long-form continuity lives in state, not only in transcript momentum.
 - It persists `story_gravity_state`, dormant threads, recap quality scores, clip-value scores, fandom signals, public-turn review data, hourly ledgers, canon capsules, highlight packages, and soak-audit runs so the strategist and manager can steer from structured memory instead of vague prompt residue.
 
@@ -62,11 +68,14 @@ Two new systems now keep the story from flattening over very long runs:
 - Pending beats are ordered by readiness, and future payoff beats cannot complete before their due window, so long-form vote changes unfold in sequence instead of skipping ahead.
 - The hourly beat ledger persists a hard contract for each clock hour, so the manager and strategist can see when the stream is generating tension without actually changing anything.
 - Canon capsules distill the story into bounded memory windows, which keeps prompts compact while still preserving weeks of continuity.
+- A canon-court layer checks risky turns for premature finality and protected-truth bleed, then softens or repairs them before public persistence.
 - Highlight packages turn strong public turns into reusable metadata for clips, quotes, ship angles, and theory angles.
+- Monetization packages extend those highlights into usable YouTube-facing assets: title options, hook lines, recap blurbs, faction labels, tags, and comment prompts.
 - A simulation lab ranks candidate strategic directions like house-pressure-first, mystery-evidence-first, romance-faultline-first, audience-rollout-first, and ensemble-refresh-first.
+- A programming grid keeps daily and weekly tentpoles visible to the manager and strategist, so “good hour, weak day” drift is caught structurally.
 - A soak-audit harness uses those deterministic strategy rankings across `24h`, `72h`, and `7d` horizons to detect slow-death failure modes like repetition, recap decay, clip drought, ship stagnation, and strategy lock-in.
 - A background God-AI planner uses `gemma3:12b` plus the simulation ranking to persist strategic briefs with north-star objective, arc ranking, reveal permissions, urgency scores, recap priorities, clip value, and fandom value for the live manager without blocking the chat loop.
-- The visible hot path is protected by prefetching manager directives in the background, by a lightweight critic, and by a small repair-model pass that can salvage weak turns before persistence.
+- The visible hot path is protected by prefetching manager directives in the background, by a lightweight critic, by load-aware inference budgeting, and by a small repair-model pass that can salvage weak turns before persistence.
 
 ## Live Update Control
 
@@ -141,6 +150,7 @@ lantern-house run
 - `lantern-house run`: start the live terminal chat runtime
 - `lantern-house simulate`: run the accelerated deterministic simulation lab against the current world state
 - `lantern-house soak-audit`: run the long-horizon deterministic soak audit against the current world state
+- `lantern-house dashboard`: show the current ops telemetry snapshot for runtime, load, checkpoint freshness, recap freshness, and active strategy
 - `lantern-house recap-now`: generate recap blocks immediately
 - `lantern-house healthcheck`: verify database and Ollama availability
 
@@ -163,9 +173,10 @@ All CLI commands now fail with concise operator messages plus logged context in 
 - `house_state` is persisted separately from transcript memory, giving the manager a deterministic practical gravity field even when models get vague.
 - The background God-AI planner can persist long-horizon strategic briefs during live operation, while `run --once` skips that loop to keep smoke runs fast.
 - The strategist stack now also persists simulation runs, ranked strategy candidates, dormant-thread registry rows, public-turn review telemetry, recap-quality scores, clip-value scores, and fandom-signal candidates.
-- The strategist stack now also persists hourly progress ledgers, canon capsules, highlight packages, and soak-audit runs.
+- The strategist stack now also persists hourly progress ledgers, programming-grid slots, canon capsules, canon-court findings, highlight packages, monetization packages, ops telemetry, and soak-audit runs.
 - The live loop wraps critical subsystems in a fail-safe executor. Unexpected failures are logged with context, routed to conservative fallbacks or last-good state, and never printed into the public chat stream.
 - Repeated failures enter a cooldown window instead of hammering the same broken dependency every turn.
+- New persistence layers are hot-patch-safe: if live code lands before migrations do, the new repository paths degrade to empty/no-op behavior and keep the stream alive until the database is upgraded.
 - Hot-patch scanning can rebuild runtime services from changed files without dropping the live process. ORM schema modules are intentionally excluded from live reload to avoid corrupting SQLAlchemy state.
 - Hot-patch scanning now follows the active runtime config file, the resolved audience steering file, and `.env` in addition to the default source tree watchers, so live config edits are not silently ignored after startup.
 - `story.seed_file` now works as a real setting: it can point either to a packaged seed resource name or a local YAML file path for custom world variants.
