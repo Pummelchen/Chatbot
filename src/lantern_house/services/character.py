@@ -11,6 +11,7 @@ from lantern_house.domain.contracts import (
     CharacterContextPacket,
     CharacterTurn,
     EventCandidate,
+    InferencePolicySnapshot,
     RelationshipUpdate,
     TurnCriticReport,
 )
@@ -66,11 +67,13 @@ class CharacterService:
         *,
         packet: CharacterContextPacket,
         thought_pulse_allowed: bool,
+        policy: InferencePolicySnapshot | None = None,
     ) -> tuple[CharacterTurn, InvocationStats | None, bool]:
         turns = await self.generate_candidates(
             packet=packet,
             thought_pulse_allowed=thought_pulse_allowed,
             candidate_count=1,
+            policy=policy,
         )
         return turns[0]
 
@@ -80,6 +83,7 @@ class CharacterService:
         packet: CharacterContextPacket,
         thought_pulse_allowed: bool,
         candidate_count: int = 2,
+        policy: InferencePolicySnapshot | None = None,
     ) -> list[tuple[CharacterTurn, InvocationStats | None, bool]]:
         attempts = max(1, min(3, candidate_count))
         candidates: list[tuple[CharacterTurn, InvocationStats | None, bool]] = []
@@ -89,6 +93,7 @@ class CharacterService:
                 thought_pulse_allowed=thought_pulse_allowed,
                 variation_index=index,
                 multi_candidate=attempts > 1,
+                policy=policy,
             )
             candidates.append((turn, stats, degraded))
         return candidates
@@ -100,6 +105,7 @@ class CharacterService:
         thought_pulse_allowed: bool,
         variation_index: int,
         multi_candidate: bool,
+        policy: InferencePolicySnapshot | None,
     ) -> tuple[CharacterTurn, InvocationStats | None, bool]:
         prompt = render_template(
             "lantern_house.prompts",
@@ -111,17 +117,21 @@ class CharacterService:
                         f"Variation lane {variation_index + 1}: keep the same canon and voice, "
                         "but choose a different phrasing, leverage point, or emotional tactic."
                         if multi_candidate
-                        else ""
+                else ""
                     ),
                 },
                 "THOUGHT_PULSE_ALLOWED": "true" if thought_pulse_allowed else "false",
             },
         )
+        if policy is not None and not policy.allow_model_call:
+            return self._fallback(packet, thought_pulse_allowed=thought_pulse_allowed), None, True
         try:
             payload, stats = await self.llm.generate_json(
                 model=self.model_name,
                 prompt=prompt,
                 temperature=0.9 if variation_index == 0 else 0.82,
+                max_retries=policy.max_retries if policy is not None else None,
+                timeout_seconds=policy.timeout_seconds if policy is not None else None,
             )
             payload = self._coerce_payload(payload)
             turn = CharacterTurn.model_validate(payload)
@@ -184,6 +194,7 @@ class CharacterService:
         original_turn: CharacterTurn,
         critic_report: TurnCriticReport,
         thought_pulse_allowed: bool,
+        policy: InferencePolicySnapshot | None = None,
     ) -> tuple[CharacterTurn, InvocationStats | None, bool]:
         prompt = render_template(
             "lantern_house.prompts",
@@ -195,13 +206,16 @@ class CharacterService:
                 "THOUGHT_PULSE_ALLOWED": "true" if thought_pulse_allowed else "false",
             },
         )
+        if policy is not None and not policy.allow_model_call:
+            return self._fallback(packet, thought_pulse_allowed=thought_pulse_allowed), None, True
         try:
             payload, stats = await self.llm.generate_json(
                 model=self.repair_model_name,
                 prompt=prompt,
                 temperature=0.35,
                 max_output_tokens=260,
-                max_retries=1,
+                max_retries=policy.max_retries if policy is not None else 1,
+                timeout_seconds=policy.timeout_seconds if policy is not None else None,
             )
             turn = CharacterTurn.model_validate(self._coerce_payload(payload))
             sanitized = self._sanitize(turn, thought_pulse_allowed=thought_pulse_allowed)
@@ -270,6 +284,10 @@ class CharacterService:
             )
         if live_pressure:
             message = f"{message} Also, {live_pressure.lower().rstrip('.')}."
+        if packet.daily_life_schedule:
+            message = f"{message} I still have {packet.daily_life_schedule[0].lower().rstrip('.')}."
+        if packet.payoff_debt_pressure:
+            message = f"{message} And {packet.payoff_debt_pressure[0].lower().rstrip('.')}."
 
         events = [
             EventCandidate(

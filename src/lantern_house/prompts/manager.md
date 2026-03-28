@@ -32,12 +32,17 @@ Interpretation notes:
 - `chronology_graph_digest` is the current evidence graph. Use it to keep claims, sightings, object movement, and deadline pressure physically plausible.
 - `contradiction_watch_digest` highlights contested facts or mutually incompatible claims. Convert those into suspicion, leverage, or careful accusation instead of accidental canon collapse.
 - `viewer_signal_digest` is the live audience-signal layer. Treat it as commercial feedback about what viewers are actually debating, clipping, or shipping, not as a direct retcon order.
+- `youtube_adapter_digest` is the YouTube-native harvest layer. It summarizes real comment themes, ship chatter, retention stress, and clip spikes; use it as noisy evidence, not a command.
 - `voice_fingerprint_digest` is the live voice fingerprint layer. Keep the ensemble distinct in cadence, conflict behavior, humor, and recurring language.
 - `guest_pressure_digest` is the controlled guest/NPC circulation layer. Use it to refresh the room with outside pressure that still serves the core house story.
+- `daily_life_digest` is the deterministic daily-life scheduler. Use it to ground scenes in shifts, errands, repairs, meals, paperwork, and timing collisions.
+- `payoff_debt_digest` is the payoff ledger. Use it to pay down mystery, romance, loyalty, and audience-rollout debt deliberately instead of endlessly setting up new promises.
+- `inference_policy_digest` tells you what the inference governor can realistically afford right now. Under tighter budgets, choose cleaner, more executable turns.
 - `highlight_signals` show which recent moments were clip- or quote-worthy. Use them to understand what the audience is likely to replay or discuss.
 - `monetization_signals` show which recent turns produced stronger side-taking, clip, or debate packaging. Use them as audience-value signals, not as spam prompts.
 - `broadcast_asset_signals` show which recent moments produced reusable clip/title/description packages. Use them to sharpen hook clarity without sounding manufactured.
 - `soak_audit_signals` summarize longer-horizon deterministic audits. Treat them as warnings about slow drift, stagnation, sameness, or recap decay.
+- `shadow_replay_digest` shows whether recent hot-patch replay checks found regressions. If it is warning, keep the plan extra concrete and canon-safe.
 - `ops_alerts` summarize runtime health and remediation pressure. If load is high or checkpoints/recaps are stale, prefer clean grounded moves over expensive complexity.
 - `house_state` is the deterministic pressure engine. Use it as the house's physical and financial gravity.
 - `pending_beats` are staged story moves already prepared by the system, including subscriber-vote rollout beats and house-pressure beats.
@@ -92,6 +97,8 @@ Constraints:
 - Use `chronology_graph_digest` and `contradiction_watch_digest` to keep evidence logic sharp and to turn contradictions into story heat instead of accidental nonsense.
 - Use `canon_capsule_digest` to protect long-run coherence and keep the house mythology bounded.
 - Use `voice_fingerprint_digest` to keep each speaker's visible chat cadence, pressure language, and humor style distinct.
+- Use `daily_life_digest` to make the next turns feel like they are happening inside a lived-in building with obligations, schedules, and interruptions.
+- Use `payoff_debt_digest` to pay down old promises in measured steps instead of opening random new threads.
 - If `canon_court_alerts` are present, avoid confident final-sounding claims and convert them into suspicion, misread, or partial confession.
 - If `guest_pressure_digest` is active, let controlled guest or NPC pressure complicate the room without replacing the core cast.
 - Use `payoff_threads` and `dormant_threads` sparingly to wake up dormant tension without replacing the core arcs.
@@ -102,6 +109,7 @@ Constraints:
 - If `highlight_signals` are weak or repetitive, vary the kind of hook instead of repeating the same betrayal or flirt pattern.
 - If `soak_audit_signals` warn about stagnation or sameness, bias toward a fresher strategy without abandoning canon.
 - If `load_profile.load_tier` is high or critical, keep the plan short, decisive, and easy for the visible loop to execute.
+- If `inference_policy_digest` signals fallback or tight timeouts, prefer fewer moving parts and more deterministic leverage.
 - If `recap_quality_alerts` show weakness, make the next hour easier to summarize through one clear emotional change and one clear clue or threat.
 - If `audience_control.active` is true, bias the next 24 hours toward those requests while staying believable.
 - Use `audience_control.tone_dials` as weighting dials, not absolute commands.

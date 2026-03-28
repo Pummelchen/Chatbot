@@ -8,7 +8,9 @@ from lantern_house.context.assembler import ContextAssembler
 from lantern_house.db.repository import StoryRepository
 from lantern_house.domain.contracts import AudienceControlReport, HotPatchCanaryRunSnapshot
 from lantern_house.services.chronology_graph import ChronologyGraphService
+from lantern_house.services.daily_life import DailyLifeSchedulerService
 from lantern_house.services.guest_circulation import GuestCirculationService
+from lantern_house.services.payoff_debt import PayoffDebtLedgerService
 from lantern_house.services.season_planner import SeasonPlannerService
 from lantern_house.services.viewer_signals import ViewerSignalIngestionService
 from lantern_house.services.voice_fingerprints import VoiceFingerprintService
@@ -28,6 +30,8 @@ class ShadowCanaryService:
         chronology_graph_service: ChronologyGraphService,
         voice_fingerprint_service: VoiceFingerprintService,
         guest_circulation_service: GuestCirculationService,
+        daily_life_service: DailyLifeSchedulerService,
+        payoff_debt_service: PayoffDebtLedgerService,
     ) -> None:
         self.repository = repository
         self.assembler = assembler
@@ -37,6 +41,8 @@ class ShadowCanaryService:
         self.chronology_graph_service = chronology_graph_service
         self.voice_fingerprint_service = voice_fingerprint_service
         self.guest_circulation_service = guest_circulation_service
+        self.daily_life_service = daily_life_service
+        self.payoff_debt_service = payoff_debt_service
 
     def run(
         self,
@@ -69,6 +75,12 @@ class ShadowCanaryService:
 
             self.guest_circulation_service.refresh(now=now, force=True)
             checks.append("guest-circulation-ok")
+
+            self.daily_life_service.refresh(now=now, force=True)
+            checks.append("daily-life-ok")
+
+            self.payoff_debt_service.refresh(now=now, force=True)
+            checks.append("payoff-debt-ok")
 
             manager_packet = self.assembler.build_manager_packet(
                 audience_control=AudienceControlReport()

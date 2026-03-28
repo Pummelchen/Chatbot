@@ -38,16 +38,19 @@ from lantern_house.services.canon_court import CanonCourtService
 from lantern_house.services.character import CharacterService
 from lantern_house.services.chronology_graph import ChronologyGraphService
 from lantern_house.services.critic import TurnCriticService
+from lantern_house.services.daily_life import DailyLifeSchedulerService
 from lantern_house.services.event_extractor import EventExtractor
 from lantern_house.services.god_ai import GodAIService
 from lantern_house.services.guest_circulation import GuestCirculationService
 from lantern_house.services.highlights import HighlightPackagingService
 from lantern_house.services.hourly_ledger import HourlyBeatLedgerService
 from lantern_house.services.house import HousePressureService
+from lantern_house.services.inference_governor import InferenceGovernorService
 from lantern_house.services.load_orchestration import LoadOrchestrationService
 from lantern_house.services.manager import StoryManagerService
 from lantern_house.services.monetization import MonetizationPackagingService
 from lantern_house.services.ops_dashboard import OpsDashboardService
+from lantern_house.services.payoff_debt import PayoffDebtLedgerService
 from lantern_house.services.programming_grid import ProgrammingGridService
 from lantern_house.services.progression import StoryProgressionService
 from lantern_house.services.recaps import RecapService
@@ -91,9 +94,12 @@ class RuntimeOrchestrator:
         monetization_service: MonetizationPackagingService,
         broadcast_asset_service: BroadcastAssetService,
         guest_circulation_service: GuestCirculationService,
+        daily_life_service: DailyLifeSchedulerService,
+        payoff_debt_service: PayoffDebtLedgerService,
         recap_service: RecapService,
         progression_service: StoryProgressionService,
         load_orchestration_service: LoadOrchestrationService,
+        inference_governor_service: InferenceGovernorService,
         ops_dashboard_service: OpsDashboardService,
         scheduler: TurnScheduler,
         recovery_service: RecoveryService,
@@ -130,9 +136,12 @@ class RuntimeOrchestrator:
         self.monetization_service = monetization_service
         self.broadcast_asset_service = broadcast_asset_service
         self.guest_circulation_service = guest_circulation_service
+        self.daily_life_service = daily_life_service
+        self.payoff_debt_service = payoff_debt_service
         self.recap_service = recap_service
         self.progression_service = progression_service
         self.load_orchestration_service = load_orchestration_service
+        self.inference_governor_service = inference_governor_service
         self.ops_dashboard_service = ops_dashboard_service
         self.scheduler = scheduler
         self.recovery_service = recovery_service
@@ -159,6 +168,8 @@ class RuntimeOrchestrator:
         self._last_good_run_state: dict[str, Any] | None = None
         self._last_load_profile = LoadProfileSnapshot()
         self._last_ops_snapshot: OpsTelemetrySnapshot | None = None
+        self._last_model_warm_at: dict[str, Any] = {}
+        self._warm_tasks: set[asyncio.Task[Any]] = set()
 
     def attach_hot_patch_controller(self, controller: HotPatchController) -> None:
         self.hot_patch_controller = controller
@@ -230,6 +241,10 @@ class RuntimeOrchestrator:
             await self._cancel_background_task(self._pending_manager_task)
             await self._cancel_background_task(self._checkpoint_task)
             await self._cancel_background_task(self._god_ai_task)
+            for task in list(self._warm_tasks):
+                task.cancel()
+                with contextlib.suppress(asyncio.CancelledError, TimeoutError):
+                    await asyncio.wait_for(task, timeout=2)
             self.fail_safe.call(
                 "runtime.write_shutdown_checkpoint",
                 lambda: self.repository.write_checkpoint(reason="shutdown", phase="shutdown"),
@@ -295,7 +310,10 @@ class RuntimeOrchestrator:
         self._refresh_world_tracking(now=startup_now, force=True)
         self._refresh_chronology_graph(now=startup_now, force=True)
         self._refresh_guest_circulation(now=startup_now, force=True)
+        self._refresh_daily_life(now=startup_now, force=True)
+        self._refresh_payoff_debt(now=startup_now, force=True)
         startup_load = self._capture_load_profile(now=startup_now)
+        self._maybe_keep_models_warm(now=startup_now, load_profile=startup_load)
         self._capture_ops_snapshot(load_profile=startup_load, now=startup_now)
         self.fail_safe.call(
             "runtime.set_loop_ready",
@@ -345,7 +363,10 @@ class RuntimeOrchestrator:
         self._refresh_voice_fingerprints(now=now)
         self._refresh_chronology_graph(now=now)
         self._refresh_guest_circulation(now=now)
+        self._refresh_daily_life(now=now)
+        self._refresh_payoff_debt(now=now)
         load_profile = self._capture_load_profile(now=now)
+        self._maybe_keep_models_warm(now=now, load_profile=load_profile)
         ops_snapshot = self._capture_ops_snapshot(load_profile=load_profile, now=now)
         self._apply_ops_remediations(snapshot=ops_snapshot, now=now)
 
@@ -418,6 +439,11 @@ class RuntimeOrchestrator:
                     or load_profile.load_tier == "critical"
                 )
                 if urgent_refresh or self._pending_manager_task is None:
+                    manager_policy = self._govern_policy(
+                        role="manager",
+                        load_profile=load_profile,
+                        now=now,
+                    )
                     self.fail_safe.call(
                         "runtime.set_manager_request_phase",
                         lambda: self.repository.set_runtime_status(
@@ -432,7 +458,11 @@ class RuntimeOrchestrator:
                     )
                     plan_result = await self.fail_safe.call_async(
                         "manager.plan_sync",
-                        lambda: self.manager_service.plan(manager_packet, self._roster),
+                        lambda: self.manager_service.plan(
+                            manager_packet,
+                            self._roster,
+                            policy=manager_policy,
+                        ),
                         context={
                             "phase": "directive-refresh",
                             "scene_objective": manager_packet.scene_objective,
@@ -499,7 +529,11 @@ class RuntimeOrchestrator:
                 retry_advice="Restore database connectivity so runtime phases can update.",
             )
             self._pending_manager_task = asyncio.create_task(
-                self.manager_service.plan(manager_packet, self._roster)
+                self.manager_service.plan(
+                    manager_packet,
+                    self._roster,
+                    policy=self._govern_policy(role="manager", load_profile=load_profile, now=now),
+                )
             )
 
         if directive is None:
@@ -575,6 +609,12 @@ class RuntimeOrchestrator:
             load_tier=load_profile.load_tier,
             thought_pulse_allowed=thought_pulse_allowed,
         )
+        character_policy = self._govern_policy(
+            role="character",
+            load_profile=load_profile,
+            now=now,
+        )
+        repair_policy = self._govern_policy(role="repair", load_profile=load_profile, now=now)
         candidate_result = await self.fail_safe.call_async(
             "character.generate_candidates",
             lambda: self.character_service.generate_candidates(
@@ -583,6 +623,7 @@ class RuntimeOrchestrator:
                 candidate_count=(
                     self.config.turn_selection.candidate_count if use_multi_candidate else 1
                 ),
+                policy=character_policy,
             ),
             context={"speaker_slug": speaker_slug, "phase": "character-request"},
             expected_inputs=[
@@ -724,6 +765,7 @@ class RuntimeOrchestrator:
                         original_turn=turn,
                         critic_report=critic_report,
                         thought_pulse_allowed=thought_pulse_allowed,
+                        policy=repair_policy,
                     ),
                     context={"speaker_slug": speaker_slug, "phase": "character-repair"},
                     expected_inputs=[
@@ -996,7 +1038,14 @@ class RuntimeOrchestrator:
         )
         bundle_result = await self.fail_safe.call_async(
             "recap.generate_bundle",
-            lambda: self.recap_service.generate_bundle(bucket_end_at=bucket_end_at),
+            lambda: self.recap_service.generate_bundle(
+                bucket_end_at=bucket_end_at,
+                policy=self._govern_policy(
+                    role="announcer",
+                    load_profile=self._last_load_profile,
+                    now=utcnow(),
+                ),
+            ),
             context={"bucket_end_at": bucket_end_at.isoformat()},
             expected_inputs=["Stored events, summaries, and a recap-capable announcer model."],
             retry_advice="Retry recap generation or rely on the deterministic recap fallback.",
@@ -1065,11 +1114,17 @@ class RuntimeOrchestrator:
                     await asyncio.wait_for(self._stop_event.wait(), timeout=60)
                 except TimeoutError:
                     continue
+            god_ai_policy = self._govern_policy(
+                role="god_ai",
+                load_profile=load_profile,
+                now=utcnow(),
+            )
             refresh_result = await self.fail_safe.call_async(
                 "god_ai.refresh_background",
-                lambda force_now=force: self.god_ai_service.refresh_if_due(
+                lambda force_now=force, policy=god_ai_policy: self.god_ai_service.refresh_if_due(
                     now=utcnow(),
                     force=force_now,
+                    policy=policy,
                 ),
                 context={"force": force},
                 expected_inputs=[
@@ -1271,6 +1326,28 @@ class RuntimeOrchestrator:
             retry_advice="Restore repository access so guest circulation can refresh.",
         )
 
+    def _refresh_daily_life(self, *, now, force: bool = False) -> None:
+        self.fail_safe.call(
+            "daily_life.refresh",
+            lambda: self.daily_life_service.refresh(now=now, force=force),
+            context={"phase": "daily-life", "force": force},
+            expected_inputs=[
+                "Readable characters, guests, and locations, plus writable daily-life tables."
+            ],
+            retry_advice="Restore repository access so daily-life scheduling can refresh.",
+        )
+
+    def _refresh_payoff_debt(self, *, now, force: bool = False) -> None:
+        self.fail_safe.call(
+            "payoff_debt.refresh",
+            lambda: self.payoff_debt_service.refresh(now=now, force=force),
+            context={"phase": "payoff-debt", "force": force},
+            expected_inputs=[
+                "Readable world memory, rollout requests, relationships, and writable debt tables."
+            ],
+            retry_advice="Restore repository access so payoff debt can refresh.",
+        )
+
     def _build_manager_packet(
         self,
         *,
@@ -1321,8 +1398,44 @@ class RuntimeOrchestrator:
             fallback_label="last-load-profile",
         )
         profile = result.value or self._last_load_profile
+        digest = self.inference_governor_service.build_digest(load_profile=profile, now=now)
+        profile = profile.model_copy(
+            update={
+                "metadata": {
+                    **(profile.metadata or {}),
+                    "policy_digest": digest,
+                }
+            }
+        )
         self._last_load_profile = profile
         return profile
+
+    def _govern_policy(self, *, role: str, load_profile: LoadProfileSnapshot, now):
+        return self.inference_governor_service.policy_for(
+            role=role,
+            load_profile=load_profile,
+            now=now,
+        )
+
+    def _maybe_keep_models_warm(self, *, now, load_profile: LoadProfileSnapshot) -> None:
+        if load_profile.load_tier != "low":
+            return
+        role_to_model = {
+            "character": self.config.models.character,
+            "manager": self.config.models.manager,
+            "announcer": self.config.models.announcer,
+        }
+        for role, model_name in role_to_model.items():
+            policy = self._govern_policy(role=role, load_profile=load_profile, now=now)
+            if not policy.keep_warm:
+                continue
+            last_warm = self._last_model_warm_at.get(model_name)
+            if last_warm and (ensure_utc(now) - ensure_utc(last_warm)).total_seconds() < 15 * 60:
+                continue
+            self._last_model_warm_at[model_name] = now
+            task = asyncio.create_task(self.llm_client.warm_model(model_name))
+            self._warm_tasks.add(task)
+            task.add_done_callback(self._warm_tasks.discard)
 
     def _capture_ops_snapshot(
         self,
@@ -1598,6 +1711,7 @@ class RuntimeOrchestrator:
         context_module = import_module("lantern_house.context.assembler")
         audience_module = import_module("lantern_house.services.audience")
         viewer_signals_module = import_module("lantern_house.services.viewer_signals")
+        youtube_adapter_module = import_module("lantern_house.services.youtube_adapter")
         beats_module = import_module("lantern_house.services.beats")
         broadcast_assets_module = import_module("lantern_house.services.broadcast_assets")
         hourly_ledger_module = import_module("lantern_house.services.hourly_ledger")
@@ -1606,13 +1720,16 @@ class RuntimeOrchestrator:
         canon_module = import_module("lantern_house.services.canon")
         canon_court_module = import_module("lantern_house.services.canon_court")
         chronology_graph_module = import_module("lantern_house.services.chronology_graph")
+        daily_life_module = import_module("lantern_house.services.daily_life")
         house_module = import_module("lantern_house.services.house")
         guest_circulation_module = import_module("lantern_house.services.guest_circulation")
         gravity_module = import_module("lantern_house.services.story_gravity")
         highlights_module = import_module("lantern_house.services.highlights")
+        inference_module = import_module("lantern_house.services.inference_governor")
         monetization_module = import_module("lantern_house.services.monetization")
         load_module = import_module("lantern_house.services.load_orchestration")
         ops_module = import_module("lantern_house.services.ops_dashboard")
+        payoff_debt_module = import_module("lantern_house.services.payoff_debt")
         simulation_module = import_module("lantern_house.services.simulation_lab")
         soak_audit_module = import_module("lantern_house.services.soak_audit")
         god_ai_module = import_module("lantern_house.services.god_ai")
@@ -1640,9 +1757,15 @@ class RuntimeOrchestrator:
             latest_config.audience,
             self.repository,
         )
+        youtube_adapter_service = youtube_adapter_module.YouTubeSignalAdapterService(
+            latest_config.youtube_adapter,
+            latest_config.viewer_signals,
+            self.repository,
+        )
         self.viewer_signal_service = viewer_signals_module.ViewerSignalIngestionService(
             latest_config.viewer_signals,
             self.repository,
+            youtube_adapter_service,
         )
         self.beat_service = beats_module.StoryBeatService(self.repository)
         self.hourly_ledger_service = hourly_ledger_module.HourlyBeatLedgerService(
@@ -1685,6 +1808,14 @@ class RuntimeOrchestrator:
         self.guest_circulation_service = guest_circulation_module.GuestCirculationService(
             self.repository,
             latest_config.guest_circulation,
+        )
+        self.daily_life_service = daily_life_module.DailyLifeSchedulerService(
+            self.repository,
+            latest_config.daily_life,
+        )
+        self.payoff_debt_service = payoff_debt_module.PayoffDebtLedgerService(
+            self.repository,
+            latest_config.payoff_debt,
         )
         simulation_lab = simulation_module.SimulationLabService(latest_config.simulation)
         soak_audit_service = soak_audit_module.SoakAuditService(
@@ -1736,6 +1867,9 @@ class RuntimeOrchestrator:
         self.load_orchestration_service = load_module.LoadOrchestrationService(
             self.repository,
             latest_config.load_orchestration,
+        )
+        self.inference_governor_service = inference_module.InferenceGovernorService(
+            latest_config.inference_governor
         )
         self.ops_dashboard_service = ops_module.OpsDashboardService(
             self.repository,

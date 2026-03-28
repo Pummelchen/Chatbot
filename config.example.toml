@@ -76,6 +76,14 @@ check_interval_minutes = 10
 max_active_signals = 12
 max_derived_signals = 8
 
+[youtube_adapter]
+enabled = true
+refresh_interval_minutes = 10
+max_records_per_file = 400
+max_theme_items = 6
+clip_spike_threshold = 75
+retention_drop_threshold = 12
+
 [house_pressure]
 enabled = true
 refresh_interval_minutes = 5
@@ -213,6 +221,38 @@ critical_latency_ms = 15000
 recent_message_window = 10
 high_failure_streak = 2
 critical_failure_streak = 4
+
+[inference_governor]
+enabled = true
+low_timeout_seconds = 70
+medium_timeout_seconds = 45
+high_timeout_seconds = 24
+critical_timeout_seconds = 12
+role_timeout_multipliers = { character = 0.7, repair = 0.45, manager = 0.8, announcer = 0.75, god_ai = 1.35 }
+base_retry_budget = { character = 2, repair = 1, manager = 2, announcer = 1, god_ai = 1 }
+disable_roles_under_high = ["god_ai"]
+disable_roles_under_critical = ["repair", "god_ai"]
+prewarm_roles_when_low = ["character", "manager", "announcer"]
+
+[daily_life]
+enabled = true
+refresh_interval_minutes = 15
+horizon_hours = 12
+max_active_slots = 12
+max_pending_beats = 5
+
+[payoff_debt]
+enabled = true
+refresh_interval_minutes = 10
+max_active_debts = 12
+max_pending_beats = 4
+overdue_after_hours = 48
+
+[shadow_replay]
+enabled = true
+recent_turn_limit = 5
+compare_window_hours = 12
+max_reported_regressions = 4
 
 [ops_dashboard]
 enabled = true

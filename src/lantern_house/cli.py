@@ -38,22 +38,26 @@ from lantern_house.services.canon_court import CanonCourtService
 from lantern_house.services.character import CharacterService
 from lantern_house.services.chronology_graph import ChronologyGraphService
 from lantern_house.services.critic import TurnCriticService
+from lantern_house.services.daily_life import DailyLifeSchedulerService
 from lantern_house.services.event_extractor import EventExtractor
 from lantern_house.services.god_ai import GodAIService
 from lantern_house.services.guest_circulation import GuestCirculationService
 from lantern_house.services.highlights import HighlightPackagingService
 from lantern_house.services.hourly_ledger import HourlyBeatLedgerService
 from lantern_house.services.house import HousePressureService
+from lantern_house.services.inference_governor import InferenceGovernorService
 from lantern_house.services.load_orchestration import LoadOrchestrationService
 from lantern_house.services.manager import StoryManagerService
 from lantern_house.services.monetization import MonetizationPackagingService
 from lantern_house.services.ops_dashboard import OpsDashboardService
+from lantern_house.services.payoff_debt import PayoffDebtLedgerService
 from lantern_house.services.programming_grid import ProgrammingGridService
 from lantern_house.services.progression import StoryProgressionService
 from lantern_house.services.recaps import RecapService
 from lantern_house.services.season_planner import SeasonPlannerService
 from lantern_house.services.seed_loader import StorySeedLoader
 from lantern_house.services.shadow_canary import ShadowCanaryService
+from lantern_house.services.shadow_replay import ShadowReplayService
 from lantern_house.services.simulation_lab import SimulationLabService
 from lantern_house.services.soak_audit import SoakAuditService
 from lantern_house.services.story_gravity import StoryGravityService
@@ -61,6 +65,7 @@ from lantern_house.services.turn_selection import TurnSelectionService
 from lantern_house.services.viewer_signals import ViewerSignalIngestionService
 from lantern_house.services.voice_fingerprints import VoiceFingerprintService
 from lantern_house.services.world_tracking import WorldTrackingService
+from lantern_house.services.youtube_adapter import YouTubeSignalAdapterService
 from lantern_house.utils.time import floor_to_hour, utcnow
 
 app = typer.Typer(no_args_is_help=True)
@@ -298,7 +303,11 @@ def _simulate(config: AppConfig, *, hours: int, turns_per_hour: int) -> None:
     if not repository.seed_exists():
         raise RuntimeError("No story seed found. Run `lantern-house seed` before `simulate`.")
     audience_service = AudienceControlService(config.audience, repository)
-    viewer_signal_service = ViewerSignalIngestionService(config.viewer_signals, repository)
+    viewer_signal_service = ViewerSignalIngestionService(
+        config.viewer_signals,
+        repository,
+        YouTubeSignalAdapterService(config.youtube_adapter, config.viewer_signals, repository),
+    )
     beat_service = StoryBeatService(repository)
     house_pressure_service = HousePressureService(repository, config.house_pressure)
     house_pressure_service.refresh(force=True)
@@ -312,6 +321,8 @@ def _simulate(config: AppConfig, *, hours: int, turns_per_hour: int) -> None:
     WorldTrackingService(repository, config.world_tracking).refresh(force=True)
     ChronologyGraphService(repository, config.chronology_graph).refresh(force=True)
     GuestCirculationService(repository, config.guest_circulation).refresh(force=True)
+    DailyLifeSchedulerService(repository, config.daily_life).refresh(force=True)
+    PayoffDebtLedgerService(repository, config.payoff_debt).refresh(force=True)
     assembler = ContextAssembler(repository, PacingHealthEvaluator())
     packet = assembler.build_manager_packet(audience_control=audience)
     report = SimulationLabService(config.simulation).evaluate(
@@ -342,7 +353,11 @@ def _soak_audit(config: AppConfig) -> None:
     if not repository.seed_exists():
         raise RuntimeError("No story seed found. Run `lantern-house seed` before `soak-audit`.")
     audience_service = AudienceControlService(config.audience, repository)
-    viewer_signal_service = ViewerSignalIngestionService(config.viewer_signals, repository)
+    viewer_signal_service = ViewerSignalIngestionService(
+        config.viewer_signals,
+        repository,
+        YouTubeSignalAdapterService(config.youtube_adapter, config.viewer_signals, repository),
+    )
     beat_service = StoryBeatService(repository)
     beat_service.sync_audience_rollout(audience_service.refresh_if_due(force=True), now=utcnow())
     viewer_signal_service.refresh_if_due(force=True)
@@ -357,6 +372,8 @@ def _soak_audit(config: AppConfig) -> None:
     WorldTrackingService(repository, config.world_tracking).refresh(force=True)
     ChronologyGraphService(repository, config.chronology_graph).refresh(force=True)
     GuestCirculationService(repository, config.guest_circulation).refresh(force=True)
+    DailyLifeSchedulerService(repository, config.daily_life).refresh(force=True)
+    PayoffDebtLedgerService(repository, config.payoff_debt).refresh(force=True)
     assembler = ContextAssembler(repository, PacingHealthEvaluator())
     packet = assembler.build_manager_packet(audience_control=audience_service.current_report())
     simulation_lab = SimulationLabService(config.simulation)
@@ -428,11 +445,25 @@ def _shadow_check(config: AppConfig, *, changed_files: list[str]) -> None:
     if not repository.seed_exists():
         raise RuntimeError("No story seed found. Run `lantern-house seed` before `shadow-check`.")
     pacing = PacingHealthEvaluator()
+    continuity_guard = ContinuityGuard()
     assembler = ContextAssembler(repository, pacing)
+    youtube_adapter = YouTubeSignalAdapterService(
+        config.youtube_adapter,
+        config.viewer_signals,
+        repository,
+    )
+    viewer_signal_service = ViewerSignalIngestionService(
+        config.viewer_signals,
+        repository,
+        youtube_adapter,
+    )
+    canon_court = CanonCourtService(config.canon_court)
+    critic = TurnCriticService(config.critic)
+    event_extractor = EventExtractor()
     service = ShadowCanaryService(
         repository=repository,
         assembler=assembler,
-        viewer_signal_service=ViewerSignalIngestionService(config.viewer_signals, repository),
+        viewer_signal_service=viewer_signal_service,
         season_planner_service=SeasonPlannerService(repository, config.season_planner),
         world_tracking_service=WorldTrackingService(repository, config.world_tracking),
         chronology_graph_service=ChronologyGraphService(repository, config.chronology_graph),
@@ -441,10 +472,28 @@ def _shadow_check(config: AppConfig, *, changed_files: list[str]) -> None:
             config.voice_fingerprints,
         ),
         guest_circulation_service=GuestCirculationService(repository, config.guest_circulation),
+        daily_life_service=DailyLifeSchedulerService(repository, config.daily_life),
+        payoff_debt_service=PayoffDebtLedgerService(repository, config.payoff_debt),
     )
     snapshot = service.run(changed_files=changed_files, now=utcnow())
+    replay_snapshot = ShadowReplayService(
+        repository=repository,
+        assembler=assembler,
+        event_extractor=event_extractor,
+        canon_court_service=canon_court,
+        critic_service=critic,
+        continuity_guard=continuity_guard,
+        config=config.shadow_replay,
+    ).run(changed_files=changed_files, now=utcnow())
+    if replay_snapshot.status != "passed":
+        raise RuntimeError(
+            "shadow replay detected regressions: "
+            + "; ".join(replay_snapshot.regressions[:2])
+        )
     typer.echo("Shadow canary passed.")
     for check in snapshot.checks:
+        typer.echo(f"- {check}")
+    for check in replay_snapshot.checks:
         typer.echo(f"- {check}")
 
 
@@ -497,7 +546,16 @@ async def _run_async(config: AppConfig, *, once: bool) -> None:
         pacing = PacingHealthEvaluator()
         assembler = ContextAssembler(repository, pacing)
         audience_control_service = AudienceControlService(config.audience, repository)
-        viewer_signal_service = ViewerSignalIngestionService(config.viewer_signals, repository)
+        youtube_adapter_service = YouTubeSignalAdapterService(
+            config.youtube_adapter,
+            config.viewer_signals,
+            repository,
+        )
+        viewer_signal_service = ViewerSignalIngestionService(
+            config.viewer_signals,
+            repository,
+            youtube_adapter_service,
+        )
         beat_service = StoryBeatService(repository)
         hourly_ledger_service = HourlyBeatLedgerService(repository, config.hourly_beat_ledger)
         programming_grid_service = ProgrammingGridService(repository, config.programming_grid)
@@ -511,6 +569,8 @@ async def _run_async(config: AppConfig, *, once: bool) -> None:
             repository,
             config.guest_circulation,
         )
+        daily_life_service = DailyLifeSchedulerService(repository, config.daily_life)
+        payoff_debt_service = PayoffDebtLedgerService(repository, config.payoff_debt)
         orchestrator = RuntimeOrchestrator(
             config=config,
             repository=repository,
@@ -552,11 +612,16 @@ async def _run_async(config: AppConfig, *, once: bool) -> None:
                 config.broadcast_assets,
             ),
             guest_circulation_service=guest_circulation_service,
+            daily_life_service=daily_life_service,
+            payoff_debt_service=payoff_debt_service,
             recap_service=RecapService(repository, client, config.models.announcer),
             progression_service=StoryProgressionService(),
             load_orchestration_service=LoadOrchestrationService(
                 repository,
                 config.load_orchestration,
+            ),
+            inference_governor_service=InferenceGovernorService(
+                config.inference_governor
             ),
             ops_dashboard_service=OpsDashboardService(repository, config.ops_dashboard),
             scheduler=TurnScheduler(

@@ -24,6 +24,7 @@ from lantern_house.domain.contracts import (
     ChronologyEdgeSnapshot,
     ChronologyNodeSnapshot,
     ContinuityFlagDraft,
+    DailyLifeSlotSnapshot,
     DormantThreadSnapshot,
     EventCandidate,
     EventView,
@@ -37,8 +38,10 @@ from lantern_house.domain.contracts import (
     MonetizationPackageSnapshot,
     ObjectPossessionSnapshot,
     OpsTelemetrySnapshot,
+    PayoffDebtSnapshot,
     ProgrammingGridSlotSnapshot,
     RelationshipSnapshot,
+    ShadowReplayRunSnapshot,
     SimulationLabReport,
     SoakAuditSnapshot,
     StoryArcSnapshot,
@@ -51,6 +54,7 @@ from lantern_house.domain.contracts import (
     TurnCriticReport,
     ViewerSignalSnapshot,
     VoiceFingerprintSnapshot,
+    YouTubeAdapterStateSnapshot,
 )
 from lantern_house.domain.enums import MessageKind, SummaryWindow
 from lantern_house.utils.time import ensure_utc, floor_to_hour, isoformat, utcnow
@@ -995,6 +999,29 @@ class StoryRepository:
                 metadata["archived_at"] = isoformat(now)
                 row.metadata_json = metadata
 
+    def list_active_rollout_requests(self, *, limit: int = 8) -> list[dict[str, Any]]:
+        with self.session_factory.session_scope() as session:
+            rows = session.scalars(
+                select(models.RolloutRequest)
+                .where(models.RolloutRequest.status == "active")
+                .order_by(
+                    desc(models.RolloutRequest.priority),
+                    desc(models.RolloutRequest.activated_at),
+                )
+                .limit(limit)
+            ).all()
+            return [
+                {
+                    "summary": row.summary,
+                    "request_type": row.request_type,
+                    "priority": row.priority,
+                    "directives": row.directives,
+                    "metadata": row.metadata_json,
+                    "activated_at": row.activated_at,
+                }
+                for row in rows
+            ]
+
     def record_simulation_lab_run(
         self,
         *,
@@ -1557,6 +1584,79 @@ class StoryRepository:
             )
             return []
 
+    def save_youtube_adapter_state(
+        self,
+        *,
+        snapshot: YouTubeAdapterStateSnapshot,
+        now=None,
+    ) -> YouTubeAdapterStateSnapshot:
+        now = ensure_utc(now or utcnow())
+        try:
+            with self.session_factory.session_scope() as session:
+                row = session.scalar(
+                    select(models.YouTubeAdapterState).where(
+                        models.YouTubeAdapterState.state_key == snapshot.state_key
+                    )
+                )
+                if row is None:
+                    row = models.YouTubeAdapterState(state_key=snapshot.state_key)
+                    session.add(row)
+                row.last_harvest_at = ensure_utc(snapshot.last_harvest_at or now)
+                row.source_offsets = snapshot.source_offsets
+                row.normalized_counts = snapshot.normalized_counts
+                row.active_themes = snapshot.active_themes
+                row.ship_heat = snapshot.ship_heat
+                row.theory_heat = snapshot.theory_heat
+                row.retention_alerts = snapshot.retention_alerts
+                row.clip_spikes = snapshot.clip_spikes
+                row.metadata_json = snapshot.metadata
+                row.updated_at = now
+                return snapshot.model_copy(update={"updated_at": now})
+        except SQLAlchemyError as exc:
+            _log_recovered_db_failure(
+                "repository.save_youtube_adapter_state",
+                exc,
+                context={"state_key": snapshot.state_key},
+                expected_inputs=["A migrated youtube_adapter_state table."],
+                retry_advice="Run migrations so YouTube adapter state can persist again.",
+                fallback_used="return-unpersisted-youtube-adapter-state",
+            )
+            return snapshot.model_copy(update={"updated_at": now})
+
+    def get_youtube_adapter_state(self) -> YouTubeAdapterStateSnapshot:
+        try:
+            with self.session_factory.session_scope() as session:
+                row = session.scalar(
+                    select(models.YouTubeAdapterState).where(
+                        models.YouTubeAdapterState.state_key == "primary"
+                    )
+                )
+                if row is None:
+                    return YouTubeAdapterStateSnapshot()
+                return YouTubeAdapterStateSnapshot(
+                    state_key=row.state_key,
+                    last_harvest_at=row.last_harvest_at,
+                    source_offsets=row.source_offsets,
+                    normalized_counts=row.normalized_counts,
+                    active_themes=row.active_themes,
+                    ship_heat=row.ship_heat,
+                    theory_heat=row.theory_heat,
+                    retention_alerts=row.retention_alerts,
+                    clip_spikes=row.clip_spikes,
+                    metadata=row.metadata_json,
+                    updated_at=row.updated_at,
+                )
+        except SQLAlchemyError as exc:
+            _log_recovered_db_failure(
+                "repository.get_youtube_adapter_state",
+                exc,
+                context={},
+                expected_inputs=["A migrated youtube_adapter_state table."],
+                retry_advice="Run migrations so YouTube adapter state reads can resume.",
+                fallback_used="default-youtube-adapter-state",
+            )
+            return YouTubeAdapterStateSnapshot()
+
     def save_voice_fingerprints(
         self,
         *,
@@ -1782,6 +1882,70 @@ class StoryRepository:
                 expected_inputs=["A migrated hot_patch_canary_runs table."],
                 retry_advice="Run migrations so hot patch canary reads can resume.",
                 fallback_used="no-hot-patch-canary-run",
+            )
+            return None
+
+    def record_shadow_replay_run(
+        self,
+        *,
+        snapshot: ShadowReplayRunSnapshot,
+        now=None,
+    ) -> ShadowReplayRunSnapshot:
+        now = ensure_utc(now or utcnow())
+        try:
+            with self.session_factory.session_scope() as session:
+                row = models.ShadowReplayRun(
+                    status=snapshot.status,
+                    changed_files=snapshot.changed_files,
+                    compared_turns=snapshot.compared_turns,
+                    regression_count=snapshot.regression_count,
+                    checks=snapshot.checks,
+                    regressions=snapshot.regressions,
+                    metadata_json=snapshot.metadata,
+                    created_at=now,
+                )
+                session.add(row)
+                session.flush()
+                return snapshot.model_copy(update={"created_at": now})
+        except SQLAlchemyError as exc:
+            _log_recovered_db_failure(
+                "repository.record_shadow_replay_run",
+                exc,
+                context={"status": snapshot.status, "changed_files": snapshot.changed_files},
+                expected_inputs=["A migrated shadow_replay_runs table."],
+                retry_advice="Run migrations so shadow replay telemetry can resume.",
+                fallback_used="return-unpersisted-shadow-replay-run",
+            )
+            return snapshot.model_copy(update={"created_at": now})
+
+    def get_latest_shadow_replay_run(self) -> ShadowReplayRunSnapshot | None:
+        try:
+            with self.session_factory.session_scope() as session:
+                row = session.scalar(
+                    select(models.ShadowReplayRun).order_by(
+                        desc(models.ShadowReplayRun.created_at)
+                    )
+                )
+                if row is None:
+                    return None
+                return ShadowReplayRunSnapshot(
+                    status=row.status,
+                    changed_files=row.changed_files,
+                    compared_turns=row.compared_turns,
+                    regression_count=row.regression_count,
+                    checks=row.checks,
+                    regressions=row.regressions,
+                    metadata=row.metadata_json,
+                    created_at=row.created_at,
+                )
+        except SQLAlchemyError as exc:
+            _log_recovered_db_failure(
+                "repository.get_latest_shadow_replay_run",
+                exc,
+                context={},
+                expected_inputs=["A migrated shadow_replay_runs table."],
+                retry_advice="Run migrations so shadow replay reads can resume.",
+                fallback_used="no-shadow-replay-run",
             )
             return None
 
@@ -2582,6 +2746,280 @@ class StoryRepository:
             )
             return []
 
+    def sync_daily_life_schedule_slots(
+        self,
+        *,
+        slots: list[DailyLifeSlotSnapshot],
+        now=None,
+    ) -> list[DailyLifeSlotSnapshot]:
+        now = ensure_utc(now or utcnow())
+        if not slots:
+            return []
+        try:
+            with self.session_factory.session_scope() as session:
+                for slot in slots:
+                    window_start_at = ensure_utc(slot.window_start_at or now)
+                    row = session.scalar(
+                        select(models.DailyLifeScheduleSlot).where(
+                            models.DailyLifeScheduleSlot.slot_key == slot.slot_key,
+                            models.DailyLifeScheduleSlot.window_start_at == window_start_at,
+                        )
+                    )
+                    if row is None:
+                        row = models.DailyLifeScheduleSlot(
+                            slot_key=slot.slot_key,
+                            window_start_at=window_start_at,
+                            created_at=now,
+                        )
+                        session.add(row)
+                    row.horizon_key = slot.horizon_key
+                    row.participant_slug = slot.participant_slug
+                    row.participant_name = slot.participant_name
+                    row.role_type = slot.role_type
+                    row.location_slug = slot.location_slug
+                    row.location_name = slot.location_name
+                    row.objective = slot.objective
+                    row.task_type = slot.task_type
+                    row.status = slot.status
+                    row.priority = slot.priority
+                    row.notes = slot.notes
+                    row.metadata_json = slot.metadata
+                    row.window_end_at = ensure_utc(slot.window_end_at or window_start_at)
+                    row.updated_at = now
+                return [slot.model_copy(update={"updated_at": now}) for slot in slots]
+        except SQLAlchemyError as exc:
+            _log_recovered_db_failure(
+                "repository.sync_daily_life_schedule_slots",
+                exc,
+                context={"slot_count": len(slots)},
+                expected_inputs=["A migrated daily_life_schedule_slots table."],
+                retry_advice="Run migrations so daily-life schedule persistence can resume.",
+                fallback_used="return-unpersisted-daily-life-slots",
+            )
+            return [slot.model_copy(update={"updated_at": now}) for slot in slots]
+
+    def list_daily_life_schedule_slots(
+        self,
+        *,
+        participant_slug: str | None = None,
+        horizon_key: str | None = None,
+        active_only: bool = True,
+        limit: int = 12,
+        now=None,
+    ) -> list[DailyLifeSlotSnapshot]:
+        now = ensure_utc(now or utcnow())
+        try:
+            with self.session_factory.session_scope() as session:
+                stmt = select(models.DailyLifeScheduleSlot).order_by(
+                    desc(models.DailyLifeScheduleSlot.priority),
+                    models.DailyLifeScheduleSlot.window_start_at,
+                )
+                if participant_slug:
+                    stmt = stmt.where(
+                        models.DailyLifeScheduleSlot.participant_slug == participant_slug
+                    )
+                if horizon_key:
+                    stmt = stmt.where(models.DailyLifeScheduleSlot.horizon_key == horizon_key)
+                if active_only:
+                    stmt = stmt.where(
+                        models.DailyLifeScheduleSlot.status != "archived",
+                        or_(
+                            models.DailyLifeScheduleSlot.window_end_at.is_(None),
+                            models.DailyLifeScheduleSlot.window_end_at >= now,
+                        ),
+                    )
+                rows = session.scalars(stmt.limit(limit)).all()
+                return [
+                    DailyLifeSlotSnapshot(
+                        slot_key=row.slot_key,
+                        horizon_key=row.horizon_key,
+                        participant_slug=row.participant_slug,
+                        participant_name=row.participant_name,
+                        role_type=row.role_type,
+                        location_slug=row.location_slug,
+                        location_name=row.location_name,
+                        objective=row.objective,
+                        task_type=row.task_type,
+                        status=row.status,
+                        priority=row.priority,
+                        notes=row.notes,
+                        metadata=row.metadata_json,
+                        window_start_at=row.window_start_at,
+                        window_end_at=row.window_end_at,
+                        updated_at=row.updated_at,
+                    )
+                    for row in rows
+                ]
+        except SQLAlchemyError as exc:
+            _log_recovered_db_failure(
+                "repository.list_daily_life_schedule_slots",
+                exc,
+                context={
+                    "participant_slug": participant_slug,
+                    "horizon_key": horizon_key,
+                    "active_only": active_only,
+                    "limit": limit,
+                },
+                expected_inputs=["A migrated daily_life_schedule_slots table."],
+                retry_advice="Run migrations so daily-life schedule reads can resume.",
+                fallback_used="empty-daily-life-slots",
+            )
+            return []
+
+    def sync_payoff_debts(
+        self,
+        *,
+        items: list[PayoffDebtSnapshot],
+        now=None,
+    ) -> list[PayoffDebtSnapshot]:
+        now = ensure_utc(now or utcnow())
+        try:
+            with self.session_factory.session_scope() as session:
+                active_keys = {item.debt_key for item in items}
+                existing = {
+                    row.debt_key: row
+                    for row in session.scalars(select(models.PayoffDebtItem)).all()
+                }
+                for item in items:
+                    row = existing.get(item.debt_key)
+                    if row is None:
+                        row = models.PayoffDebtItem(debt_key=item.debt_key, created_at=now)
+                        session.add(row)
+                    row.debt_type = item.debt_type
+                    row.subject = item.subject
+                    row.summary = item.summary
+                    row.payoff_class = item.payoff_class
+                    row.status = item.status
+                    row.linked_character_slug = item.linked_character_slug
+                    row.due_window = item.due_window
+                    row.heat = item.heat
+                    row.urgency = item.urgency
+                    row.freshness_hours = item.freshness_hours
+                    row.metadata_json = item.metadata
+                    row.last_touched_at = ensure_utc(item.last_touched_at or now)
+                    row.updated_at = now
+                for debt_key, row in existing.items():
+                    if debt_key in active_keys:
+                        continue
+                    if row.status != "paid":
+                        row.status = "archived"
+                    row.updated_at = now
+                return [
+                    item.model_copy(
+                        update={
+                            "last_touched_at": ensure_utc(item.last_touched_at or now),
+                            "updated_at": now,
+                        }
+                    )
+                    for item in items
+                ]
+        except SQLAlchemyError as exc:
+            _log_recovered_db_failure(
+                "repository.sync_payoff_debts",
+                exc,
+                context={"item_count": len(items)},
+                expected_inputs=["A migrated payoff_debt_items table."],
+                retry_advice="Run migrations so payoff-debt persistence can resume.",
+                fallback_used="return-unpersisted-payoff-debts",
+            )
+            return [
+                item.model_copy(
+                    update={
+                        "last_touched_at": ensure_utc(item.last_touched_at or now),
+                        "updated_at": now,
+                    }
+                )
+                for item in items
+            ]
+
+    def list_payoff_debts(
+        self,
+        *,
+        linked_character_slug: str | None = None,
+        statuses: list[str] | None = None,
+        limit: int = 12,
+    ) -> list[PayoffDebtSnapshot]:
+        try:
+            with self.session_factory.session_scope() as session:
+                stmt = select(models.PayoffDebtItem).order_by(
+                    desc(models.PayoffDebtItem.urgency),
+                    desc(models.PayoffDebtItem.heat),
+                    desc(models.PayoffDebtItem.updated_at),
+                )
+                if linked_character_slug:
+                    stmt = stmt.where(
+                        models.PayoffDebtItem.linked_character_slug == linked_character_slug
+                    )
+                if statuses:
+                    stmt = stmt.where(models.PayoffDebtItem.status.in_(statuses))
+                rows = session.scalars(stmt.limit(limit)).all()
+                return [
+                    PayoffDebtSnapshot(
+                        debt_key=row.debt_key,
+                        debt_type=row.debt_type,
+                        subject=row.subject,
+                        summary=row.summary,
+                        payoff_class=row.payoff_class,
+                        status=row.status,
+                        linked_character_slug=row.linked_character_slug,
+                        due_window=row.due_window,
+                        heat=row.heat,
+                        urgency=row.urgency,
+                        freshness_hours=row.freshness_hours,
+                        metadata=row.metadata_json,
+                        last_touched_at=row.last_touched_at,
+                        created_at=row.created_at,
+                        updated_at=row.updated_at,
+                    )
+                    for row in rows
+                ]
+        except SQLAlchemyError as exc:
+            _log_recovered_db_failure(
+                "repository.list_payoff_debts",
+                exc,
+                context={
+                    "linked_character_slug": linked_character_slug,
+                    "statuses": statuses,
+                    "limit": limit,
+                },
+                expected_inputs=["A migrated payoff_debt_items table."],
+                retry_advice="Run migrations so payoff-debt reads can resume.",
+                fallback_used="empty-payoff-debts",
+            )
+            return []
+
+    def list_recent_chat_rows(
+        self,
+        *,
+        limit: int = 6,
+        hours: int = 12,
+        now=None,
+    ) -> list[dict[str, Any]]:
+        now = ensure_utc(now or utcnow())
+        cutoff = now - timedelta(hours=max(1, hours))
+        with self.session_factory.session_scope() as session:
+            rows = session.scalars(
+                select(models.Message)
+                .where(
+                    models.Message.message_kind == MessageKind.CHAT.value,
+                    models.Message.created_at >= cutoff,
+                )
+                .order_by(desc(models.Message.created_at))
+                .limit(limit)
+            ).all()
+            return [
+                {
+                    "id": row.id,
+                    "tick_no": row.tick_no,
+                    "speaker_slug": row.speaker_slug,
+                    "speaker_label": row.speaker_label,
+                    "content": row.content,
+                    "created_at": row.created_at,
+                    "hidden_metadata": row.hidden_metadata,
+                }
+                for row in rows
+            ]
+
     def list_recent_public_turn_reviews(self, *, limit: int = 8) -> list[dict[str, Any]]:
         with self.session_factory.session_scope() as session:
             rows = session.scalars(
@@ -2591,6 +3029,7 @@ class StoryRepository:
             ).all()
             return [
                 {
+                    "message_id": row.message_id,
                     "speaker_slug": row.speaker_slug,
                     "review_status": row.review_status,
                     "critic_score": row.critic_score,

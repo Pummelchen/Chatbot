@@ -21,6 +21,10 @@ The project targets macOS Apple Silicon with Python 3.12+, MySQL 8.4, and Ollama
 - A guest and NPC circulation engine that injects recurring outsiders as controlled pressure, not random sprawl
 - A high-stakes multi-candidate turn selector that generates and reranks alternative public turns only when the moment is strategically important
 - A live viewer-signal ingestion layer driven by `viewer_signals.yaml` plus local `youtube_signals/*.jsonl` harvest files for comments, clips, retention, and live chat
+- A YouTube adapter that incrementally harvests those JSONL feeds into bounded themes, ship pressure, theory pressure, retention alerts, and clip spikes
+- A hard inference governor that applies per-role timeouts, retry budgets, shutdown rules, and prewarm policy from the current runtime load tier
+- A deterministic daily-life scheduler that keeps shifts, meals, errands, repairs, guest check-ins, and private windows colliding in believable ways
+- A payoff-debt ledger that tracks lies, promises, flirtations, threats, clues, and rollout obligations as due narrative debts
 - Automatic highlight packaging that turns strong turns into clip-ready and quote-ready metadata
 - A deeper monetization packaging pipeline that turns strong turns into title, hook, quote, faction, theory, and comment-prompt assets
 - A broadcast-asset pipeline that turns strong turns into reusable clip manifests, descriptions, chapter markers, ship/theory labels, and “why this matters” export packages
@@ -35,6 +39,7 @@ The project targets macOS Apple Silicon with Python 3.12+, MySQL 8.4, and Ollama
 - An adaptive fail-safe runtime that keeps last-good state, backs off repeated failures, and writes structured recovery context to `logs/error.txt`
 - A hot-patch loader that can soft-reload changed runtime, service, prompt, and config files without stopping the live stream
 - A shadow canary for hot patches that validates changed files against a seeded runtime graph before live reload is accepted
+- A shadow replay pass that replays recent persisted turns through the patched governance stack before a hot patch is trusted
 - Prompt templates for manager, characters, and recap generation
 - A live-editable `update.txt` control file for subscriber-vote steering
 - A detailed story bible with cast, secrets, hooks, recap examples, and early arc plans
@@ -49,6 +54,7 @@ The system avoids shoving the entire transcript into every prompt. Instead it pe
 - The manager receives unresolved questions, arc status, dormant payoff threads, recent event highlights, continuity warnings, pacing health, and recent summaries.
 - The manager also receives the latest hourly ledger status, canon capsule digests, highlight signals, and soak-audit warnings.
 - The manager also receives season-plan signals, viewer-signal digests, broadcast-asset packaging signals, and timeline/possession/alibi summaries.
+- The manager also receives daily-life schedule pressure, payoff-debt pressure, inference-policy digests, and shadow-replay health.
 - Recaps are generated from stored events and prior summaries rather than transcript replay.
 
 The manager operates in micro-steps. It sets the scene objective, controls reveal pace, assigns soft goals, tracks pacing health, and authorizes rare thought pulses.
@@ -85,7 +91,10 @@ Two new systems now keep the story from flattening over very long runs:
 - A programming grid keeps daily and weekly tentpoles visible to the manager and strategist, so “good hour, weak day” drift is caught structurally.
 - A soak-audit harness uses those deterministic strategy rankings across `24h`, `72h`, and `7d` horizons to detect slow-death failure modes like repetition, recap decay, clip drought, ship stagnation, and strategy lock-in.
 - A background God-AI planner uses `gemma3:12b` plus the simulation ranking to persist strategic briefs with north-star objective, arc ranking, reveal permissions, urgency scores, recap priorities, clip value, and fandom value for the live manager without blocking the chat loop.
+- A daily-life scheduler grounds scenes in resident and guest routine, so dramatic collisions come from believable logistics instead of only planner text.
+- A payoff-debt ledger gives the strategist explicit due windows for promises, lies, clues, threats, attraction beats, and audience-requested outcomes.
 - The visible hot path is protected by prefetching manager directives in the background, by a lightweight critic, by load-aware inference budgeting, and by a small repair-model pass that can salvage weak turns before persistence.
+- A hard inference governor caps per-role latency and retries, disables noncritical model work under pressure, and keeps only the most valuable models warm.
 - On important turns only, the live loop can generate two 1B candidates and rerank them against hourly needs, clip value, fandom tension, and strategic urgency before persistence.
 
 ## Live Update Control
@@ -101,6 +110,8 @@ The repo root now includes [update.txt](/Users/andreborchert/Library/CloudStorag
 Major requests are phased in gradually over the configured rollout window, which defaults to 24 hours. If viewers vote for something large like "A and B should have a baby," the manager is expected to build the emotional and practical path first instead of jumping straight to the end-state.
 
 The repo root also includes [viewer_signals.yaml](/Users/andreborchert/Library/CloudStorage/Dropbox/Chatbot/viewer_signals.yaml), a local-first signal file for real audience observations such as ship spikes, theory bursts, clip replays, faction splits, or recap drop-off. The adjacent [youtube_signals/README.md](/Users/andreborchert/Library/CloudStorage/Dropbox/Chatbot/youtube_signals/README.md) documents optional JSONL harvest files for comments, clips, retention, and live chat. These signals steer the strategist and manager, but do not directly retcon canon.
+
+When harvested JSONL feeds are present, the YouTube adapter reads them incrementally and persists file offsets, so large comment or clip backlogs do not get reread from scratch after a restart.
 
 ## Seeded Ensemble
 
@@ -165,7 +176,7 @@ lantern-house run
 - `lantern-house simulate`: run the accelerated deterministic simulation lab against the current world state
 - `lantern-house soak-audit`: run the long-horizon deterministic soak audit against the current world state
 - `lantern-house broadcast-assets`: inspect the most recent reusable broadcast/clip export packages
-- `lantern-house shadow-check`: run the shadow canary used by hot-patch validation
+- `lantern-house shadow-check`: run the shadow canary plus shadow replay used by hot-patch validation
 - `lantern-house dashboard`: show the current ops telemetry snapshot for runtime, load, checkpoint freshness, recap freshness, and active strategy
 - `lantern-house recap-now`: generate recap blocks immediately
 - `lantern-house healthcheck`: verify database and Ollama availability
@@ -191,11 +202,14 @@ All CLI commands now fail with concise operator messages plus logged context in 
 - The strategist stack now also persists simulation runs, ranked strategy candidates, dormant-thread registry rows, public-turn review telemetry, recap-quality scores, clip-value scores, and fandom-signal candidates.
 - The strategist stack now also persists hourly progress ledgers, programming-grid slots, canon capsules, canon-court findings, highlight packages, monetization packages, ops telemetry, and soak-audit runs.
 - The strategist stack now also persists timeline facts, object-possession snapshots, viewer-signal observations, and broadcast-asset export packages.
+- The strategist stack now also persists daily-life schedule slots, payoff-debt items, YouTube adapter cursor state, and shadow-replay runs.
 - The live loop wraps critical subsystems in a fail-safe executor. Unexpected failures are logged with context, routed to conservative fallbacks or last-good state, and never printed into the public chat stream.
 - Repeated failures enter a cooldown window instead of hammering the same broken dependency every turn.
+- The inference governor can shorten timeouts, trim retry budgets, disable repair or God-AI work, and prewarm only core roles when local latency spikes.
 - New persistence layers are hot-patch-safe: if live code lands before migrations do, the new repository paths degrade to empty/no-op behavior and keep the stream alive until the database is upgraded.
 - Hot-patch scanning can rebuild runtime services from changed files without dropping the live process. ORM schema modules are intentionally excluded from live reload to avoid corrupting SQLAlchemy state.
 - Hot-patch scanning now follows the active runtime config file, the resolved audience steering file, and `.env` in addition to the default source tree watchers, so live config edits are not silently ignored after startup.
+- Shadow replay extends the hot-patch gate by replaying recent persisted turns through the changed governance stack before the runtime trusts the patch.
 - `story.seed_file` now works as a real setting: it can point either to a packaged seed resource name or a local YAML file path for custom world variants.
 - Degraded mode can keep the simulation alive when a model request fails, but it does so conservatively.
 - Manager and God-AI planners now use shorter retry budgets because both have deterministic fallbacks; this keeps fallback guidance timely instead of minutes late.

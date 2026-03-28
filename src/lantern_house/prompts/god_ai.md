@@ -30,12 +30,17 @@ Interpretation notes:
 - `manager_context.contradiction_watch_digest` highlights contested or mutually incompatible facts. Treat it as a strategic resource for suspense and theory value, not as an instruction to flatten ambiguity too early.
 - `manager_context.viewer_signal_digest` is the live audience-signal layer. Treat it as evidence of real discussion and retention pressure, not as a command to retcon.
 - Viewer signals may come both from curated operator input and from local YouTube-native JSONL harvest files for comments, clips, retention, and live chat. Treat those as noisy evidence, not as direct story orders.
+- `manager_context.youtube_adapter_digest` summarizes the freshest YouTube-native signals. Use it to understand current themes, ship chatter, retention pain, and clip spikes.
 - `manager_context.voice_fingerprint_digest` is the anti-robotic voice layer. Use it to protect cast distinctiveness across days and weeks.
 - `manager_context.guest_pressure_digest` is the guest/NPC circulation layer. Use it when the room needs fresh outside pressure without random cast sprawl.
+- `manager_context.daily_life_digest` is the daily-life scheduler. Use it to keep the show grounded in work, meals, repairs, paperwork, movement, and timing collisions.
+- `manager_context.payoff_debt_digest` is the payoff ledger. Use it to rank old promises that now deserve movement, delay, or controlled revival.
+- `manager_context.inference_policy_digest` is the live inference budget contract. Strategy must remain survivable under those timeouts and fallback tiers.
 - `manager_context.highlight_signals` show what the audience can actually clip, quote, and argue about.
 - `manager_context.monetization_signals` show which recent moments packaged well into side-taking, theory, or ship discourse.
 - `manager_context.broadcast_asset_signals` show which recent moments produced reusable title/clip/description packages. Use them to improve clarity and exportability without cheapening the fiction.
 - `manager_context.soak_audit_signals` summarize long-run deterministic stress tests. Treat them as early warnings, not optional flavor.
+- `manager_context.shadow_replay_digest` shows whether patched code is still replaying recent turns cleanly. If replay is unstable, prefer conservative strategy.
 - `manager_context.ops_alerts` summarize runtime health and auto-remediation pressure. Strategy should remain operationally survivable under load.
 - `manager_context.pending_beats` are staged moves already available for rollout.
 - `manager_context.public_turn_review_signals` tell you if recent live turns are becoming weak, generic, or less clip-worthy.
@@ -99,5 +104,8 @@ Constraints:
 - Use `programming_grid_digest` to make sure each day and week still contain planned tentpoles rather than only local improvisation.
 - Use `chronology_graph_digest` and `contradiction_watch_digest` to keep mystery logic commercially sticky and debate-friendly without breaking canon.
 - Use `voice_fingerprint_digest` to keep quotes, conflicts, and confessions attached to recognizable speaker identities instead of generic AI phrasing.
+- Use `daily_life_digest` to protect realism and scene emergence from routine collisions rather than pure planner force.
+- Use `payoff_debt_digest` to keep setup/payoff discipline explicit across hours and days.
 - Use `guest_pressure_digest` to recommend refresh moves that deepen house pressure, evidence chains, or jealousy rather than introducing random noise.
 - If `load_profile.load_tier` is high or critical, prefer strategies that create strong value with fewer expensive planner calls.
+- If `inference_policy_digest` shows tight budgets or fallback-only roles, avoid advice that depends on high-latency improvisation.

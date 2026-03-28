@@ -122,6 +122,17 @@ class ViewerSignalsConfig(BaseModel):
     max_derived_signals: int = 8
 
 
+class YouTubeAdapterConfig(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    enabled: bool = True
+    refresh_interval_minutes: int = 10
+    max_records_per_file: int = 400
+    max_theme_items: int = 6
+    clip_spike_threshold: int = 75
+    retention_drop_threshold: int = 12
+
+
 class HousePressureConfig(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
@@ -314,6 +325,41 @@ class LoadOrchestrationConfig(BaseModel):
     critical_failure_streak: int = 4
 
 
+class InferenceGovernorConfig(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    enabled: bool = True
+    low_timeout_seconds: int = 70
+    medium_timeout_seconds: int = 45
+    high_timeout_seconds: int = 24
+    critical_timeout_seconds: int = 12
+    role_timeout_multipliers: dict[str, float] = Field(
+        default_factory=lambda: {
+            "character": 0.7,
+            "repair": 0.45,
+            "manager": 0.8,
+            "announcer": 0.75,
+            "god_ai": 1.35,
+        }
+    )
+    base_retry_budget: dict[str, int] = Field(
+        default_factory=lambda: {
+            "character": 2,
+            "repair": 1,
+            "manager": 2,
+            "announcer": 1,
+            "god_ai": 1,
+        }
+    )
+    disable_roles_under_high: list[str] = Field(default_factory=lambda: ["god_ai"])
+    disable_roles_under_critical: list[str] = Field(
+        default_factory=lambda: ["repair", "god_ai"]
+    )
+    prewarm_roles_when_low: list[str] = Field(
+        default_factory=lambda: ["character", "manager", "announcer"]
+    )
+
+
 class OpsDashboardConfig(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
@@ -341,6 +387,35 @@ class GuestCirculationConfig(BaseModel):
     max_pending_guest_beats: int = 3
 
 
+class DailyLifeConfig(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    enabled: bool = True
+    refresh_interval_minutes: int = 15
+    horizon_hours: int = 12
+    max_active_slots: int = 12
+    max_pending_beats: int = 5
+
+
+class PayoffDebtConfig(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    enabled: bool = True
+    refresh_interval_minutes: int = 10
+    max_active_debts: int = 12
+    max_pending_beats: int = 4
+    overdue_after_hours: int = 48
+
+
+class ShadowReplayConfig(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    enabled: bool = True
+    recent_turn_limit: int = 5
+    compare_window_hours: int = 12
+    max_reported_regressions: int = 4
+
+
 class AppConfig(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
@@ -355,6 +430,7 @@ class AppConfig(BaseModel):
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
     audience: AudienceConfig = Field(default_factory=AudienceConfig)
     viewer_signals: ViewerSignalsConfig = Field(default_factory=ViewerSignalsConfig)
+    youtube_adapter: YouTubeAdapterConfig = Field(default_factory=YouTubeAdapterConfig)
     house_pressure: HousePressureConfig = Field(default_factory=HousePressureConfig)
     story_gravity: StoryGravityConfig = Field(default_factory=StoryGravityConfig)
     critic: CriticConfig = Field(default_factory=CriticConfig)
@@ -379,9 +455,15 @@ class AppConfig(BaseModel):
     load_orchestration: LoadOrchestrationConfig = Field(
         default_factory=LoadOrchestrationConfig
     )
+    inference_governor: InferenceGovernorConfig = Field(
+        default_factory=InferenceGovernorConfig
+    )
     ops_dashboard: OpsDashboardConfig = Field(default_factory=OpsDashboardConfig)
     broadcast_assets: BroadcastAssetsConfig = Field(default_factory=BroadcastAssetsConfig)
     guest_circulation: GuestCirculationConfig = Field(default_factory=GuestCirculationConfig)
+    daily_life: DailyLifeConfig = Field(default_factory=DailyLifeConfig)
+    payoff_debt: PayoffDebtConfig = Field(default_factory=PayoffDebtConfig)
+    shadow_replay: ShadowReplayConfig = Field(default_factory=ShadowReplayConfig)
     loaded_from: str | None = Field(default=None, exclude=True)
     config_root: str | None = Field(default=None, exclude=True)
 

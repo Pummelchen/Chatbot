@@ -17,13 +17,20 @@ from lantern_house.config import ViewerSignalsConfig
 from lantern_house.db.repository import StoryRepository
 from lantern_house.domain.contracts import ViewerSignalSnapshot
 from lantern_house.runtime.failsafe import AdaptiveServiceError, log_call_failure
+from lantern_house.services.youtube_adapter import YouTubeSignalAdapterService
 from lantern_house.utils.time import ensure_utc, isoformat, utcnow
 
 
 class ViewerSignalIngestionService:
-    def __init__(self, config: ViewerSignalsConfig, repository: StoryRepository) -> None:
+    def __init__(
+        self,
+        config: ViewerSignalsConfig,
+        repository: StoryRepository,
+        youtube_adapter_service: YouTubeSignalAdapterService | None = None,
+    ) -> None:
         self.config = config
         self.repository = repository
+        self.youtube_adapter_service = youtube_adapter_service
         self.path = Path(config.source_file_path)
         self.harvest_directory = Path(config.harvest_directory_path)
         self.interval = timedelta(minutes=max(1, config.check_interval_minutes))
@@ -43,7 +50,7 @@ class ViewerSignalIngestionService:
             return self.repository.list_active_viewer_signals(limit=self.config.max_active_signals)
 
         try:
-            signals = self._load_signals(now=now)
+            signals = self._load_signals(now=now, force=force)
         except Exception as exc:
             log_call_failure(
                 "viewer_signals.refresh_if_due",
@@ -89,7 +96,7 @@ class ViewerSignalIngestionService:
         )
         return self.repository.list_active_viewer_signals(limit=self.config.max_active_signals)
 
-    def _load_signals(self, *, now) -> list[ViewerSignalSnapshot]:
+    def _load_signals(self, *, now, force: bool = False) -> list[ViewerSignalSnapshot]:
         if not self.config.enabled:
             return []
         payload = self._load_yaml_payload()
@@ -117,7 +124,7 @@ class ViewerSignalIngestionService:
             )
             if signal is not None:
                 normalized.append(signal)
-        normalized.extend(self._load_harvested_signals(now=now))
+        normalized.extend(self._load_harvested_signals(now=now, force=force))
         return _dedupe_signals(normalized)[: self.config.max_active_signals]
 
     def _load_yaml_payload(self) -> dict[str, Any]:
@@ -144,13 +151,20 @@ class ViewerSignalIngestionService:
             )
         return payload
 
-    def _load_harvested_signals(self, *, now) -> list[ViewerSignalSnapshot]:
-        if not self.harvest_directory.exists():
-            return []
-        comments = _read_jsonl(self.harvest_directory / self.config.comments_file_name)
-        clips = _read_jsonl(self.harvest_directory / self.config.clips_file_name)
-        retention = _read_jsonl(self.harvest_directory / self.config.retention_file_name)
-        live_chat = _read_jsonl(self.harvest_directory / self.config.live_chat_file_name)
+    def _load_harvested_signals(self, *, now, force: bool = False) -> list[ViewerSignalSnapshot]:
+        if self.youtube_adapter_service is not None:
+            bundle = self.youtube_adapter_service.harvest(now=now, force=force)
+            comments = bundle.comments
+            clips = bundle.clips
+            retention = bundle.retention
+            live_chat = bundle.live_chat
+        else:
+            if not self.harvest_directory.exists():
+                return []
+            comments = _read_jsonl(self.harvest_directory / self.config.comments_file_name)
+            clips = _read_jsonl(self.harvest_directory / self.config.clips_file_name)
+            retention = _read_jsonl(self.harvest_directory / self.config.retention_file_name)
+            live_chat = _read_jsonl(self.harvest_directory / self.config.live_chat_file_name)
         roster = self.repository.list_characters()
         names = {
             item["slug"]: {

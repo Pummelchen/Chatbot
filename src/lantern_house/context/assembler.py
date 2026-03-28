@@ -131,6 +131,11 @@ class ContextAssembler:
             limit=5,
             default=[],
         )
+        youtube_adapter_state = _repo_call(
+            self.repository,
+            "get_youtube_adapter_state",
+            default=None,
+        )
         voice_fingerprints = _repo_call(
             self.repository,
             "list_voice_fingerprints",
@@ -141,6 +146,19 @@ class ContextAssembler:
             self.repository,
             "list_active_guest_profiles",
             limit=4,
+            default=[],
+        )
+        daily_life_slots = _repo_call(
+            self.repository,
+            "list_daily_life_schedule_slots",
+            limit=8,
+            default=[],
+        )
+        payoff_debts = _repo_call(
+            self.repository,
+            "list_payoff_debts",
+            statuses=["open", "at-risk", "due", "overdue"],
+            limit=6,
             default=[],
         )
         highlight_packages = _repo_call(
@@ -166,6 +184,11 @@ class ContextAssembler:
             "get_latest_soak_audit",
             default=None,
         )
+        shadow_replay = _repo_call(
+            self.repository,
+            "get_latest_shadow_replay_run",
+            default=None,
+        )
         strategic_brief = (
             _repo_call(self.repository, "get_latest_strategic_brief", default=None)
             if include_strategic
@@ -184,6 +207,7 @@ class ContextAssembler:
 
         pacing_health = self.pacing_evaluator.evaluate(messages=messages, events=events)
         story_engine = world["metadata"].get("story_engine", {})
+        effective_load_profile = load_profile or LoadProfileSnapshot()
         story_governance = self.governance_evaluator.evaluate(
             messages=messages,
             events=events,
@@ -319,7 +343,7 @@ class ContextAssembler:
                 for slot in programming_grid_slots
                 if slot.horizon in {"daily", "weekly"}
             ][:4],
-            load_profile=load_profile or LoadProfileSnapshot(),
+            load_profile=effective_load_profile,
             canon_capsule_digest=[
                 _compact_text(
                     (
@@ -390,6 +414,50 @@ class ContextAssembler:
                 )
                 for item in viewer_signals[:4]
             ],
+            youtube_adapter_digest=[
+                *(
+                    [
+                        _compact_text(
+                            f"themes: {', '.join(youtube_adapter_state.active_themes[:3])}",
+                            limit=190,
+                        )
+                    ]
+                    if youtube_adapter_state.active_themes
+                    else []
+                ),
+                *(
+                    [
+                        _compact_text(
+                            f"ships: {', '.join(youtube_adapter_state.ship_heat[:2])}",
+                            limit=190,
+                        )
+                    ]
+                    if youtube_adapter_state.ship_heat
+                    else []
+                ),
+                *(
+                    [
+                        _compact_text(
+                            f"retention: {youtube_adapter_state.retention_alerts[0]}",
+                            limit=190,
+                        )
+                    ]
+                    if youtube_adapter_state.retention_alerts
+                    else []
+                ),
+                *(
+                    [
+                        _compact_text(
+                            f"clip spikes: {youtube_adapter_state.clip_spikes[0]}",
+                            limit=190,
+                        )
+                    ]
+                    if youtube_adapter_state.clip_spikes
+                    else []
+                ),
+            ]
+            if youtube_adapter_state
+            else [],
             voice_fingerprint_digest=[
                 _compact_text(
                     (
@@ -406,6 +474,30 @@ class ContextAssembler:
                     limit=190,
                 )
                 for item in guest_profiles[:3]
+            ],
+            daily_life_digest=[
+                _compact_text(
+                    (
+                        f"{slot.participant_name} @ {slot.location_name}: "
+                        f"{slot.objective} [{slot.status}]"
+                    ),
+                    limit=200,
+                )
+                for slot in daily_life_slots[:4]
+            ],
+            payoff_debt_digest=[
+                _compact_text(
+                    (
+                        f"{item.payoff_class} / {item.due_window} / heat {item.heat}: "
+                        f"{item.summary}"
+                    ),
+                    limit=200,
+                )
+                for item in payoff_debts[:4]
+            ],
+            inference_policy_digest=[
+                _compact_text(item, limit=180)
+                for item in ((effective_load_profile.metadata or {}).get("policy_digest") or [])
             ],
             highlight_signals=[
                 _compact_text(
@@ -447,6 +539,23 @@ class ContextAssembler:
                     *[_compact_text(item, limit=160) for item in soak_audit.audit_notes[:2]],
                 ]
                 if soak_audit
+                else []
+            ),
+            shadow_replay_digest=(
+                [
+                    _compact_text(
+                        (
+                            f"shadow {shadow_replay.status}; turns {shadow_replay.compared_turns}; "
+                            f"regressions {shadow_replay.regression_count}"
+                        ),
+                        limit=190,
+                    ),
+                    *[
+                        _compact_text(item, limit=180)
+                        for item in shadow_replay.regressions[:2]
+                    ],
+                ]
+                if shadow_replay
                 else []
             ),
             ops_alerts=[
@@ -539,6 +648,21 @@ class ContextAssembler:
             "list_recent_chronology_edges",
             contradiction_only=True,
             limit=4,
+            default=[],
+        )
+        daily_life_slots = _repo_call(
+            self.repository,
+            "list_daily_life_schedule_slots",
+            participant_slug=character_slug,
+            limit=3,
+            default=[],
+        )
+        payoff_debts = _repo_call(
+            self.repository,
+            "list_payoff_debts",
+            linked_character_slug=character_slug,
+            statuses=["open", "at-risk", "due", "overdue"],
+            limit=3,
             default=[],
         )
 
@@ -645,6 +769,20 @@ class ContextAssembler:
                     limit=140,
                 )
                 for item in voice_fingerprint[:1]
+            ],
+            daily_life_schedule=[
+                _compact_text(
+                    f"{slot.location_name}: {slot.objective} [{slot.status}]",
+                    limit=140,
+                )
+                for slot in daily_life_slots[:2]
+            ],
+            payoff_debt_pressure=[
+                _compact_text(
+                    f"{item.due_window} / heat {item.heat}: {item.summary}",
+                    limit=140,
+                )
+                for item in payoff_debts[:2]
             ],
             manager_directive=_compact_text(directive_text, limit=220),
             forbidden_boundaries=[_compact_text(item, limit=100) for item in boundaries],

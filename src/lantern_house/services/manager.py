@@ -7,6 +7,7 @@ from __future__ import annotations
 from lantern_house.config import RuntimeConfig
 from lantern_house.domain.contracts import (
     CharacterGoal,
+    InferencePolicySnapshot,
     ManagerContextPacket,
     ManagerDirectivePlan,
     ThoughtPulseAuthorization,
@@ -22,19 +23,27 @@ class StoryManagerService:
         self.model_name = model_name
         self.runtime_config = runtime_config
 
-    async def plan(self, context: ManagerContextPacket, roster: list[str]) -> ManagerDirectivePlan:
+    async def plan(
+        self,
+        context: ManagerContextPacket,
+        roster: list[str],
+        policy: InferencePolicySnapshot | None = None,
+    ) -> ManagerDirectivePlan:
         prompt = render_template(
             "lantern_house.prompts",
             "manager.md",
             {"MANAGER_CONTEXT": context.model_dump(mode="json")},
         )
+        if policy is not None and not policy.allow_model_call:
+            return self._normalize(self._fallback(context, roster), roster)
         try:
             payload, _stats = await self.llm.generate_json(
                 model=self.model_name,
                 prompt=prompt,
                 temperature=0.7,
                 max_output_tokens=480,
-                max_retries=2,
+                max_retries=policy.max_retries if policy is not None else 2,
+                timeout_seconds=policy.timeout_seconds if policy is not None else None,
             )
             plan = ManagerDirectivePlan.model_validate(payload)
         except Exception as exc:
@@ -120,8 +129,12 @@ class StoryManagerService:
         programming_grid = context.programming_grid_digest
         season_plan = context.season_plan_digest
         viewer_signals = context.viewer_signal_digest
+        youtube_signals = context.youtube_adapter_digest
         contradiction_watch = context.contradiction_watch_digest
         guest_pressure = context.guest_pressure_digest
+        daily_life = context.daily_life_digest
+        payoff_debt = context.payoff_debt_digest
+        shadow_replay = context.shadow_replay_digest
         objective = (
             "Disturb the fragile calm with one practical problem "
             "and one emotionally loaded question."
@@ -184,6 +197,8 @@ class StoryManagerService:
             desired[0] = audience_move
         if context.payoff_threads:
             desired[0] = f"Revive this dormant hook in a grounded way: {context.payoff_threads[0]}"
+        if payoff_debt:
+            desired[0] = f"Pay down this story debt with a believable move: {payoff_debt[0]}"
         if context.house_state.active_pressures:
             signal = context.house_state.active_pressures[0]
             objective = (
@@ -205,6 +220,11 @@ class StoryManagerService:
             desired[1] = (
                 "Let an outsider, witness, or guest complication pressure the main cast "
                 f"without stealing the core story: {guest_pressure[0]}"
+            )
+        if daily_life:
+            desired[1] = (
+                "Ground the next exchange in a real task or schedule collision: "
+                f"{daily_life[0]}"
             )
         if context.pacing_health.mystery_stalled:
             desired[0] = (
@@ -242,12 +262,19 @@ class StoryManagerService:
                 "Make the next turn legible enough to clip, title, and debate without sounding "
                 "like manufactured content."
             )
+        if youtube_signals:
+            desired[1] = (
+                "Convert real audience-side energy into theory fuel or ship friction without "
+                "acknowledging the platform."
+            )
         if context.voice_fingerprint_digest:
             desired[1] = (
                 "Keep every line locked to the speaker's established cadence and conflict style."
             )
         if context.soak_audit_signals:
             desired[0] = f"Follow the latest soak warning: {context.soak_audit_signals[0]}"
+        if shadow_replay and any("regression" in item.lower() for item in shadow_replay):
+            desired[1] = "Keep the next turn short, concrete, and safely inside established canon."
         if context.canon_court_alerts:
             desired[0] = (
                 "Keep suspicion alive without speaking as if the central truth is already proven."

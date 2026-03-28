@@ -10,6 +10,7 @@ from lantern_house.config import GodAIConfig
 from lantern_house.context.assembler import ContextAssembler
 from lantern_house.domain.contracts import (
     AudienceControlReport,
+    InferencePolicySnapshot,
     ManagerContextPacket,
     StrategicBriefPlan,
     StrategicBriefSnapshot,
@@ -49,6 +50,7 @@ class GodAIService:
         *,
         now=None,
         force: bool = False,
+        policy: InferencePolicySnapshot | None = None,
     ) -> StrategicBriefSnapshot | None:
         now = ensure_utc(now or utcnow())
         if not self.config.enabled:
@@ -95,6 +97,14 @@ class GodAIService:
                 simulation_report=simulation,
                 now=now,
             )
+        if policy is not None and not policy.allow_model_call:
+            return provisional or self.assembler.repository.record_strategic_brief(
+                plan=fallback_plan,
+                source="god-ai",
+                model_name=None,
+                simulation_report=simulation,
+                now=now,
+            )
         try:
             payload, _stats = await self.llm.generate_json(
                 model=self.model_name,
@@ -111,7 +121,8 @@ class GodAIService:
                 ),
                 temperature=0.45,
                 max_output_tokens=900,
-                max_retries=1,
+                max_retries=policy.max_retries if policy is not None else 1,
+                timeout_seconds=policy.timeout_seconds if policy is not None else None,
             )
             plan = StrategicBriefPlan.model_validate(
                 self._coerce_plan_payload(

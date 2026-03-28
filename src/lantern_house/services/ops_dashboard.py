@@ -36,6 +36,7 @@ class OpsDashboardService:
         strategic_brief = self.repository.get_latest_strategic_brief(now=now, active_only=False)
         latest_hour = self.repository.get_latest_hourly_progress_ledger()
         story_gravity = self.repository.get_story_gravity_state_snapshot()
+        shadow_replay = getattr(self.repository, "get_latest_shadow_replay_run", lambda: None)()
         last_recap_hour = run_state.get("last_recap_hour")
         last_checkpoint_at = run_state.get("last_checkpoint_at")
         checkpoint_age = (
@@ -62,6 +63,7 @@ class OpsDashboardService:
             strategy_age=strategy_age,
             load_profile=load_profile,
             latest_hour=latest_hour,
+            shadow_replay=shadow_replay,
         )
         snapshot = OpsTelemetrySnapshot(
             runtime_status=run_state["status"],
@@ -85,6 +87,10 @@ class OpsDashboardService:
                     else None
                 ),
                 "load_actions": load_profile.recommended_actions,
+                "inference_policy_digest": (
+                    (load_profile.metadata or {}).get("policy_digest", [])[:4]
+                ),
+                "shadow_replay_status": shadow_replay.status if shadow_replay else "unknown",
             },
             created_at=now,
         )
@@ -123,6 +129,7 @@ def _auto_remediations(
     strategy_age: int,
     load_profile: LoadProfileSnapshot,
     latest_hour,
+    shadow_replay,
 ) -> list[str]:
     actions: list[str] = []
     if checkpoint_age >= config.stale_checkpoint_seconds:
@@ -135,4 +142,6 @@ def _auto_remediations(
         actions.append("throttle-background-work")
     if latest_hour and not latest_hour.contract_met:
         actions.append("force-hourly-progression")
+    if shadow_replay and shadow_replay.status == "failed":
+        actions.append("review-shadow-replay")
     return actions[:5]

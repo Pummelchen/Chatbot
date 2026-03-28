@@ -639,6 +639,65 @@ class ProgrammingGridSlot(Base):
     )
 
 
+class DailyLifeScheduleSlot(Base):
+    __tablename__ = "daily_life_schedule_slots"
+    __table_args__ = (
+        UniqueConstraint(
+            "slot_key",
+            "window_start_at",
+            name="uq_daily_life_schedule_slot_window",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    slot_key: Mapped[str] = mapped_column(String(120), nullable=False)
+    horizon_key: Mapped[str] = mapped_column(String(40), nullable=False, default="current-day")
+    participant_slug: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    participant_name: Mapped[str] = mapped_column(String(160), nullable=False, default="")
+    role_type: Mapped[str] = mapped_column(String(40), nullable=False, default="resident")
+    location_slug: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    location_name: Mapped[str] = mapped_column(String(150), nullable=False, default="")
+    objective: Mapped[str] = mapped_column(Text, nullable=False)
+    task_type: Mapped[str] = mapped_column(String(60), nullable=False, default="household")
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="planned")
+    priority: Mapped[int] = mapped_column(Integer, nullable=False, default=5)
+    notes: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    metadata_json: Mapped[dict] = mapped_column("metadata", JSON, default=dict, nullable=False)
+    window_start_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    window_end_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, onupdate=_utcnow
+    )
+
+
+class PayoffDebtItem(Base):
+    __tablename__ = "payoff_debt_items"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    debt_key: Mapped[str] = mapped_column(String(150), unique=True, nullable=False)
+    debt_type: Mapped[str] = mapped_column(String(60), nullable=False)
+    subject: Mapped[str] = mapped_column(String(180), nullable=False)
+    summary: Mapped[str] = mapped_column(Text, nullable=False)
+    payoff_class: Mapped[str] = mapped_column(String(40), nullable=False, default="beat")
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="open")
+    linked_character_slug: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    due_window: Mapped[str] = mapped_column(String(40), nullable=False, default="soon")
+    heat: Mapped[int] = mapped_column(Integer, nullable=False, default=5)
+    urgency: Mapped[int] = mapped_column(Integer, nullable=False, default=5)
+    freshness_hours: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    metadata_json: Mapped[dict] = mapped_column("metadata", JSON, default=dict, nullable=False)
+    last_touched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, onupdate=_utcnow
+    )
+
+
 class PublicTurnReview(Base):
     __tablename__ = "public_turn_reviews"
 
@@ -902,6 +961,27 @@ class ViewerSignal(Base):
     )
 
 
+class YouTubeAdapterState(Base):
+    __tablename__ = "youtube_adapter_state"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    state_key: Mapped[str] = mapped_column(
+        String(50), unique=True, nullable=False, default="primary"
+    )
+    last_harvest_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    source_offsets: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    normalized_counts: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    active_themes: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    ship_heat: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    theory_heat: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    retention_alerts: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    clip_spikes: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    metadata_json: Mapped[dict] = mapped_column("metadata", JSON, default=dict, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, onupdate=_utcnow
+    )
+
+
 class VoiceFingerprint(Base):
     __tablename__ = "voice_fingerprints"
 
@@ -952,6 +1032,22 @@ class HotPatchCanaryRun(Base):
     changed_files: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
     checks: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
     error_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    metadata_json: Mapped[dict] = mapped_column("metadata", JSON, default=dict, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, nullable=False
+    )
+
+
+class ShadowReplayRun(Base):
+    __tablename__ = "shadow_replay_runs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    status: Mapped[str] = mapped_column(String(20), nullable=False)
+    changed_files: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    compared_turns: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    regression_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    checks: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    regressions: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
     metadata_json: Mapped[dict] = mapped_column("metadata", JSON, default=dict, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow, nullable=False

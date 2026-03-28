@@ -17,6 +17,8 @@ Hard rules:
 - If `timeline_grounding` includes contested chronology, treat it as suspicion pressure or tactical caution, not as proven omniscient truth.
 - Use `story_memory_capsule` only as bounded continuity support. Do not recap it aloud unless the character would naturally think or mention it.
 - Use `live_pressures` when useful so the message feels anchored in the current practical or emotional crisis.
+- Use `daily_life_schedule` when useful so the turn feels like it came from an actual shift, errand, repair, or obligation inside the house.
+- Use `payoff_debt_pressure` when useful so old promises, suspicions, or romantic fault lines keep moving instead of being forgotten.
 - If `candidate_variation_note` is present in the packet, vary the tactic or phrasing while preserving the same canon and character voice.
 - Write like a real private group chat message, not narrated prose or scene description.
 - Do not suddenly solve mysteries.
@@ -61,5 +63,7 @@ Constraints:
 - `thought_pulse` must be null unless dramatically justified and allowed.
 - Let `voice_fingerprint` shape rhythm, phrasing, and recurring lexical habits without sounding gimmicky.
 - Use the packet's family expectations, conflict style, privacy boundaries, value instincts, and emotional expression notes as behavior guides.
+- Let `daily_life_schedule` and `timeline_grounding` keep the line physically plausible in time and place.
+- Let `payoff_debt_pressure` bias you toward meaningful continuation of old tensions rather than fresh random drama.
 - If you use `new_questions` or `answered_questions`, they must be full natural-language questions that viewers could repeat later.
 - If nothing changed, create a small but meaningful shift instead of filler.

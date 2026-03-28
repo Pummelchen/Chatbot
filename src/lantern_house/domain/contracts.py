@@ -487,6 +487,47 @@ class ChronologyEdgeSnapshot(BaseModel):
     updated_at: datetime | None = None
 
 
+class DailyLifeSlotSnapshot(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    slot_key: str
+    horizon_key: str = "current-day"
+    participant_slug: str | None = None
+    participant_name: str = ""
+    role_type: str = "resident"
+    location_slug: str | None = None
+    location_name: str = ""
+    objective: str
+    task_type: str = "household"
+    status: str = "planned"
+    priority: int = Field(default=5, ge=1, le=10)
+    notes: list[str] = Field(default_factory=list)
+    metadata: dict = Field(default_factory=dict)
+    window_start_at: datetime | None = None
+    window_end_at: datetime | None = None
+    updated_at: datetime | None = None
+
+
+class PayoffDebtSnapshot(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    debt_key: str
+    debt_type: str
+    subject: str
+    summary: str
+    payoff_class: str = "beat"
+    status: str = "open"
+    linked_character_slug: str | None = None
+    due_window: str = "soon"
+    heat: int = Field(default=5, ge=1, le=10)
+    urgency: int = Field(default=5, ge=1, le=10)
+    freshness_hours: int = Field(default=0, ge=0)
+    metadata: dict = Field(default_factory=dict)
+    last_touched_at: datetime | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+
 class ViewerSignalSnapshot(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
@@ -614,6 +655,35 @@ class HotPatchCanaryRunSnapshot(BaseModel):
     created_at: datetime | None = None
 
 
+class ShadowReplayRunSnapshot(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    status: str
+    changed_files: list[str] = Field(default_factory=list)
+    compared_turns: int = Field(default=0, ge=0)
+    regression_count: int = Field(default=0, ge=0)
+    checks: list[str] = Field(default_factory=list)
+    regressions: list[str] = Field(default_factory=list)
+    metadata: dict = Field(default_factory=dict)
+    created_at: datetime | None = None
+
+
+class YouTubeAdapterStateSnapshot(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    state_key: str = "primary"
+    last_harvest_at: datetime | None = None
+    source_offsets: dict[str, int] = Field(default_factory=dict)
+    normalized_counts: dict[str, int] = Field(default_factory=dict)
+    active_themes: list[str] = Field(default_factory=list)
+    ship_heat: list[str] = Field(default_factory=list)
+    theory_heat: list[str] = Field(default_factory=list)
+    retention_alerts: list[str] = Field(default_factory=list)
+    clip_spikes: list[str] = Field(default_factory=list)
+    metadata: dict = Field(default_factory=dict)
+    updated_at: datetime | None = None
+
+
 class LoadProfileSnapshot(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
@@ -625,6 +695,22 @@ class LoadProfileSnapshot(BaseModel):
     pending_manager_prefetch: bool = False
     background_pressure: int = Field(default=0, ge=0, le=10)
     recommended_actions: list[str] = Field(default_factory=list)
+    metadata: dict = Field(default_factory=dict)
+    created_at: datetime | None = None
+
+
+class InferencePolicySnapshot(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    role: str
+    load_tier: str = "low"
+    timeout_seconds: int = Field(default=45, ge=1, le=600)
+    max_retries: int = Field(default=1, ge=0, le=6)
+    allow_model_call: bool = True
+    fallback_mode: str = "service-fallback"
+    cancellation_mode: str = "timeout"
+    keep_warm: bool = False
+    notes: list[str] = Field(default_factory=list)
     metadata: dict = Field(default_factory=dict)
     created_at: datetime | None = None
 
@@ -814,12 +900,17 @@ class ManagerContextPacket(BaseModel):
     room_occupancy_digest: list[str] = Field(default_factory=list)
     season_plan_digest: list[str] = Field(default_factory=list)
     viewer_signal_digest: list[str] = Field(default_factory=list)
+    youtube_adapter_digest: list[str] = Field(default_factory=list)
     voice_fingerprint_digest: list[str] = Field(default_factory=list)
     guest_pressure_digest: list[str] = Field(default_factory=list)
+    daily_life_digest: list[str] = Field(default_factory=list)
+    payoff_debt_digest: list[str] = Field(default_factory=list)
+    inference_policy_digest: list[str] = Field(default_factory=list)
     highlight_signals: list[str] = Field(default_factory=list)
     monetization_signals: list[str] = Field(default_factory=list)
     broadcast_asset_signals: list[str] = Field(default_factory=list)
     soak_audit_signals: list[str] = Field(default_factory=list)
+    shadow_replay_digest: list[str] = Field(default_factory=list)
     ops_alerts: list[str] = Field(default_factory=list)
     strategic_guidance: list[str] = Field(default_factory=list)
     simulation_ranking: list[str] = Field(default_factory=list)
@@ -855,6 +946,8 @@ class CharacterContextPacket(BaseModel):
     timeline_grounding: list[str] = Field(default_factory=list)
     voice_fingerprint: list[str] = Field(default_factory=list)
     story_memory_capsule: list[str] = Field(default_factory=list)
+    daily_life_schedule: list[str] = Field(default_factory=list)
+    payoff_debt_pressure: list[str] = Field(default_factory=list)
     manager_directive: str
     forbidden_boundaries: list[str] = Field(default_factory=list)
 

@@ -8,7 +8,12 @@ import re
 from collections import Counter
 
 from lantern_house.db.repository import StoryRepository
-from lantern_house.domain.contracts import EventView, RecapBundle, RecapWindowSummary
+from lantern_house.domain.contracts import (
+    EventView,
+    InferencePolicySnapshot,
+    RecapBundle,
+    RecapWindowSummary,
+)
 from lantern_house.llm.ollama import OllamaClient
 from lantern_house.runtime.failsafe import log_call_failure
 from lantern_house.utils.resources import render_template
@@ -21,7 +26,12 @@ class RecapService:
         self.llm = llm
         self.model_name = model_name
 
-    async def generate_bundle(self, *, bucket_end_at) -> RecapBundle:
+    async def generate_bundle(
+        self,
+        *,
+        bucket_end_at,
+        policy: InferencePolicySnapshot | None = None,
+    ) -> RecapBundle:
         events_1h = self.repository.load_events_for_window(bucket_end_at=bucket_end_at, hours=1)
         events_12h = self.repository.load_events_for_window(bucket_end_at=bucket_end_at, hours=12)
         events_24h = self.repository.load_events_for_window(bucket_end_at=bucket_end_at, hours=24)
@@ -47,6 +57,12 @@ class RecapService:
                 }
             },
         )
+        if policy is not None and not policy.allow_model_call:
+            return RecapBundle(
+                one_hour=self._fallback_window(events_1h, "Last hour"),
+                twelve_hours=self._fallback_window(events_12h, "Last 12 hours"),
+                twenty_four_hours=self._fallback_window(events_24h, "Last 24 hours"),
+            )
 
         try:
             payload, _stats = await self.llm.generate_json(
@@ -54,6 +70,8 @@ class RecapService:
                 prompt=prompt,
                 temperature=0.5,
                 max_output_tokens=520,
+                max_retries=policy.max_retries if policy is not None else None,
+                timeout_seconds=policy.timeout_seconds if policy is not None else None,
             )
             bundle = RecapBundle.model_validate(payload)
             if self._mentions_unknown_entities(bundle):
