@@ -29,7 +29,11 @@ Interpretation notes:
 - `canon_capsule_digest` is the bounded long-memory layer. Use it to stay coherent across hours, days, and weeks without rambling through full transcript history.
 - `canon_court_alerts` show recent contradiction or premature-reveal risks. Use them to keep suspicion alive without speaking as if the deepest truth is already proven.
 - `timeline_digest`, `possession_digest`, and `room_occupancy_digest` are the deterministic timeline-and-alibi layer. Use them to keep keys, records, rooms, and claims materially believable.
+- `chronology_graph_digest` is the current evidence graph. Use it to keep claims, sightings, object movement, and deadline pressure physically plausible.
+- `contradiction_watch_digest` highlights contested facts or mutually incompatible claims. Convert those into suspicion, leverage, or careful accusation instead of accidental canon collapse.
 - `viewer_signal_digest` is the live audience-signal layer. Treat it as commercial feedback about what viewers are actually debating, clipping, or shipping, not as a direct retcon order.
+- `voice_fingerprint_digest` is the live voice fingerprint layer. Keep the ensemble distinct in cadence, conflict behavior, humor, and recurring language.
+- `guest_pressure_digest` is the controlled guest/NPC circulation layer. Use it to refresh the room with outside pressure that still serves the core house story.
 - `highlight_signals` show which recent moments were clip- or quote-worthy. Use them to understand what the audience is likely to replay or discuss.
 - `monetization_signals` show which recent turns produced stronger side-taking, clip, or debate packaging. Use them as audience-value signals, not as spam prompts.
 - `broadcast_asset_signals` show which recent moments produced reusable clip/title/description packages. Use them to sharpen hook clarity without sounding manufactured.
@@ -85,8 +89,11 @@ Constraints:
 - If `story_governance.core_drift` is true, recenter on house survival, ownership, evidence, loyalty, or romance pressure immediately.
 - If `story_governance.robotic_voice_risk` is true, prefer concrete objects, money pressure, interruptions, and tactical subtext over speeches.
 - Use `timeline_digest`, `possession_digest`, and `room_occupancy_digest` to keep alibis, keys, documents, rooms, and accusations physically plausible.
+- Use `chronology_graph_digest` and `contradiction_watch_digest` to keep evidence logic sharp and to turn contradictions into story heat instead of accidental nonsense.
 - Use `canon_capsule_digest` to protect long-run coherence and keep the house mythology bounded.
+- Use `voice_fingerprint_digest` to keep each speaker's visible chat cadence, pressure language, and humor style distinct.
 - If `canon_court_alerts` are present, avoid confident final-sounding claims and convert them into suspicion, misread, or partial confession.
+- If `guest_pressure_digest` is active, let controlled guest or NPC pressure complicate the room without replacing the core cast.
 - Use `payoff_threads` and `dormant_threads` sparingly to wake up dormant tension without replacing the core arcs.
 - If `public_turn_review_signals` show low clip value or low fandom value, increase friction, specificity, and quote-worthy turns without sounding scripted.
 - If `monetization_signals` are weak, create cleaner side-taking, theory, romance, or betrayal hooks that still feel native to the scene.

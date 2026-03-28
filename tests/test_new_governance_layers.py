@@ -8,14 +8,19 @@ from pathlib import Path
 
 from lantern_house.config import (
     BroadcastAssetsConfig,
+    ChronologyGraphConfig,
+    GuestCirculationConfig,
     SeasonPlannerConfig,
     TurnSelectionConfig,
     ViewerSignalsConfig,
+    VoiceFingerprintConfig,
     WorldTrackingConfig,
 )
 from lantern_house.domain.contracts import (
     CharacterContextPacket,
     CharacterTurn,
+    ChronologyEdgeSnapshot,
+    GuestProfileSnapshot,
     HighlightPackageSnapshot,
     HourlyProgressLedgerSnapshot,
     ManagerContextPacket,
@@ -24,12 +29,16 @@ from lantern_house.domain.contracts import (
     StoryGovernanceReport,
     StrategicBriefSnapshot,
     TurnCriticReport,
+    VoiceFingerprintSnapshot,
 )
 from lantern_house.domain.enums import EventType
 from lantern_house.services.broadcast_assets import BroadcastAssetService
+from lantern_house.services.chronology_graph import ChronologyGraphService
+from lantern_house.services.guest_circulation import GuestCirculationService
 from lantern_house.services.season_planner import SeasonPlannerService
 from lantern_house.services.turn_selection import EvaluatedTurnCandidate, TurnSelectionService
 from lantern_house.services.viewer_signals import ViewerSignalIngestionService
+from lantern_house.services.voice_fingerprints import VoiceFingerprintService
 from lantern_house.services.world_tracking import (
     WorldTrackingService,
     build_room_occupancy_digest,
@@ -41,6 +50,11 @@ class ViewerSignalRepo:
     def __init__(self) -> None:
         self.runtime = {"metadata": {}}
         self.signals = []
+        self.characters = [
+            {"slug": "amelia", "full_name": "Amelia Vale"},
+            {"slug": "rafael", "full_name": "Rafael Costa"},
+            {"slug": "lucia", "full_name": "Lucía Ortega"},
+        ]
 
     def get_run_state(self):
         return self.runtime
@@ -58,6 +72,9 @@ class ViewerSignalRepo:
 
     def list_active_viewer_signals(self, *, limit=8):
         return self.signals[:limit]
+
+    def list_characters(self):
+        return list(self.characters)
 
 
 class SeasonRepo:
@@ -176,6 +193,163 @@ class WorldTrackingRepo:
         ]
 
 
+class ChronologyRepo:
+    def __init__(self) -> None:
+        self.persisted: tuple[list, list[ChronologyEdgeSnapshot]] = ([], [])
+
+    def list_recent_chronology_edges(self, *, limit=12, contradiction_only=False):
+        del limit, contradiction_only
+        return []
+
+    def list_character_positions(self):
+        return [
+            {
+                "slug": "amelia",
+                "full_name": "Amelia Vale",
+                "location_slug": "front-desk",
+                "location_name": "Front Desk",
+            }
+        ]
+
+    def list_object_possessions(self, *, limit=12):
+        del limit
+        return []
+
+    def list_recent_timeline_facts(self, *, hours=24, limit=36):
+        del hours, limit
+        now = utcnow()
+        return [
+            type(
+                "Fact",
+                (),
+                {
+                    "fact_type": "alibi",
+                    "subject_slug": "amelia",
+                    "related_slug": None,
+                    "location_slug": "roof-walk",
+                    "location_name": "Roof Walk",
+                    "object_slug": None,
+                    "object_name": "",
+                    "summary": "Amelia said she was on the Roof Walk before dawn.",
+                    "confidence": 7,
+                    "source": "chat",
+                    "metadata": {},
+                    "created_at": now,
+                },
+            )(),
+            type(
+                "Fact",
+                (),
+                {
+                    "fact_type": "alibi-claim",
+                    "subject_slug": "amelia",
+                    "related_slug": None,
+                    "location_slug": "boiler-room",
+                    "location_name": "Boiler Room",
+                    "object_slug": None,
+                    "object_name": "",
+                    "summary": "Someone else placed Amelia in the Boiler Room.",
+                    "confidence": 7,
+                    "source": "chat",
+                    "metadata": {},
+                    "created_at": now,
+                },
+            )(),
+        ]
+
+    def get_house_state_snapshot(self):
+        return type("HouseState", (), {"payroll_due_in_hours": 24, "cash_on_hand": 500})()
+
+    def sync_chronology_graph(self, *, nodes, edges, now=None):
+        del now
+        self.persisted = (list(nodes), list(edges))
+        return self.persisted
+
+
+class VoiceFingerprintRepo:
+    def __init__(self) -> None:
+        self.saved: list[VoiceFingerprintSnapshot] = []
+
+    def list_voice_fingerprints(self, *, character_slugs=None, limit=8):
+        del character_slugs, limit
+        return []
+
+    def list_characters(self):
+        return [
+            {
+                "slug": "amelia",
+                "full_name": "Amelia Vale",
+                "public_persona": "steadfast manager",
+                "message_style": "Clipped and controlled under pressure.",
+                "conflict_style": "Calm until forced into blunt clarity.",
+                "humor_style": "Dry, surgical humor when cornered.",
+                "emotional_expression": "Care through competent restraint.",
+            }
+        ]
+
+    def list_recent_messages(self, *, limit=8, speaker_slugs=None):
+        del limit, speaker_slugs
+        return [
+            type(
+                "Message",
+                (),
+                {"content": "Touch the drawer again and I stop being polite about payroll."},
+            )(),
+            type(
+                "Message",
+                (),
+                {"content": "I am not repeating myself. The key stays with me."},
+            )(),
+        ]
+
+    def save_voice_fingerprints(self, *, fingerprints, now=None):
+        del now
+        self.saved = list(fingerprints)
+        return self.saved
+
+
+class GuestRepo:
+    def __init__(self) -> None:
+        self.saved_profiles: list[GuestProfileSnapshot] = []
+        self.beat_calls: list[dict] = []
+
+    def list_active_guest_profiles(self, *, limit=6):
+        del limit
+        return []
+
+    def get_world_state_snapshot(self):
+        return {"current_story_day": 3}
+
+    def get_house_state_snapshot(self):
+        return type(
+            "HouseState",
+            (),
+            {
+                "inspection_risk": 7,
+                "cash_on_hand": 320,
+                "hourly_burn_rate": 40,
+                "payroll_due_in_hours": 18,
+                "reputation_risk": 8,
+                "weather_pressure": 6,
+            },
+        )()
+
+    def sync_guest_profiles(self, *, profiles, now=None):
+        del now
+        self.saved_profiles = list(profiles)
+        return self.saved_profiles
+
+    def sync_beats(self, *, beat_type, items, source_key, now=None):
+        self.beat_calls.append(
+            {
+                "beat_type": beat_type,
+                "items": list(items),
+                "source_key": source_key,
+                "now": now,
+            }
+        )
+
+
 def test_viewer_signal_ingestion_parses_local_yaml(tmp_path: Path) -> None:
     signal_file = tmp_path / "viewer_signals.yaml"
     signal_file.write_text(
@@ -201,6 +375,55 @@ signals:
     assert len(signals) == 1
     assert signals[0].signal_type == "theory-burst"
     assert repo.runtime["metadata"]["viewer_signals"]["signal_count"] == 1
+
+
+def test_viewer_signal_ingestion_derives_local_harvest_signals(tmp_path: Path) -> None:
+    harvest_dir = tmp_path / "youtube_signals"
+    harvest_dir.mkdir()
+    (harvest_dir / "comments.jsonl").write_text(
+        "\n".join(
+            [
+                '{"text":"Amelia and Rafael are the ship. Also Lucía forged something."}',
+                '{"text":"Amelia Rafael ship is the reason I am still here."}',
+            ]
+        ),
+        encoding="utf-8",
+    )
+    (harvest_dir / "clips.jsonl").write_text(
+        (
+            '{"title":"Ledger theory clip","text":"Lucía and the forged codicil theory '
+            'is everywhere.","views":1400}\n'
+        ),
+        encoding="utf-8",
+    )
+    (harvest_dir / "retention.jsonl").write_text(
+        (
+            '{"segment":"00:12-00:15","drop_percent":3,"summary":"Retention held during '
+            'the codicil fight."}\n'
+        ),
+        encoding="utf-8",
+    )
+    (harvest_dir / "live_chat.jsonl").write_text(
+        '{"text":"Hana knows way too much, but Amelia and Rafael still win."}\n',
+        encoding="utf-8",
+    )
+    repo = ViewerSignalRepo()
+    service = ViewerSignalIngestionService(
+        ViewerSignalsConfig(
+            source_file_path=str(tmp_path / "viewer_signals.yaml"),
+            harvest_directory_path=str(harvest_dir),
+            max_active_signals=12,
+            max_derived_signals=8,
+        ),
+        repo,
+    )
+
+    signals = service.refresh_if_due(force=True)
+    signal_types = {item.signal_type for item in signals}
+
+    assert "ship-buzz" in signal_types
+    assert "theory-burst" in signal_types
+    assert repo.runtime["metadata"]["viewer_signals"]["signal_count"] >= 2
 
 
 def test_season_planner_creates_near_and_long_horizon_slots() -> None:
@@ -248,6 +471,39 @@ def test_world_tracking_captures_presence_and_possession_claims() -> None:
     assert any(fact.fact_type == "presence" for fact in repo.timeline)
     assert any(fact.fact_type == "alibi" for fact in repo.timeline)
     assert repo.possessions[0].holder_character_slug == "amelia"
+
+
+def test_chronology_graph_marks_contested_location_claims() -> None:
+    repo = ChronologyRepo()
+    service = ChronologyGraphService(repo, ChronologyGraphConfig())
+
+    edges = service.refresh(now=utcnow(), force=True)
+
+    assert any(edge.contradiction_status == "contested" for edge in edges)
+    assert repo.persisted[1]
+
+
+def test_voice_fingerprints_capture_character_style() -> None:
+    repo = VoiceFingerprintRepo()
+    service = VoiceFingerprintService(repo, VoiceFingerprintConfig())
+
+    fingerprints = service.refresh(now=utcnow(), force=True)
+
+    assert fingerprints[0].cadence_profile == "clipped"
+    assert "Amelia" in fingerprints[0].signature_line
+    assert fingerprints[0].lexical_markers
+
+
+def test_guest_circulation_creates_profiles_and_beats() -> None:
+    repo = GuestRepo()
+    service = GuestCirculationService(repo, GuestCirculationConfig())
+
+    profiles = service.refresh(now=utcnow(), force=True)
+    guest_keys = {item.guest_key for item in profiles}
+
+    assert "permit-clerk" in guest_keys
+    assert "debt-liaison" in guest_keys
+    assert repo.beat_calls
 
 
 def test_broadcast_asset_service_builds_export_package() -> None:

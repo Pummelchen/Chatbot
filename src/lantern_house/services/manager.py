@@ -120,6 +120,8 @@ class StoryManagerService:
         programming_grid = context.programming_grid_digest
         season_plan = context.season_plan_digest
         viewer_signals = context.viewer_signal_digest
+        contradiction_watch = context.contradiction_watch_digest
+        guest_pressure = context.guest_pressure_digest
         objective = (
             "Disturb the fragile calm with one practical problem "
             "and one emotionally loaded question."
@@ -189,10 +191,20 @@ class StoryManagerService:
                 "without solving the deeper issue."
             )
             desired[0] = signal.recommended_move or signal.summary or desired[0]
+        if contradiction_watch:
+            desired[0] = (
+                "Exploit a contested alibi, room claim, or object trail without treating it as "
+                f"settled fact: {contradiction_watch[0]}"
+            )
         if viewer_signals:
             desired[1] = (
                 "Translate current viewer energy into believable side-taking, theory, or ship "
                 "fuel without acknowledging the audience."
+            )
+        if guest_pressure:
+            desired[1] = (
+                "Let an outsider, witness, or guest complication pressure the main cast "
+                f"without stealing the core story: {guest_pressure[0]}"
             )
         if context.pacing_health.mystery_stalled:
             desired[0] = (
@@ -229,6 +241,10 @@ class StoryManagerService:
             desired[1] = (
                 "Make the next turn legible enough to clip, title, and debate without sounding "
                 "like manufactured content."
+            )
+        if context.voice_fingerprint_digest:
+            desired[1] = (
+                "Keep every line locked to the speaker's established cadence and conflict style."
             )
         if context.soak_audit_signals:
             desired[0] = f"Follow the latest soak warning: {context.soak_audit_signals[0]}"

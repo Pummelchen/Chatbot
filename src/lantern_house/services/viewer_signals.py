@@ -5,6 +5,8 @@
 from __future__ import annotations
 
 import hashlib
+import json
+from collections import Counter
 from datetime import timedelta
 from pathlib import Path
 from typing import Any
@@ -23,6 +25,7 @@ class ViewerSignalIngestionService:
         self.config = config
         self.repository = repository
         self.path = Path(config.source_file_path)
+        self.harvest_directory = Path(config.harvest_directory_path)
         self.interval = timedelta(minutes=max(1, config.check_interval_minutes))
 
     def refresh_if_due(
@@ -45,9 +48,13 @@ class ViewerSignalIngestionService:
             log_call_failure(
                 "viewer_signals.refresh_if_due",
                 exc,
-                context={"path": str(self.path)},
+                context={
+                    "path": str(self.path),
+                    "harvest_directory": str(self.harvest_directory),
+                },
                 expected_inputs=[
-                    "A valid YAML mapping with an optional enabled flag and a signals list."
+                    "A valid YAML mapping with an optional enabled flag and a signals list.",
+                    "Optional JSONL files under the configured YouTube-signal harvest directory.",
                 ],
                 retry_advice=(
                     "Fix viewer_signals.yaml and save it again. The runtime will keep using the "
@@ -61,6 +68,7 @@ class ViewerSignalIngestionService:
                         "last_checked_at": isoformat(now),
                         "last_error": str(exc)[:240],
                         "path": str(self.path),
+                        "harvest_directory": str(self.harvest_directory),
                     }
                 },
                 now=now,
@@ -74,6 +82,7 @@ class ViewerSignalIngestionService:
                     "last_checked_at": isoformat(now),
                     "signal_count": len(signals),
                     "path": str(self.path),
+                    "harvest_directory": str(self.harvest_directory),
                 }
             },
             now=now,
@@ -83,12 +92,40 @@ class ViewerSignalIngestionService:
     def _load_signals(self, *, now) -> list[ViewerSignalSnapshot]:
         if not self.config.enabled:
             return []
-        if not self.path.exists():
+        payload = self._load_yaml_payload()
+        if not bool(payload.get("enabled", True)):
             return []
 
+        configured_signals = payload.get("signals") or []
+        if not isinstance(configured_signals, list):
+            raise AdaptiveServiceError(
+                "viewer_signals.yaml `signals` must be a list",
+                expected_inputs=["A list of viewer-signal objects under the `signals` key."],
+                retry_advice="Rewrite `signals` as a YAML list and retry.",
+                context={"path": str(self.path)},
+            )
+
+        normalized: list[ViewerSignalSnapshot] = []
+        for index, item in enumerate(configured_signals):
+            if not isinstance(item, dict):
+                continue
+            signal = _build_signal_snapshot(
+                item=item,
+                index=index,
+                default_source="operator",
+                now=now,
+            )
+            if signal is not None:
+                normalized.append(signal)
+        normalized.extend(self._load_harvested_signals(now=now))
+        return _dedupe_signals(normalized)[: self.config.max_active_signals]
+
+    def _load_yaml_payload(self) -> dict[str, Any]:
+        if not self.path.exists():
+            return {}
         raw_text = self.path.read_text(encoding="utf-8")
         if not raw_text.strip():
-            return []
+            return {}
         try:
             payload = yaml.safe_load(raw_text) or {}
         except yaml.YAMLError as exc:
@@ -105,56 +142,40 @@ class ViewerSignalIngestionService:
                 retry_advice="Rewrite the file as a top-level mapping and retry.",
                 context={"path": str(self.path)},
             )
-        if not bool(payload.get("enabled", True)):
+        return payload
+
+    def _load_harvested_signals(self, *, now) -> list[ViewerSignalSnapshot]:
+        if not self.harvest_directory.exists():
             return []
-        signals = payload.get("signals")
-        if signals is None:
-            return []
-        if not isinstance(signals, list):
-            raise AdaptiveServiceError(
-                "viewer_signals.yaml `signals` must be a list",
-                expected_inputs=["A list of viewer-signal objects under the `signals` key."],
-                retry_advice="Rewrite `signals` as a YAML list and retry.",
-                context={"path": str(self.path)},
+        comments = _read_jsonl(self.harvest_directory / self.config.comments_file_name)
+        clips = _read_jsonl(self.harvest_directory / self.config.clips_file_name)
+        retention = _read_jsonl(self.harvest_directory / self.config.retention_file_name)
+        live_chat = _read_jsonl(self.harvest_directory / self.config.live_chat_file_name)
+        roster = self.repository.list_characters()
+        names = {
+            item["slug"]: {
+                item["slug"],
+                item["full_name"].split()[0].lower(),
+                item["full_name"].lower(),
+            }
+            for item in roster
+        }
+        generated: list[ViewerSignalSnapshot] = []
+        generated.extend(
+            _ship_signals(
+                comments=comments,
+                live_chat=live_chat,
+                names=names,
+                now=now,
             )
-        normalized: list[ViewerSignalSnapshot] = []
-        for index, item in enumerate(signals):
-            if not isinstance(item, dict):
-                continue
-            summary = _clean(item.get("summary")) or _clean(item.get("evidence"))
-            signal_type = _slug(item.get("signal_type") or item.get("type") or "viewer")
-            subject = _clean(item.get("subject")) or "general"
-            if not summary:
-                continue
-            key_seed = item.get("signal_key") or f"{signal_type}:{subject}:{summary}"
-            digest = hashlib.sha1(str(key_seed).encode("utf-8")).hexdigest()[:12]
-            expires_at = None
-            expires_in_hours = _int_or_default(item.get("expires_in_hours"), 24)
-            if expires_in_hours > 0:
-                expires_at = now + timedelta(hours=min(24 * 30, expires_in_hours))
-            normalized.append(
-                ViewerSignalSnapshot(
-                    signal_key=_slug(item.get("signal_key") or f"{signal_type}-{digest}"),
-                    signal_type=signal_type,
-                    subject=subject,
-                    intensity=_clamp(_int_or_default(item.get("intensity"), 5), 1, 10),
-                    sentiment=_slug(item.get("sentiment") or "mixed"),
-                    summary=summary,
-                    source=_clean(item.get("source")) or "operator",
-                    retention_impact=_clamp(
-                        _int_or_default(item.get("retention_impact"), 5), 1, 10
-                    ),
-                    metadata={
-                        "index": index,
-                        "raw_tags": item.get("tags") if isinstance(item.get("tags"), list) else [],
-                        "evidence": _listify(item.get("evidence")),
-                        "weight": _int_or_default(item.get("weight"), 0),
-                    },
-                    expires_at=expires_at,
-                    created_at=now,
-                )
-            )
-        return normalized[: self.config.max_active_signals]
+        )
+        generated.extend(
+            _theory_signals(comments=comments, clips=clips, live_chat=live_chat, now=now)
+        )
+        generated.extend(_faction_signals(comments=comments, names=names, now=now))
+        generated.extend(_clip_replay_signals(clips=clips, now=now))
+        generated.extend(_retention_signals(retention=retention, now=now))
+        return generated[: self.config.max_derived_signals]
 
     def _safe_run_state(self) -> dict[str, Any]:
         try:
@@ -202,3 +223,268 @@ def _int_or_default(value: Any, default: int) -> int:
 
 def _clamp(value: int, minimum: int, maximum: int) -> int:
     return max(minimum, min(maximum, value))
+
+
+def _build_signal_snapshot(
+    *,
+    item: dict[str, Any],
+    index: int,
+    default_source: str,
+    now,
+) -> ViewerSignalSnapshot | None:
+    summary = _clean(item.get("summary")) or _clean(item.get("evidence"))
+    signal_type = _slug(item.get("signal_type") or item.get("type") or "viewer")
+    subject = _clean(item.get("subject")) or "general"
+    if not summary:
+        return None
+    key_seed = item.get("signal_key") or f"{signal_type}:{subject}:{summary}"
+    digest = hashlib.sha1(str(key_seed).encode("utf-8")).hexdigest()[:12]
+    expires_at = None
+    expires_in_hours = _int_or_default(item.get("expires_in_hours"), 24)
+    if expires_in_hours > 0:
+        expires_at = now + timedelta(hours=min(24 * 30, expires_in_hours))
+    return ViewerSignalSnapshot(
+        signal_key=_slug(item.get("signal_key") or f"{signal_type}-{digest}"),
+        signal_type=signal_type,
+        subject=subject,
+        intensity=_clamp(_int_or_default(item.get("intensity"), 5), 1, 10),
+        sentiment=_slug(item.get("sentiment") or "mixed"),
+        summary=summary,
+        source=_clean(item.get("source")) or default_source,
+        retention_impact=_clamp(_int_or_default(item.get("retention_impact"), 5), 1, 10),
+        metadata={
+            "index": index,
+            "raw_tags": item.get("tags") if isinstance(item.get("tags"), list) else [],
+            "evidence": _listify(item.get("evidence")),
+            "weight": _int_or_default(item.get("weight"), 0),
+        },
+        expires_at=expires_at,
+        created_at=now,
+    )
+
+
+def _read_jsonl(path: Path) -> list[dict[str, Any]]:
+    if not path.exists():
+        return []
+    records: list[dict[str, Any]] = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        text = line.strip()
+        if not text:
+            continue
+        try:
+            payload = json.loads(text)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(payload, dict):
+            records.append(payload)
+    return records
+
+
+def _ship_signals(
+    *,
+    comments: list[dict[str, Any]],
+    live_chat: list[dict[str, Any]],
+    names: dict[str, set[str]],
+    now,
+) -> list[ViewerSignalSnapshot]:
+    pair_counts: Counter[tuple[str, str]] = Counter()
+    texts = [*_messages_from_records(comments), *_messages_from_records(live_chat)]
+    for text in texts:
+        hits = sorted(
+            {
+                slug
+                for slug, aliases in names.items()
+                if any(alias in text for alias in aliases if alias)
+            }
+        )
+        if len(hits) < 2:
+            continue
+        pair_counts[(hits[0], hits[1])] += 1
+    results: list[ViewerSignalSnapshot] = []
+    for index, (pair, count) in enumerate(pair_counts.most_common(2)):
+        subject = "/".join(pair)
+        results.append(
+            _derived_signal(
+                signal_type="ship-buzz",
+                subject=subject,
+                summary=f"Audience discussion is clustering around {subject}.",
+                source="youtube-comments",
+                intensity=min(10, 4 + count),
+                retention_impact=min(10, 5 + count),
+                evidence=[f"{count} co-mention clusters from comments and live chat."],
+                index=index,
+                now=now,
+            )
+        )
+    return results
+
+
+def _theory_signals(
+    *,
+    comments: list[dict[str, Any]],
+    clips: list[dict[str, Any]],
+    live_chat: list[dict[str, Any]],
+    now,
+) -> list[ViewerSignalSnapshot]:
+    theory_terms = {
+        "ledger": "ledger",
+        "codicil": "codicil",
+        "evelyn": "evelyn",
+        "voice memo": "voice memo",
+        "key": "key",
+        "record": "records",
+    }
+    counts: Counter[str] = Counter()
+    texts = [
+        *_messages_from_records(comments),
+        *_messages_from_records(clips),
+        *_messages_from_records(live_chat),
+    ]
+    for text in texts:
+        for marker, label in theory_terms.items():
+            if marker in text:
+                counts[label] += 1
+    results: list[ViewerSignalSnapshot] = []
+    for index, (subject, count) in enumerate(counts.most_common(2)):
+        results.append(
+            _derived_signal(
+                signal_type="theory-burst",
+                subject=subject,
+                summary=f"Theory chatter is spiking around {subject}.",
+                source="youtube-mixed",
+                intensity=min(10, 4 + count),
+                retention_impact=min(10, 5 + count),
+                evidence=[f"{count} theory mentions across comments, clips, and live chat."],
+                index=index,
+                now=now,
+            )
+        )
+    return results
+
+
+def _faction_signals(
+    *,
+    comments: list[dict[str, Any]],
+    names: dict[str, set[str]],
+    now,
+) -> list[ViewerSignalSnapshot]:
+    counts: Counter[str] = Counter()
+    for text in _messages_from_records(comments):
+        if "team " not in text and "side " not in text:
+            continue
+        for slug, aliases in names.items():
+            if any(alias in text for alias in aliases if alias):
+                counts[slug] += 1
+    results: list[ViewerSignalSnapshot] = []
+    for index, (subject, count) in enumerate(counts.most_common(2)):
+        results.append(
+            _derived_signal(
+                signal_type="faction-split",
+                subject=subject,
+                summary=f"Side-taking is forming around {subject}.",
+                source="youtube-comments",
+                intensity=min(10, 4 + count),
+                retention_impact=min(10, 4 + count),
+                evidence=[f"{count} side-taking comment clusters mention {subject}."],
+                index=index,
+                now=now,
+            )
+        )
+    return results
+
+
+def _clip_replay_signals(*, clips: list[dict[str, Any]], now) -> list[ViewerSignalSnapshot]:
+    results: list[ViewerSignalSnapshot] = []
+    ranked = sorted(
+        clips,
+        key=lambda item: _int_or_default(item.get("replays"), 0),
+        reverse=True,
+    )
+    for index, item in enumerate(ranked[:2]):
+        replays = _int_or_default(item.get("replays"), 0)
+        if replays < 3:
+            continue
+        subject = _clean(item.get("subject") or item.get("title") or f"clip-{index + 1}")
+        results.append(
+            _derived_signal(
+                signal_type="clip-replay",
+                subject=subject,
+                summary=f"One clip is replaying unusually often: {subject}.",
+                source="youtube-clips",
+                intensity=min(10, 3 + replays),
+                retention_impact=min(10, 4 + replays),
+                evidence=[f"Replay count observed: {replays}."],
+                index=index,
+                now=now,
+            )
+        )
+    return results
+
+
+def _retention_signals(*, retention: list[dict[str, Any]], now) -> list[ViewerSignalSnapshot]:
+    results: list[ViewerSignalSnapshot] = []
+    for index, item in enumerate(retention[:2]):
+        drop_percent = _int_or_default(item.get("drop_percent"), 0)
+        if drop_percent < 12:
+            continue
+        segment = _clean(item.get("segment") or item.get("label") or "mid-stream")
+        signal_type = "recap-dropoff" if "recap" in segment.lower() else "retention-dip"
+        results.append(
+            _derived_signal(
+                signal_type=signal_type,
+                subject=segment,
+                summary=f"Audience retention drops during {segment}.",
+                source="youtube-retention",
+                intensity=min(10, 4 + drop_percent // 8),
+                retention_impact=min(10, 5 + drop_percent // 10),
+                evidence=[f"Drop percentage observed: {drop_percent}%."],
+                index=index,
+                now=now,
+            )
+        )
+    return results
+
+
+def _derived_signal(
+    *,
+    signal_type: str,
+    subject: str,
+    summary: str,
+    source: str,
+    intensity: int,
+    retention_impact: int,
+    evidence: list[str],
+    index: int,
+    now,
+) -> ViewerSignalSnapshot:
+    key_seed = f"{signal_type}:{subject}:{summary}"
+    digest = hashlib.sha1(key_seed.encode("utf-8")).hexdigest()[:12]
+    return ViewerSignalSnapshot(
+        signal_key=f"{signal_type}-{digest}",
+        signal_type=signal_type,
+        subject=subject,
+        intensity=_clamp(intensity, 1, 10),
+        sentiment="mixed",
+        summary=summary,
+        source=source,
+        retention_impact=_clamp(retention_impact, 1, 10),
+        metadata={"index": index, "evidence": evidence},
+        expires_at=now + timedelta(hours=24),
+        created_at=now,
+    )
+
+
+def _messages_from_records(records: list[dict[str, Any]]) -> list[str]:
+    messages: list[str] = []
+    for item in records:
+        text = _clean(item.get("text") or item.get("title") or item.get("summary"))
+        if text:
+            messages.append(text.lower())
+    return messages
+
+
+def _dedupe_signals(signals: list[ViewerSignalSnapshot]) -> list[ViewerSignalSnapshot]:
+    unique: dict[str, ViewerSignalSnapshot] = {}
+    for signal in signals:
+        unique[signal.signal_key] = signal
+    return list(unique.values())

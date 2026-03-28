@@ -44,6 +44,7 @@ If you are moving from an older story bible to the current globally optimized ca
 
 - Edit [update.txt](/Users/andreborchert/Library/CloudStorage/Dropbox/Chatbot/update.txt) to steer the live story from subscriber votes.
 - Edit [viewer_signals.yaml](/Users/andreborchert/Library/CloudStorage/Dropbox/Chatbot/viewer_signals.yaml) to feed in real audience observations like ship spikes, theory bursts, faction splits, clip replays, or recap drop-off.
+- Drop harvested YouTube-native JSONL files into [youtube_signals/README.md](/Users/andreborchert/Library/CloudStorage/Dropbox/Chatbot/youtube_signals/README.md)'s directory structure when you want the runtime to derive signals from comments, clips, retention, or live chat.
 - The runtime checks the file every 10 minutes by default.
 - The viewer-signal layer also polls every 10 minutes by default and persists only bounded active signals, so noisy observations age out instead of bloating canon.
 - Relative paths in config are resolved from the active config file location, so custom runtime TOML files can safely point at their own `update.txt`, log directory, and optional custom seed YAML.
@@ -87,6 +88,7 @@ If you are moving from an older story bible to the current globally optimized ca
 - Structured failure context is written to `logs/error.txt`.
 - Console logging is disabled by default during `run`, so the live operator terminal stays clean for story output only.
 - Runtime hot-patch scanning watches `src/lantern_house` plus the active config file, `.env`, and the resolved audience steering file path, so a `--config` runtime does not silently fall back to the default example config during a reload.
+- Runtime hot-patch scanning also watches the resolved YouTube-signal harvest directory, and shadow validation can be triggered manually with `lantern-house shadow-check`.
 
 ## Failure Handling
 
@@ -100,6 +102,7 @@ If you are moving from an older story bible to the current globally optimized ca
 - If a generated chat turn reads like robotic dialogue or prose narration, the runtime first tries the configured small repair model and then falls back to a continuity-safe deterministic line if repair fails.
 - Critical runtime calls are wrapped in a fail-safe executor that can reuse last-good state, fall back conservatively, and apply cooldowns after repeated failures.
 - Hot-patch failures are logged and ignored; the process keeps running on the previous healthy runtime bundle.
+- Hot-patch shadow validation runs before a live rebuild when enabled. If the canary fails, the rebuild is rejected and the current runtime bundle stays live.
 - New governance-table reads and writes degrade to empty or no-op behavior if code is deployed before migrations land, so live hot patches do not immediately crash the stream on missing-table errors.
 - Internal errors, retries, and recovery notices must never be emitted into the public chat stream.
 - Internal errors, retries, and recovery notices should also stay out of the live operator console unless `logging.console_enabled=true` is set explicitly.

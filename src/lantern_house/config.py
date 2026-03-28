@@ -112,8 +112,14 @@ class ViewerSignalsConfig(BaseModel):
 
     enabled: bool = True
     source_file_path: str = "viewer_signals.yaml"
+    harvest_directory_path: str = "youtube_signals"
+    comments_file_name: str = "comments.jsonl"
+    clips_file_name: str = "clips.jsonl"
+    retention_file_name: str = "retention.jsonl"
+    live_chat_file_name: str = "live_chat.jsonl"
     check_interval_minutes: int = 10
     max_active_signals: int = 12
+    max_derived_signals: int = 8
 
 
 class HousePressureConfig(BaseModel):
@@ -184,6 +190,16 @@ class SeasonPlannerConfig(BaseModel):
     long_term_horizon_days: int = 90
 
 
+class ChronologyGraphConfig(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    enabled: bool = True
+    refresh_interval_minutes: int = 10
+    recent_fact_hours: int = 24
+    contradiction_window_minutes: int = 180
+    max_digest_edges: int = 10
+
+
 class CanonConfig(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
@@ -217,6 +233,15 @@ class WorldTrackingConfig(BaseModel):
     max_recent_facts: int = 12
     max_room_occupants: int = 4
     money_deadline_hours: int = 72
+
+
+class VoiceFingerprintConfig(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    enabled: bool = True
+    refresh_interval_minutes: int = 20
+    recent_messages_per_character: int = 8
+    lexical_marker_count: int = 5
 
 
 class TurnSelectionConfig(BaseModel):
@@ -264,6 +289,8 @@ class HotPatchConfig(BaseModel):
 
     enabled: bool = True
     check_interval_seconds: int = 15
+    shadow_validate: bool = True
+    shadow_check_timeout_seconds: int = 45
     watch_paths: list[str] = Field(
         default_factory=lambda: [
             "src/lantern_house",
@@ -305,6 +332,15 @@ class BroadcastAssetsConfig(BaseModel):
     max_recent_assets: int = 10
 
 
+class GuestCirculationConfig(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    enabled: bool = True
+    refresh_interval_minutes: int = 20
+    max_active_guests: int = 4
+    max_pending_guest_beats: int = 3
+
+
 class AppConfig(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
@@ -327,10 +363,14 @@ class AppConfig(BaseModel):
     hourly_beat_ledger: HourlyBeatLedgerConfig = Field(default_factory=HourlyBeatLedgerConfig)
     programming_grid: ProgrammingGridConfig = Field(default_factory=ProgrammingGridConfig)
     season_planner: SeasonPlannerConfig = Field(default_factory=SeasonPlannerConfig)
+    chronology_graph: ChronologyGraphConfig = Field(default_factory=ChronologyGraphConfig)
     canon: CanonConfig = Field(default_factory=CanonConfig)
     canon_court: CanonCourtConfig = Field(default_factory=CanonCourtConfig)
     highlights: HighlightsConfig = Field(default_factory=HighlightsConfig)
     world_tracking: WorldTrackingConfig = Field(default_factory=WorldTrackingConfig)
+    voice_fingerprints: VoiceFingerprintConfig = Field(
+        default_factory=VoiceFingerprintConfig
+    )
     turn_selection: TurnSelectionConfig = Field(default_factory=TurnSelectionConfig)
     monetization: MonetizationConfig = Field(default_factory=MonetizationConfig)
     soak_audit: SoakAuditConfig = Field(default_factory=SoakAuditConfig)
@@ -341,6 +381,7 @@ class AppConfig(BaseModel):
     )
     ops_dashboard: OpsDashboardConfig = Field(default_factory=OpsDashboardConfig)
     broadcast_assets: BroadcastAssetsConfig = Field(default_factory=BroadcastAssetsConfig)
+    guest_circulation: GuestCirculationConfig = Field(default_factory=GuestCirculationConfig)
     loaded_from: str | None = Field(default=None, exclude=True)
     config_root: str | None = Field(default=None, exclude=True)
 
@@ -385,7 +426,13 @@ def load_config(config_path: str | Path | None = None) -> AppConfig:
                 update={
                     "source_file_path": str(
                         _resolve_runtime_path(base_dir, config.viewer_signals.source_file_path)
-                    )
+                    ),
+                    "harvest_directory_path": str(
+                        _resolve_runtime_path(
+                            base_dir,
+                            config.viewer_signals.harvest_directory_path,
+                        )
+                    ),
                 }
             ),
             "story": config.story.model_copy(update={"seed_file": story_seed_file}),
@@ -401,6 +448,7 @@ def build_hot_patch_config(config: AppConfig) -> HotPatchConfig:
         config.loaded_from,
         config.audience.update_file_path,
         config.viewer_signals.source_file_path,
+        config.viewer_signals.harvest_directory_path,
         str(Path(config.config_root) / ".env") if config.config_root else None,
     ]
     for item in extras:

@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import subprocess
 import sys
+from datetime import timedelta
 from pathlib import Path
 
 from lantern_house.config import (
@@ -159,5 +160,44 @@ watch_paths = ["src/lantern_house"]
 
     assert config.loaded_from == str(config_path.resolve())
     assert config.audience.update_file_path == str(update_file.resolve())
+    assert config.viewer_signals.harvest_directory_path == str(
+        (tmp_path / "youtube_signals").resolve()
+    )
     assert str(config_path.resolve()) in hot_patch.watch_paths
     assert str(update_file.resolve()) in hot_patch.watch_paths
+    assert str((tmp_path / "youtube_signals").resolve()) in hot_patch.watch_paths
+
+
+def test_hotpatch_controller_reports_shadow_validation_checks(tmp_path: Path) -> None:
+    root = tmp_path / "project"
+    watched = root / "watched"
+    watched.mkdir(parents=True)
+    target = watched / "probe.py"
+    target.write_text("VALUE = 1\n", encoding="utf-8")
+    rebuild_calls: list[tuple[list[str], list[str]]] = []
+
+    from lantern_house.config import HotPatchConfig
+    from lantern_house.runtime.hotpatch import HotPatchController
+    from lantern_house.utils.time import utcnow
+
+    controller = HotPatchController(
+        config=HotPatchConfig(
+            check_interval_seconds=1,
+            shadow_validate=True,
+            watch_paths=[str(watched.relative_to(root))],
+            watch_extensions=[".py"],
+        ),
+        project_root=root,
+        rebuild_runtime=lambda files, modules: rebuild_calls.append((files, modules)),
+        validate_patch=lambda files: ["shadow-ok", *[Path(item).name for item in files]],
+    )
+    controller.bootstrap()
+    controller._last_checked_at = utcnow() - timedelta(seconds=2)
+    target.write_text("VALUE = 2\n", encoding="utf-8")
+
+    report = controller.refresh_if_due(now=utcnow())
+
+    assert report is not None
+    assert report.shadow_validated is True
+    assert "shadow-ok" in report.validation_checks
+    assert rebuild_calls

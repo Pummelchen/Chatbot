@@ -67,8 +67,14 @@ check_interval_minutes = 10
 [viewer_signals]
 enabled = true
 source_file_path = "viewer_signals.yaml"
+harvest_directory_path = "youtube_signals"
+comments_file_name = "comments.jsonl"
+clips_file_name = "clips.jsonl"
+retention_file_name = "retention.jsonl"
+live_chat_file_name = "live_chat.jsonl"
 check_interval_minutes = 10
 max_active_signals = 12
+max_derived_signals = 8
 
 [house_pressure]
 enabled = true
@@ -114,6 +120,13 @@ refresh_interval_minutes = 30
 near_term_horizon_days = 30
 long_term_horizon_days = 90
 
+[chronology_graph]
+enabled = true
+refresh_interval_minutes = 10
+recent_fact_hours = 24
+contradiction_window_minutes = 180
+max_digest_edges = 10
+
 [canon]
 enabled = true
 windows = ["1h", "6h", "24h", "7d", "30d"]
@@ -137,6 +150,12 @@ max_recent_facts = 12
 max_room_occupants = 4
 money_deadline_hours = 72
 
+[voice_fingerprints]
+enabled = true
+refresh_interval_minutes = 20
+recent_messages_per_character = 8
+lexical_marker_count = 5
+
 [turn_selection]
 enabled = true
 candidate_count = 2
@@ -154,6 +173,12 @@ max_clip_seconds = 55
 enabled = true
 min_asset_score = 72
 max_recent_assets = 10
+
+[guest_circulation]
+enabled = true
+refresh_interval_minutes = 20
+max_active_guests = 4
+max_pending_guest_beats = 3
 
 [soak_audit]
 enabled = true
@@ -173,8 +198,11 @@ unexpected_iteration_delay_seconds = 3
 [hot_patch]
 enabled = true
 check_interval_seconds = 15
+shadow_validate = true
+shadow_check_timeout_seconds = 45
 # The runtime also auto-adds the active config file, .env, and the resolved
-# audience steering and viewer-signal file paths to the watched set at startup.
+# audience steering, viewer-signal YAML, and YouTube-signal harvest paths to the
+# watched set at startup.
 watch_paths = ["src/lantern_house", "config.example.toml", "update.txt"]
 watch_extensions = [".py", ".md", ".toml", ".yaml", ".yml", ".txt"]
 

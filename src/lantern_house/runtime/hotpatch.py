@@ -1,3 +1,7 @@
+# Lantern House core instruction: stay fail-safe, never leak debug or
+# error text into the live chat, log recovered failures to
+# logs/error.txt with context, and preserve hot-patch compatibility
+# for uninterrupted long-running operation.
 from __future__ import annotations
 
 import importlib
@@ -31,6 +35,8 @@ class HotPatchReport:
     changed_files: list[str] = field(default_factory=list)
     reloaded_modules: list[str] = field(default_factory=list)
     rebuilt_runtime: bool = False
+    shadow_validated: bool = False
+    validation_checks: list[str] = field(default_factory=list)
 
 
 class HotPatchController:
@@ -40,10 +46,12 @@ class HotPatchController:
         config: HotPatchConfig,
         project_root: Path,
         rebuild_runtime: Callable[[list[str], list[str]], None],
+        validate_patch: Callable[[list[str]], list[str] | None] | None = None,
     ) -> None:
         self.config = config
         self.project_root = project_root
         self.rebuild_runtime = rebuild_runtime
+        self.validate_patch = validate_patch
         resolved_roots = []
         for item in config.watch_paths:
             candidate = (project_root / item).resolve()
@@ -76,6 +84,9 @@ class HotPatchController:
             return None
 
         try:
+            validation_checks: list[str] = []
+            if self.config.shadow_validate and self.validate_patch is not None:
+                validation_checks = self.validate_patch([str(path) for path in changed_paths]) or []
             changed_modules = self._reload_modules_if_needed(changed_paths)
             self.rebuild_runtime(
                 [str(path) for path in changed_paths],
@@ -86,6 +97,8 @@ class HotPatchController:
                 changed_files=[str(path) for path in changed_paths],
                 reloaded_modules=changed_modules,
                 rebuilt_runtime=True,
+                shadow_validated=self.config.shadow_validate and self.validate_patch is not None,
+                validation_checks=validation_checks,
             )
         except Exception as exc:
             log_call_failure(

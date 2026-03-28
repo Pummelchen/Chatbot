@@ -78,6 +78,9 @@ class TurnCriticService:
         if self._repeats_recent_language(packet.recent_messages, lowered):
             score -= 12
             reasons.append("The turn repeats recent language too closely.")
+        if self._voice_fingerprint_mismatch(packet=packet, message=message):
+            score -= 14
+            reasons.append("The turn drifted away from the speaker's established live voice.")
 
         repairable_flag_types = {"robotic-voice", "chat-register", "voice-integrity"}
         if any(flag.flag_type in repairable_flag_types for flag in flags):
@@ -154,6 +157,39 @@ class TurnCriticService:
             if candidate
         )
 
+    def _voice_fingerprint_mismatch(
+        self,
+        *,
+        packet: CharacterContextPacket,
+        message: str,
+    ) -> bool:
+        if not packet.voice_fingerprint:
+            return False
+        lowered = message.lower()
+        word_count = len(message.split())
+        fingerprint_text = " ".join(packet.voice_fingerprint).lower()
+        if "cadence=clipped" in fingerprint_text and word_count > 26:
+            return True
+        if "cadence=measured" in fingerprint_text and word_count < 4:
+            return True
+        if "controlled" in fingerprint_text and message.count("!") > 1:
+            return True
+        if "sarcastic" in fingerprint_text and any(
+            marker in lowered for marker in self._GENERIC_MARKERS
+        ):
+            return True
+        marker_match = any(
+            marker in lowered
+            for marker in _extract_terms(" ".join(packet.voice_fingerprint))
+        )
+        if (
+            not marker_match
+            and any(marker in lowered for marker in self._GENERIC_MARKERS)
+            and len(packet.voice_fingerprint) >= 2
+        ):
+            return True
+        return False
+
     def _repair_actions(
         self,
         *,
@@ -170,6 +206,8 @@ class TurnCriticService:
             actions.append("Shorten the line so it lands like chat, not prose.")
         if any("generic" in reason.lower() for reason in reasons):
             actions.append("Swap generic confrontation phrasing for a concrete ask or threat.")
+        if any("established live voice" in reason.lower() for reason in reasons):
+            actions.append("Restore the speaker's cadence, conflict style, and lexical habits.")
         if not actions:
             actions.append("Keep the turn specific, social, and slightly dangerous.")
         return actions

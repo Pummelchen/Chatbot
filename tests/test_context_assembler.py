@@ -9,8 +9,10 @@ from datetime import timedelta
 from lantern_house.context.assembler import ContextAssembler
 from lantern_house.domain.contracts import (
     AudienceControlReport,
+    ChronologyEdgeSnapshot,
     DormantThreadSnapshot,
     EventView,
+    GuestProfileSnapshot,
     HighlightPackageSnapshot,
     HourlyProgressLedgerSnapshot,
     MessageView,
@@ -18,6 +20,7 @@ from lantern_house.domain.contracts import (
     SoakAuditSnapshot,
     StoryGravityStateSnapshot,
     SummaryView,
+    VoiceFingerprintSnapshot,
 )
 from lantern_house.quality.pacing import PacingHealthEvaluator
 from lantern_house.utils.time import utcnow
@@ -276,6 +279,52 @@ class FakeRepository:
             audit_notes=["The next several hours need a sharper clue path."],
         )
 
+    def list_recent_chronology_edges(self, *, limit=12, contradiction_only=False):
+        edge = ChronologyEdgeSnapshot(
+            subject_key="character:amelia",
+            predicate="claimed-in",
+            object_key="location:roof-walk",
+            contradiction_status="contested",
+            supporting_text="Amelia's alibi conflicts with a second room claim.",
+        )
+        if contradiction_only:
+            return [edge]
+        return [
+            edge,
+            ChronologyEdgeSnapshot(
+                subject_key="object:lantern-wing-key",
+                predicate="stored-in",
+                object_key="location:front-desk",
+                supporting_text="The lantern-wing key was last grounded at the desk.",
+            ),
+        ][:limit]
+
+    def list_voice_fingerprints(self, *, character_slugs=None, limit=8):
+        item = VoiceFingerprintSnapshot(
+            character_slug="amelia",
+            signature_line=(
+                "Amelia should sound clipped, guarded, and concrete about money or keys."
+            ),
+            cadence_profile="clipped",
+            conflict_tone="Calm until forced into blunt clarity.",
+            lexical_markers=["drawer", "payroll", "key"],
+        )
+        if character_slugs:
+            return [item]
+        return [item][:limit]
+
+    def list_active_guest_profiles(self, *, limit=6):
+        return [
+            GuestProfileSnapshot(
+                guest_key="permit-clerk",
+                display_name="Elsie Rowan",
+                role="permit clerk",
+                pressure_tags=["inspection", "paperwork"],
+                summary="A permit clerk turns paperwork into a social threat.",
+                hook="She wants the binder nobody wants opened in public.",
+            )
+        ][:limit]
+
 
 def test_context_assembler_builds_packets() -> None:
     assembler = ContextAssembler(FakeRepository(), PacingHealthEvaluator())
@@ -310,9 +359,14 @@ def test_context_assembler_builds_packets() -> None:
     assert manager_packet.audience_control.active is True
     assert manager_packet.hourly_ledger.contract_met is True
     assert manager_packet.canon_capsule_digest
+    assert manager_packet.chronology_graph_digest
+    assert manager_packet.contradiction_watch_digest
+    assert manager_packet.voice_fingerprint_digest
+    assert manager_packet.guest_pressure_digest
     assert manager_packet.highlight_signals
     assert manager_packet.soak_audit_signals
     assert character_packet.character_slug == "amelia"
     assert character_packet.voice_guardrails
+    assert character_packet.voice_fingerprint
     assert "control the damage" in character_packet.manager_directive
     assert character_packet.story_memory_capsule

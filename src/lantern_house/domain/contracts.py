@@ -460,6 +460,33 @@ class ObjectPossessionSnapshot(BaseModel):
     created_at: datetime | None = None
 
 
+class ChronologyNodeSnapshot(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    node_key: str
+    node_type: str
+    label: str
+    status: str = "active"
+    metadata: dict = Field(default_factory=dict)
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+
+class ChronologyEdgeSnapshot(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    subject_key: str
+    predicate: str
+    object_key: str
+    confidence: int = Field(default=5, ge=1, le=10)
+    contradiction_status: str = "clean"
+    supporting_text: str = ""
+    source: str = "runtime"
+    metadata: dict = Field(default_factory=dict)
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+
 class ViewerSignalSnapshot(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
@@ -474,6 +501,21 @@ class ViewerSignalSnapshot(BaseModel):
     metadata: dict = Field(default_factory=dict)
     expires_at: datetime | None = None
     created_at: datetime | None = None
+
+
+class VoiceFingerprintSnapshot(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    character_slug: str
+    signature_line: str
+    cadence_profile: str = "balanced"
+    conflict_tone: str = ""
+    affection_tone: str = ""
+    humor_markers: list[str] = Field(default_factory=list)
+    lexical_markers: list[str] = Field(default_factory=list)
+    taboo_markers: list[str] = Field(default_factory=list)
+    metadata: dict = Field(default_factory=dict)
+    updated_at: datetime | None = None
 
 
 class HighlightPackageSnapshot(BaseModel):
@@ -542,6 +584,32 @@ class BroadcastAssetSnapshot(BaseModel):
     why_it_matters: str = ""
     comment_seed: str = ""
     asset_score: int = Field(default=0, ge=0, le=100)
+    metadata: dict = Field(default_factory=dict)
+    created_at: datetime | None = None
+
+
+class GuestProfileSnapshot(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    guest_key: str
+    display_name: str
+    role: str
+    status: str = "active"
+    pressure_tags: list[str] = Field(default_factory=list)
+    summary: str
+    hook: str
+    linked_location_slug: str | None = None
+    metadata: dict = Field(default_factory=dict)
+    updated_at: datetime | None = None
+
+
+class HotPatchCanaryRunSnapshot(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    status: str
+    changed_files: list[str] = Field(default_factory=list)
+    checks: list[str] = Field(default_factory=list)
+    error_summary: str | None = None
     metadata: dict = Field(default_factory=dict)
     created_at: datetime | None = None
 
@@ -740,10 +808,14 @@ class ManagerContextPacket(BaseModel):
     canon_capsule_digest: list[str] = Field(default_factory=list)
     canon_court_alerts: list[str] = Field(default_factory=list)
     timeline_digest: list[str] = Field(default_factory=list)
+    chronology_graph_digest: list[str] = Field(default_factory=list)
+    contradiction_watch_digest: list[str] = Field(default_factory=list)
     possession_digest: list[str] = Field(default_factory=list)
     room_occupancy_digest: list[str] = Field(default_factory=list)
     season_plan_digest: list[str] = Field(default_factory=list)
     viewer_signal_digest: list[str] = Field(default_factory=list)
+    voice_fingerprint_digest: list[str] = Field(default_factory=list)
+    guest_pressure_digest: list[str] = Field(default_factory=list)
     highlight_signals: list[str] = Field(default_factory=list)
     monetization_signals: list[str] = Field(default_factory=list)
     broadcast_asset_signals: list[str] = Field(default_factory=list)
@@ -781,6 +853,7 @@ class CharacterContextPacket(BaseModel):
     recent_events: list[str] = Field(default_factory=list)
     live_pressures: list[str] = Field(default_factory=list)
     timeline_grounding: list[str] = Field(default_factory=list)
+    voice_fingerprint: list[str] = Field(default_factory=list)
     story_memory_capsule: list[str] = Field(default_factory=list)
     manager_directive: str
     forbidden_boundaries: list[str] = Field(default_factory=list)

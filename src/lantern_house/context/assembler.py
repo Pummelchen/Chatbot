@@ -99,6 +99,19 @@ class ContextAssembler:
             limit=4,
             default=[],
         )
+        chronology_edges = _repo_call(
+            self.repository,
+            "list_recent_chronology_edges",
+            limit=8,
+            default=[],
+        )
+        contradiction_edges = _repo_call(
+            self.repository,
+            "list_recent_chronology_edges",
+            limit=4,
+            contradiction_only=True,
+            default=[],
+        )
         timeline_facts = _repo_call(
             self.repository,
             "list_recent_timeline_facts",
@@ -116,6 +129,18 @@ class ContextAssembler:
             self.repository,
             "list_active_viewer_signals",
             limit=5,
+            default=[],
+        )
+        voice_fingerprints = _repo_call(
+            self.repository,
+            "list_voice_fingerprints",
+            limit=6,
+            default=[],
+        )
+        guest_profiles = _repo_call(
+            self.repository,
+            "list_active_guest_profiles",
+            limit=4,
             default=[],
         )
         highlight_packages = _repo_call(
@@ -319,6 +344,23 @@ class ContextAssembler:
                 )
                 for item in timeline_facts[:4]
             ],
+            chronology_graph_digest=[
+                _compact_text(
+                    (
+                        f"{item.subject_key} {item.predicate} {item.object_key} "
+                        f"[{item.contradiction_status}]"
+                    ),
+                    limit=190,
+                )
+                for item in chronology_edges[:4]
+            ],
+            contradiction_watch_digest=[
+                _compact_text(
+                    f"{item.subject_key} contested: {item.supporting_text}",
+                    limit=190,
+                )
+                for item in contradiction_edges[:3]
+            ],
             possession_digest=[
                 _compact_text(
                     f"{item.object_name}: {item.summary}",
@@ -347,6 +389,23 @@ class ContextAssembler:
                     limit=190,
                 )
                 for item in viewer_signals[:4]
+            ],
+            voice_fingerprint_digest=[
+                _compact_text(
+                    (
+                        f"{item.character_slug}: {item.cadence_profile}; "
+                        f"{item.conflict_tone}; markers {', '.join(item.lexical_markers[:3])}"
+                    ),
+                    limit=190,
+                )
+                for item in voice_fingerprints[:4]
+            ],
+            guest_pressure_digest=[
+                _compact_text(
+                    f"{item.display_name} / {item.role}: {item.hook}",
+                    limit=190,
+                )
+                for item in guest_profiles[:3]
             ],
             highlight_signals=[
                 _compact_text(
@@ -468,6 +527,20 @@ class ContextAssembler:
             "list_character_positions",
             default=[],
         )
+        voice_fingerprint = _repo_call(
+            self.repository,
+            "list_voice_fingerprints",
+            character_slugs=[character_slug],
+            limit=1,
+            default=[],
+        )
+        contradiction_edges = _repo_call(
+            self.repository,
+            "list_recent_chronology_edges",
+            contradiction_only=True,
+            limit=4,
+            default=[],
+        )
 
         personal_directive = directive.get("per_character", {}).get(character_slug, {})
         directive_text = (
@@ -552,7 +625,27 @@ class ContextAssembler:
                     _compact_text(f"{item.object_name}: {item.summary}", limit=120)
                     for item in object_possessions[:2]
                 ],
+                *[
+                    _compact_text(item.supporting_text, limit=120)
+                    for item in contradiction_edges
+                    if character_slug in item.subject_key
+                    or overview["location_name"].lower() in item.supporting_text.lower()
+                ][:1],
             ][:5],
+            voice_fingerprint=[
+                _compact_text(item.signature_line, limit=140)
+                for item in voice_fingerprint[:1]
+            ]
+            + [
+                _compact_text(
+                    (
+                        f"cadence={item.cadence_profile}; conflict={item.conflict_tone}; "
+                        f"markers={', '.join(item.lexical_markers[:3])}"
+                    ),
+                    limit=140,
+                )
+                for item in voice_fingerprint[:1]
+            ],
             manager_directive=_compact_text(directive_text, limit=220),
             forbidden_boundaries=[_compact_text(item, limit=100) for item in boundaries],
         )

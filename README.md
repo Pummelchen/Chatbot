@@ -16,8 +16,11 @@ The project targets macOS Apple Silicon with Python 3.12+, MySQL 8.4, and Ollama
 - A season planner that projects 30-day and 90-day reveal windows, ship cycles, inheritance turns, and cast-refresh points above the daily grid
 - Multi-resolution canon capsules for `1h`, `6h`, `24h`, `7d`, and `30d` memory distillation
 - A deterministic timeline, possession, and alibi layer that tracks who was where, which object was last grounded where, room occupancy, money deadlines, and repair state
+- A deterministic chronology and evidence graph that links sightings, claims, object movement, deadlines, and contested facts into reusable mystery logic
+- A per-character voice-fingerprint layer that persists cadence, conflict tone, humor markers, taboo markers, and lexical habits to keep public turns distinct and non-robotic
+- A guest and NPC circulation engine that injects recurring outsiders as controlled pressure, not random sprawl
 - A high-stakes multi-candidate turn selector that generates and reranks alternative public turns only when the moment is strategically important
-- A live viewer-signal ingestion layer driven by `viewer_signals.yaml`, ready for later YouTube/OBS signal sources
+- A live viewer-signal ingestion layer driven by `viewer_signals.yaml` plus local `youtube_signals/*.jsonl` harvest files for comments, clips, retention, and live chat
 - Automatic highlight packaging that turns strong turns into clip-ready and quote-ready metadata
 - A deeper monetization packaging pipeline that turns strong turns into title, hook, quote, faction, theory, and comment-prompt assets
 - A broadcast-asset pipeline that turns strong turns into reusable clip manifests, descriptions, chapter markers, ship/theory labels, and “why this matters” export packages
@@ -31,6 +34,7 @@ The project targets macOS Apple Silicon with Python 3.12+, MySQL 8.4, and Ollama
 - A small repair-model path for weak public turns, with deterministic fallback if repair fails
 - An adaptive fail-safe runtime that keeps last-good state, backs off repeated failures, and writes structured recovery context to `logs/error.txt`
 - A hot-patch loader that can soft-reload changed runtime, service, prompt, and config files without stopping the live stream
+- A shadow canary for hot patches that validates changed files against a seeded runtime graph before live reload is accepted
 - Prompt templates for manager, characters, and recap generation
 - A live-editable `update.txt` control file for subscriber-vote steering
 - A detailed story bible with cast, secrets, hooks, recap examples, and early arc plans
@@ -96,7 +100,7 @@ The repo root now includes [update.txt](/Users/andreborchert/Library/CloudStorag
 
 Major requests are phased in gradually over the configured rollout window, which defaults to 24 hours. If viewers vote for something large like "A and B should have a baby," the manager is expected to build the emotional and practical path first instead of jumping straight to the end-state.
 
-The repo root also includes [viewer_signals.yaml](/Users/andreborchert/Library/CloudStorage/Dropbox/Chatbot/viewer_signals.yaml), a local-first signal file for real audience observations such as ship spikes, theory bursts, clip replays, faction splits, or recap drop-off. These signals steer the strategist and manager, but do not directly retcon canon.
+The repo root also includes [viewer_signals.yaml](/Users/andreborchert/Library/CloudStorage/Dropbox/Chatbot/viewer_signals.yaml), a local-first signal file for real audience observations such as ship spikes, theory bursts, clip replays, faction splits, or recap drop-off. The adjacent [youtube_signals/README.md](/Users/andreborchert/Library/CloudStorage/Dropbox/Chatbot/youtube_signals/README.md) documents optional JSONL harvest files for comments, clips, retention, and live chat. These signals steer the strategist and manager, but do not directly retcon canon.
 
 ## Seeded Ensemble
 
@@ -161,6 +165,7 @@ lantern-house run
 - `lantern-house simulate`: run the accelerated deterministic simulation lab against the current world state
 - `lantern-house soak-audit`: run the long-horizon deterministic soak audit against the current world state
 - `lantern-house broadcast-assets`: inspect the most recent reusable broadcast/clip export packages
+- `lantern-house shadow-check`: run the shadow canary used by hot-patch validation
 - `lantern-house dashboard`: show the current ops telemetry snapshot for runtime, load, checkpoint freshness, recap freshness, and active strategy
 - `lantern-house recap-now`: generate recap blocks immediately
 - `lantern-house healthcheck`: verify database and Ollama availability
@@ -202,6 +207,7 @@ All CLI commands now fail with concise operator messages plus logged context in 
 - Low-quality unresolved-question fragments are filtered before they enter canon memory.
 - If a model turn drifts into robotic or prose-like register, the runtime repairs it before persisting public output.
 - The repair path can use a dedicated small model configured as `models.repair`; if that model fails, the runtime falls back to the deterministic continuity-safe line instead of blocking.
+- Hot patches can run through a shadow canary first, so changed code is validated against seeded runtime services before the live process swaps in rebuilt components.
 
 ## Quality Checks
 

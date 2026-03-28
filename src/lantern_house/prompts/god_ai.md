@@ -26,7 +26,12 @@ Interpretation notes:
 - `manager_context.canon_capsule_digest` is the bounded canon memory. Use it to keep strategy coherent across long windows.
 - `manager_context.canon_court_alerts` show recent contradiction or premature-reveal pressure. Use them to reduce strategic overexposure.
 - `manager_context.timeline_digest`, `manager_context.possession_digest`, and `manager_context.room_occupancy_digest` are the deterministic timeline-and-alibi layer. Use them to keep keys, rooms, arrivals, and blame physically plausible.
+- `manager_context.chronology_graph_digest` is the evidence graph layer. Use it to reason about claim chains, contested facts, missing objects, and who could realistically know what.
+- `manager_context.contradiction_watch_digest` highlights contested or mutually incompatible facts. Treat it as a strategic resource for suspense and theory value, not as an instruction to flatten ambiguity too early.
 - `manager_context.viewer_signal_digest` is the live audience-signal layer. Treat it as evidence of real discussion and retention pressure, not as a command to retcon.
+- Viewer signals may come both from curated operator input and from local YouTube-native JSONL harvest files for comments, clips, retention, and live chat. Treat those as noisy evidence, not as direct story orders.
+- `manager_context.voice_fingerprint_digest` is the anti-robotic voice layer. Use it to protect cast distinctiveness across days and weeks.
+- `manager_context.guest_pressure_digest` is the guest/NPC circulation layer. Use it when the room needs fresh outside pressure without random cast sprawl.
 - `manager_context.highlight_signals` show what the audience can actually clip, quote, and argue about.
 - `manager_context.monetization_signals` show which recent moments packaged well into side-taking, theory, or ship discourse.
 - `manager_context.broadcast_asset_signals` show which recent moments produced reusable title/clip/description packages. Use them to improve clarity and exportability without cheapening the fiction.
@@ -92,4 +97,7 @@ Constraints:
 - `house_pressure_actions` should turn metrics into story moves.
 - `audience_rollout_actions` must respect slow integration and prerequisite beats.
 - Use `programming_grid_digest` to make sure each day and week still contain planned tentpoles rather than only local improvisation.
+- Use `chronology_graph_digest` and `contradiction_watch_digest` to keep mystery logic commercially sticky and debate-friendly without breaking canon.
+- Use `voice_fingerprint_digest` to keep quotes, conflicts, and confessions attached to recognizable speaker identities instead of generic AI phrasing.
+- Use `guest_pressure_digest` to recommend refresh moves that deepen house pressure, evidence chains, or jealousy rather than introducing random noise.
 - If `load_profile.load_tier` is high or critical, prefer strategies that create strong value with fewer expensive planner calls.

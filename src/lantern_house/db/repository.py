@@ -21,11 +21,15 @@ from lantern_house.domain.contracts import (
     CanonCapsuleSnapshot,
     CanonCourtFindingSnapshot,
     CharacterTurn,
+    ChronologyEdgeSnapshot,
+    ChronologyNodeSnapshot,
     ContinuityFlagDraft,
     DormantThreadSnapshot,
     EventCandidate,
     EventView,
+    GuestProfileSnapshot,
     HighlightPackageSnapshot,
+    HotPatchCanaryRunSnapshot,
     HourlyProgressLedgerSnapshot,
     HouseStateSnapshot,
     ManagerDirectivePlan,
@@ -46,6 +50,7 @@ from lantern_house.domain.contracts import (
     TimelineFactSnapshot,
     TurnCriticReport,
     ViewerSignalSnapshot,
+    VoiceFingerprintSnapshot,
 )
 from lantern_house.domain.enums import MessageKind, SummaryWindow
 from lantern_house.utils.time import ensure_utc, floor_to_hour, isoformat, utcnow
@@ -181,6 +186,7 @@ class StoryRepository:
                     "emotional_expression": row.emotional_expression,
                     "message_style": row.message_style,
                     "ensemble_role": row.ensemble_role,
+                    "humor_style": row.humor_style,
                     "color": row.color,
                 }
                 for row in characters
@@ -329,6 +335,7 @@ class StoryRepository:
                 "emotional_expression": character.emotional_expression,
                 "message_style": character.message_style,
                 "ensemble_role": character.ensemble_role,
+                "humor_style": character.humor_style,
                 "location_name": location.name if location else "Unknown",
                 "emotional_state": state.emotional_state,
                 "current_goals": state.active_goals,
@@ -1326,6 +1333,138 @@ class StoryRepository:
             )
             return []
 
+    def sync_chronology_graph(
+        self,
+        *,
+        nodes: list[ChronologyNodeSnapshot],
+        edges: list[ChronologyEdgeSnapshot],
+        now=None,
+    ) -> tuple[list[ChronologyNodeSnapshot], list[ChronologyEdgeSnapshot]]:
+        now = ensure_utc(now or utcnow())
+        try:
+            with self.session_factory.session_scope() as session:
+                existing_nodes = {
+                    row.node_key: row
+                    for row in session.scalars(select(models.ChronologyGraphNode)).all()
+                }
+                for snapshot in nodes:
+                    row = existing_nodes.get(snapshot.node_key)
+                    if row is None:
+                        row = models.ChronologyGraphNode(
+                            node_key=snapshot.node_key,
+                            created_at=now,
+                        )
+                        session.add(row)
+                        existing_nodes[snapshot.node_key] = row
+                    row.node_type = snapshot.node_type
+                    row.label = snapshot.label
+                    row.status = snapshot.status
+                    row.metadata_json = snapshot.metadata
+                    row.updated_at = now
+
+                recent_cutoff = now - timedelta(hours=12)
+                persisted_edges: list[ChronologyEdgeSnapshot] = []
+                for snapshot in edges:
+                    row = session.scalar(
+                        select(models.ChronologyGraphEdge).where(
+                            models.ChronologyGraphEdge.subject_key == snapshot.subject_key,
+                            models.ChronologyGraphEdge.predicate == snapshot.predicate,
+                            models.ChronologyGraphEdge.object_key == snapshot.object_key,
+                            models.ChronologyGraphEdge.supporting_text
+                            == snapshot.supporting_text,
+                            models.ChronologyGraphEdge.created_at >= recent_cutoff,
+                        )
+                    )
+                    if row is None:
+                        row = models.ChronologyGraphEdge(
+                            subject_key=snapshot.subject_key,
+                            predicate=snapshot.predicate,
+                            object_key=snapshot.object_key,
+                            created_at=now,
+                        )
+                        session.add(row)
+                    row.confidence = snapshot.confidence
+                    row.contradiction_status = snapshot.contradiction_status
+                    row.supporting_text = snapshot.supporting_text
+                    row.source = snapshot.source
+                    row.metadata_json = snapshot.metadata
+                    row.updated_at = now
+                    persisted_edges.append(
+                        snapshot.model_copy(
+                            update={"created_at": row.created_at or now, "updated_at": now}
+                        )
+                    )
+
+                persisted_nodes = [
+                    snapshot.model_copy(update={"created_at": now, "updated_at": now})
+                    for snapshot in nodes
+                ]
+                return persisted_nodes, persisted_edges
+        except SQLAlchemyError as exc:
+            _log_recovered_db_failure(
+                "repository.sync_chronology_graph",
+                exc,
+                context={"node_count": len(nodes), "edge_count": len(edges)},
+                expected_inputs=[
+                    "Migrated chronology_graph_nodes and chronology_graph_edges tables."
+                ],
+                retry_advice="Run migrations so chronology graph persistence can resume.",
+                fallback_used="return-unpersisted-chronology-graph",
+            )
+            return (
+                [
+                    snapshot.model_copy(update={"created_at": now, "updated_at": now})
+                    for snapshot in nodes
+                ],
+                [
+                    snapshot.model_copy(update={"created_at": now, "updated_at": now})
+                    for snapshot in edges
+                ],
+            )
+
+    def list_recent_chronology_edges(
+        self,
+        *,
+        limit: int = 12,
+        contradiction_only: bool = False,
+    ) -> list[ChronologyEdgeSnapshot]:
+        try:
+            with self.session_factory.session_scope() as session:
+                stmt = select(models.ChronologyGraphEdge).order_by(
+                    desc(models.ChronologyGraphEdge.updated_at),
+                    desc(models.ChronologyGraphEdge.created_at),
+                )
+                if contradiction_only:
+                    stmt = stmt.where(models.ChronologyGraphEdge.contradiction_status != "clean")
+                rows = session.scalars(stmt.limit(limit)).all()
+                return [
+                    ChronologyEdgeSnapshot(
+                        subject_key=row.subject_key,
+                        predicate=row.predicate,
+                        object_key=row.object_key,
+                        confidence=row.confidence,
+                        contradiction_status=row.contradiction_status,
+                        supporting_text=row.supporting_text,
+                        source=row.source,
+                        metadata=row.metadata_json,
+                        created_at=row.created_at,
+                        updated_at=row.updated_at,
+                    )
+                    for row in rows
+                ]
+        except SQLAlchemyError as exc:
+            _log_recovered_db_failure(
+                "repository.list_recent_chronology_edges",
+                exc,
+                context={"limit": limit, "contradiction_only": contradiction_only},
+                expected_inputs=[
+                    "Migrated chronology_graph_edges table."
+                ],
+                retry_advice="Run migrations so chronology graph reads can resume.",
+                fallback_used="empty-chronology-edges",
+            )
+            return []
+
     def sync_viewer_signals(
         self,
         *,
@@ -1417,6 +1556,234 @@ class StoryRepository:
                 fallback_used="empty-viewer-signals",
             )
             return []
+
+    def save_voice_fingerprints(
+        self,
+        *,
+        fingerprints: list[VoiceFingerprintSnapshot],
+        now=None,
+    ) -> list[VoiceFingerprintSnapshot]:
+        now = ensure_utc(now or utcnow())
+        if not fingerprints:
+            return []
+        try:
+            with self.session_factory.session_scope() as session:
+                existing = {
+                    row.character_slug: row
+                    for row in session.scalars(select(models.VoiceFingerprint)).all()
+                }
+                for snapshot in fingerprints:
+                    row = existing.get(snapshot.character_slug)
+                    if row is None:
+                        row = models.VoiceFingerprint(
+                            character_slug=snapshot.character_slug,
+                            created_at=now,
+                        )
+                        session.add(row)
+                    row.signature_line = snapshot.signature_line
+                    row.cadence_profile = snapshot.cadence_profile
+                    row.conflict_tone = snapshot.conflict_tone
+                    row.affection_tone = snapshot.affection_tone
+                    row.humor_markers = snapshot.humor_markers
+                    row.lexical_markers = snapshot.lexical_markers
+                    row.taboo_markers = snapshot.taboo_markers
+                    row.metadata_json = snapshot.metadata
+                    row.updated_at = now
+                return [
+                    snapshot.model_copy(update={"updated_at": now}) for snapshot in fingerprints
+                ]
+        except SQLAlchemyError as exc:
+            _log_recovered_db_failure(
+                "repository.save_voice_fingerprints",
+                exc,
+                context={"fingerprint_count": len(fingerprints)},
+                expected_inputs=["A migrated voice_fingerprints table."],
+                retry_advice="Run migrations so voice fingerprint persistence can resume.",
+                fallback_used="return-unpersisted-voice-fingerprints",
+            )
+            return [snapshot.model_copy(update={"updated_at": now}) for snapshot in fingerprints]
+
+    def list_voice_fingerprints(
+        self,
+        *,
+        character_slugs: list[str] | None = None,
+        limit: int = 8,
+    ) -> list[VoiceFingerprintSnapshot]:
+        try:
+            with self.session_factory.session_scope() as session:
+                stmt = select(models.VoiceFingerprint).order_by(
+                    desc(models.VoiceFingerprint.updated_at)
+                )
+                if character_slugs:
+                    stmt = stmt.where(models.VoiceFingerprint.character_slug.in_(character_slugs))
+                rows = session.scalars(stmt.limit(limit)).all()
+                return [
+                    VoiceFingerprintSnapshot(
+                        character_slug=row.character_slug,
+                        signature_line=row.signature_line,
+                        cadence_profile=row.cadence_profile,
+                        conflict_tone=row.conflict_tone,
+                        affection_tone=row.affection_tone,
+                        humor_markers=row.humor_markers,
+                        lexical_markers=row.lexical_markers,
+                        taboo_markers=row.taboo_markers,
+                        metadata=row.metadata_json,
+                        updated_at=row.updated_at,
+                    )
+                    for row in rows
+                ]
+        except SQLAlchemyError as exc:
+            _log_recovered_db_failure(
+                "repository.list_voice_fingerprints",
+                exc,
+                context={"character_slugs": character_slugs, "limit": limit},
+                expected_inputs=["A migrated voice_fingerprints table."],
+                retry_advice="Run migrations so voice fingerprint reads can resume.",
+                fallback_used="empty-voice-fingerprints",
+            )
+            return []
+
+    def sync_guest_profiles(
+        self,
+        *,
+        profiles: list[GuestProfileSnapshot],
+        now=None,
+    ) -> list[GuestProfileSnapshot]:
+        now = ensure_utc(now or utcnow())
+        try:
+            with self.session_factory.session_scope() as session:
+                active_keys = {profile.guest_key for profile in profiles}
+                existing = {
+                    row.guest_key: row for row in session.scalars(select(models.GuestProfile)).all()
+                }
+                for snapshot in profiles:
+                    row = existing.get(snapshot.guest_key)
+                    if row is None:
+                        row = models.GuestProfile(
+                            guest_key=snapshot.guest_key,
+                            created_at=now,
+                        )
+                        session.add(row)
+                    row.display_name = snapshot.display_name
+                    row.role = snapshot.role
+                    row.status = snapshot.status
+                    row.pressure_tags = snapshot.pressure_tags
+                    row.summary = snapshot.summary
+                    row.hook = snapshot.hook
+                    row.linked_location_slug = snapshot.linked_location_slug
+                    row.metadata_json = snapshot.metadata
+                    row.updated_at = now
+                for guest_key, row in existing.items():
+                    if guest_key in active_keys:
+                        continue
+                    row.status = "archived"
+                    row.updated_at = now
+                return [snapshot.model_copy(update={"updated_at": now}) for snapshot in profiles]
+        except SQLAlchemyError as exc:
+            _log_recovered_db_failure(
+                "repository.sync_guest_profiles",
+                exc,
+                context={"profile_count": len(profiles)},
+                expected_inputs=["A migrated guest_profiles table."],
+                retry_advice="Run migrations so guest profile persistence can resume.",
+                fallback_used="return-unpersisted-guest-profiles",
+            )
+            return [snapshot.model_copy(update={"updated_at": now}) for snapshot in profiles]
+
+    def list_active_guest_profiles(self, *, limit: int = 6) -> list[GuestProfileSnapshot]:
+        try:
+            with self.session_factory.session_scope() as session:
+                rows = session.scalars(
+                    select(models.GuestProfile)
+                    .where(models.GuestProfile.status == "active")
+                    .order_by(desc(models.GuestProfile.updated_at))
+                    .limit(limit)
+                ).all()
+                return [
+                    GuestProfileSnapshot(
+                        guest_key=row.guest_key,
+                        display_name=row.display_name,
+                        role=row.role,
+                        status=row.status,
+                        pressure_tags=row.pressure_tags,
+                        summary=row.summary,
+                        hook=row.hook,
+                        linked_location_slug=row.linked_location_slug,
+                        metadata=row.metadata_json,
+                        updated_at=row.updated_at,
+                    )
+                    for row in rows
+                ]
+        except SQLAlchemyError as exc:
+            _log_recovered_db_failure(
+                "repository.list_active_guest_profiles",
+                exc,
+                context={"limit": limit},
+                expected_inputs=["A migrated guest_profiles table."],
+                retry_advice="Run migrations so guest profile reads can resume.",
+                fallback_used="empty-guest-profiles",
+            )
+            return []
+
+    def record_hot_patch_canary_run(
+        self,
+        *,
+        snapshot: HotPatchCanaryRunSnapshot,
+        now=None,
+    ) -> HotPatchCanaryRunSnapshot:
+        now = ensure_utc(now or utcnow())
+        try:
+            with self.session_factory.session_scope() as session:
+                row = models.HotPatchCanaryRun(
+                    status=snapshot.status,
+                    changed_files=snapshot.changed_files,
+                    checks=snapshot.checks,
+                    error_summary=snapshot.error_summary,
+                    metadata_json=snapshot.metadata,
+                    created_at=now,
+                )
+                session.add(row)
+                session.flush()
+                return snapshot.model_copy(update={"created_at": now})
+        except SQLAlchemyError as exc:
+            _log_recovered_db_failure(
+                "repository.record_hot_patch_canary_run",
+                exc,
+                context={"status": snapshot.status, "changed_files": snapshot.changed_files},
+                expected_inputs=["A migrated hot_patch_canary_runs table."],
+                retry_advice="Run migrations so hot patch canary telemetry can resume.",
+                fallback_used="return-unpersisted-hot-patch-canary-run",
+            )
+            return snapshot.model_copy(update={"created_at": now})
+
+    def get_latest_hot_patch_canary_run(self) -> HotPatchCanaryRunSnapshot | None:
+        try:
+            with self.session_factory.session_scope() as session:
+                row = session.scalar(
+                    select(models.HotPatchCanaryRun).order_by(
+                        desc(models.HotPatchCanaryRun.created_at)
+                    )
+                )
+                if row is None:
+                    return None
+                return HotPatchCanaryRunSnapshot(
+                    status=row.status,
+                    changed_files=row.changed_files,
+                    checks=row.checks,
+                    error_summary=row.error_summary,
+                    metadata=row.metadata_json,
+                    created_at=row.created_at,
+                )
+        except SQLAlchemyError as exc:
+            _log_recovered_db_failure(
+                "repository.get_latest_hot_patch_canary_run",
+                exc,
+                context={},
+                expected_inputs=["A migrated hot_patch_canary_runs table."],
+                retry_advice="Run migrations so hot patch canary reads can resume.",
+                fallback_used="no-hot-patch-canary-run",
+            )
+            return None
 
     def record_strategic_brief(
         self,

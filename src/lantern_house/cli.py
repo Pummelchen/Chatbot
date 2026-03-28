@@ -7,6 +7,8 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import subprocess
+import sys
 import time
 from collections.abc import Callable
 from pathlib import Path
@@ -34,9 +36,11 @@ from lantern_house.services.broadcast_assets import BroadcastAssetService
 from lantern_house.services.canon import CanonDistillationService
 from lantern_house.services.canon_court import CanonCourtService
 from lantern_house.services.character import CharacterService
+from lantern_house.services.chronology_graph import ChronologyGraphService
 from lantern_house.services.critic import TurnCriticService
 from lantern_house.services.event_extractor import EventExtractor
 from lantern_house.services.god_ai import GodAIService
+from lantern_house.services.guest_circulation import GuestCirculationService
 from lantern_house.services.highlights import HighlightPackagingService
 from lantern_house.services.hourly_ledger import HourlyBeatLedgerService
 from lantern_house.services.house import HousePressureService
@@ -49,17 +53,20 @@ from lantern_house.services.progression import StoryProgressionService
 from lantern_house.services.recaps import RecapService
 from lantern_house.services.season_planner import SeasonPlannerService
 from lantern_house.services.seed_loader import StorySeedLoader
+from lantern_house.services.shadow_canary import ShadowCanaryService
 from lantern_house.services.simulation_lab import SimulationLabService
 from lantern_house.services.soak_audit import SoakAuditService
 from lantern_house.services.story_gravity import StoryGravityService
 from lantern_house.services.turn_selection import TurnSelectionService
 from lantern_house.services.viewer_signals import ViewerSignalIngestionService
+from lantern_house.services.voice_fingerprints import VoiceFingerprintService
 from lantern_house.services.world_tracking import WorldTrackingService
 from lantern_house.utils.time import floor_to_hour, utcnow
 
 app = typer.Typer(no_args_is_help=True)
 ROOT = Path(__file__).resolve().parents[2]
 logger = logging.getLogger(__name__)
+CHANGED_FILE_OPTION = typer.Option(None, "--changed-file")
 
 
 def _load(config_path: str | None) -> AppConfig:
@@ -243,6 +250,25 @@ def broadcast_assets(
     )
 
 
+@app.command("shadow-check")
+def shadow_check(
+    config: str | None = typer.Option(None, "--config"),
+    changed_file: list[str] | None = CHANGED_FILE_OPTION,
+) -> None:
+    cfg = _load(config)
+    _run_cli_command(
+        "shadow-check",
+        cfg,
+        lambda: _shadow_check(cfg, changed_files=changed_file or []),
+        expected_inputs=[
+            "A migrated and seeded database.",
+            "Readable runtime files and a consistent service graph.",
+        ],
+        retry_advice="Repair the changed files or database state and rerun shadow-check.",
+        configure_logs_first=True,
+    )
+
+
 def _migrate(config: AppConfig) -> None:
     os.environ["LANTERN_HOUSE_DATABASE_URL"] = config.database.url
     alembic_cfg = AlembicConfig(str(ROOT / "alembic.ini"))
@@ -282,7 +308,10 @@ def _simulate(config: AppConfig, *, hours: int, turns_per_hour: int) -> None:
     viewer_signal_service.refresh_if_due(force=True)
     audience = audience_service.refresh_if_due(force=True)
     beat_service.sync_audience_rollout(audience, now=utcnow())
+    VoiceFingerprintService(repository, config.voice_fingerprints).refresh(force=True)
     WorldTrackingService(repository, config.world_tracking).refresh(force=True)
+    ChronologyGraphService(repository, config.chronology_graph).refresh(force=True)
+    GuestCirculationService(repository, config.guest_circulation).refresh(force=True)
     assembler = ContextAssembler(repository, PacingHealthEvaluator())
     packet = assembler.build_manager_packet(audience_control=audience)
     report = SimulationLabService(config.simulation).evaluate(
@@ -324,7 +353,10 @@ def _soak_audit(config: AppConfig) -> None:
     ProgrammingGridService(repository, config.programming_grid).refresh(force=True)
     SeasonPlannerService(repository, config.season_planner).refresh(force=True)
     CanonDistillationService(repository, config.canon).refresh(now=utcnow())
+    VoiceFingerprintService(repository, config.voice_fingerprints).refresh(force=True)
     WorldTrackingService(repository, config.world_tracking).refresh(force=True)
+    ChronologyGraphService(repository, config.chronology_graph).refresh(force=True)
+    GuestCirculationService(repository, config.guest_circulation).refresh(force=True)
     assembler = ContextAssembler(repository, PacingHealthEvaluator())
     packet = assembler.build_manager_packet(audience_control=audience_service.current_report())
     simulation_lab = SimulationLabService(config.simulation)
@@ -390,6 +422,57 @@ def _broadcast_assets(config: AppConfig, *, limit: int) -> None:
             )
 
 
+def _shadow_check(config: AppConfig, *, changed_files: list[str]) -> None:
+    engine = create_engine_from_config(config.database)
+    repository = StoryRepository(SessionFactory(engine))
+    if not repository.seed_exists():
+        raise RuntimeError("No story seed found. Run `lantern-house seed` before `shadow-check`.")
+    pacing = PacingHealthEvaluator()
+    assembler = ContextAssembler(repository, pacing)
+    service = ShadowCanaryService(
+        repository=repository,
+        assembler=assembler,
+        viewer_signal_service=ViewerSignalIngestionService(config.viewer_signals, repository),
+        season_planner_service=SeasonPlannerService(repository, config.season_planner),
+        world_tracking_service=WorldTrackingService(repository, config.world_tracking),
+        chronology_graph_service=ChronologyGraphService(repository, config.chronology_graph),
+        voice_fingerprint_service=VoiceFingerprintService(
+            repository,
+            config.voice_fingerprints,
+        ),
+        guest_circulation_service=GuestCirculationService(repository, config.guest_circulation),
+    )
+    snapshot = service.run(changed_files=changed_files, now=utcnow())
+    typer.echo("Shadow canary passed.")
+    for check in snapshot.checks:
+        typer.echo(f"- {check}")
+
+
+def _build_hot_patch_validator(config: AppConfig) -> Callable[[list[str]], list[str]]:
+    def validate(changed_files: list[str]) -> list[str]:
+        if not config.hot_patch.shadow_validate:
+            return []
+        command = [sys.executable, "-m", "lantern_house", "shadow-check"]
+        if config.loaded_from:
+            command.extend(["--config", config.loaded_from])
+        for path in changed_files:
+            command.extend(["--changed-file", path])
+        completed = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            timeout=max(5, config.hot_patch.shadow_check_timeout_seconds),
+            cwd=str(ROOT),
+        )
+        output = completed.stdout.strip()
+        error = completed.stderr.strip()
+        if completed.returncode != 0:
+            raise RuntimeError(error or output or "shadow canary validation failed")
+        return [line[2:] for line in output.splitlines() if line.startswith("- ")]
+
+    return validate
+
+
 async def _run_async(config: AppConfig, *, once: bool) -> None:
     engine = create_engine_from_config(config.database)
     session_factory = SessionFactory(engine)
@@ -420,8 +503,14 @@ async def _run_async(config: AppConfig, *, once: bool) -> None:
         programming_grid_service = ProgrammingGridService(repository, config.programming_grid)
         season_planner_service = SeasonPlannerService(repository, config.season_planner)
         canon_service = CanonDistillationService(repository, config.canon)
+        chronology_graph_service = ChronologyGraphService(repository, config.chronology_graph)
         simulation_lab = SimulationLabService(config.simulation)
         soak_audit_service = SoakAuditService(repository, simulation_lab, config.soak_audit)
+        voice_fingerprint_service = VoiceFingerprintService(repository, config.voice_fingerprints)
+        guest_circulation_service = GuestCirculationService(
+            repository,
+            config.guest_circulation,
+        )
         orchestrator = RuntimeOrchestrator(
             config=config,
             repository=repository,
@@ -434,6 +523,7 @@ async def _run_async(config: AppConfig, *, once: bool) -> None:
             season_planner_service=season_planner_service,
             canon_service=canon_service,
             canon_court_service=CanonCourtService(config.canon_court),
+            chronology_graph_service=chronology_graph_service,
             house_pressure_service=HousePressureService(repository, config.house_pressure),
             world_tracking_service=WorldTrackingService(repository, config.world_tracking),
             story_gravity_service=StoryGravityService(repository, config.story_gravity),
@@ -452,6 +542,7 @@ async def _run_async(config: AppConfig, *, once: bool) -> None:
                 config.models.character,
                 config.models.repair,
             ),
+            voice_fingerprint_service=voice_fingerprint_service,
             turn_selection_service=TurnSelectionService(config.turn_selection),
             critic_service=TurnCriticService(config.critic),
             highlight_service=HighlightPackagingService(repository, config.highlights),
@@ -460,6 +551,7 @@ async def _run_async(config: AppConfig, *, once: bool) -> None:
                 repository,
                 config.broadcast_assets,
             ),
+            guest_circulation_service=guest_circulation_service,
             recap_service=RecapService(repository, client, config.models.announcer),
             progression_service=StoryProgressionService(),
             load_orchestration_service=LoadOrchestrationService(
@@ -478,12 +570,14 @@ async def _run_async(config: AppConfig, *, once: bool) -> None:
             renderer=TerminalRenderer(),
             llm_client=client,
             fail_safe_executor=FailSafeExecutor(config.failsafe),
+            hot_patch_validator=_build_hot_patch_validator(config),
         )
         orchestrator.attach_hot_patch_controller(
             HotPatchController(
                 config=build_hot_patch_config(config),
                 project_root=ROOT,
                 rebuild_runtime=orchestrator.rebuild_runtime_components,
+                validate_patch=_build_hot_patch_validator(config),
             )
         )
         await orchestrator.run(once=once)

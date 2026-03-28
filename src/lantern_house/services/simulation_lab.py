@@ -133,8 +133,15 @@ class SimulationLabService:
         if context.story_governance.cliffhanger_pressure_low:
             score += 9
             rationale.append("Evidence and sharper questions restore cliffhanger pressure cleanly.")
+        if context.contradiction_watch_digest:
+            score += 12
+            rationale.append(
+                "The chronology graph already shows contested facts that can deepen the mystery."
+            )
         next_focus = (
-            context.unresolved_questions[0]
+            context.contradiction_watch_digest[0]
+            if context.contradiction_watch_digest
+            else context.unresolved_questions[0]
             if context.unresolved_questions
             else "Introduce a clue that complicates an existing suspect map."
         )
@@ -282,6 +289,11 @@ class SimulationLabService:
         if context.story_governance.robotic_voice_risk:
             score += 8
             rationale.append("A broader ensemble rotation can restore voice contrast.")
+        if context.guest_pressure_digest:
+            score += 14
+            rationale.append(
+                "Fresh guest and outsider pressure can expand combinations without random drift."
+            )
         if context.highlight_signals:
             score += 4
             rationale.append("Fresh pairings can vary the kind of moment viewers clip and quote.")
@@ -300,7 +312,9 @@ class SimulationLabService:
                 "Season planning can justify refreshing pairings without feeling random."
             )
         next_focus = (
-            "Bring in a quieter character with a concrete agenda and let them "
+            context.guest_pressure_digest[0]
+            if context.guest_pressure_digest
+            else "Bring in a quieter character with a concrete agenda and let them "
             "disrupt the current rhythm."
         )
         return SimulationCandidateScore(
@@ -344,6 +358,10 @@ class SimulationLabService:
             )
         if context.story_governance.robotic_voice_risk:
             risks.append("Dialogue quality is flattening toward generic AI-sounding conflict.")
+        if context.contradiction_watch_digest:
+            risks.append(
+                "The chronology graph contains contested facts that still need controlled payoff."
+            )
         if context.pacing_health.too_agreeable:
             risks.append("Active characters are agreeing too easily and lowering comment tension.")
         if context.house_state.staff_fatigue >= 7:
@@ -360,6 +378,12 @@ class SimulationLabService:
             risks.append(
                 "Viewer demand is visible, but the current runtime is not "
                 "turning it into reusable broadcast moments."
+            )
+        if context.guest_pressure_digest and not any(
+            "guest" in item.lower() for item in context.pending_beats
+        ):
+            risks.append(
+                "Guest pressure is available, but it is not yet turning into visible scene beats."
             )
         if context.load_profile.load_tier in {"high", "critical"}:
             risks.append(

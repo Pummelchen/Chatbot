@@ -159,6 +159,45 @@ class ObjectPossession(Base):
     )
 
 
+class ChronologyGraphNode(Base):
+    __tablename__ = "chronology_graph_nodes"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    node_key: Mapped[str] = mapped_column(String(150), unique=True, nullable=False)
+    node_type: Mapped[str] = mapped_column(String(40), nullable=False)
+    label: Mapped[str] = mapped_column(String(180), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="active")
+    metadata_json: Mapped[dict] = mapped_column("metadata", JSON, default=dict, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, onupdate=_utcnow
+    )
+
+
+class ChronologyGraphEdge(Base):
+    __tablename__ = "chronology_graph_edges"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    subject_key: Mapped[str] = mapped_column(String(150), nullable=False)
+    predicate: Mapped[str] = mapped_column(String(50), nullable=False)
+    object_key: Mapped[str] = mapped_column(String(150), nullable=False)
+    confidence: Mapped[int] = mapped_column(Integer, default=5, nullable=False)
+    contradiction_status: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="clean"
+    )
+    supporting_text: Mapped[str] = mapped_column(Text, nullable=False)
+    source: Mapped[str] = mapped_column(String(50), nullable=False, default="runtime")
+    metadata_json: Mapped[dict] = mapped_column("metadata", JSON, default=dict, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, onupdate=_utcnow
+    )
+
+
 class CanonFact(Base):
     __tablename__ = "canon_facts"
 
@@ -860,6 +899,62 @@ class ViewerSignal(Base):
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow, onupdate=_utcnow
+    )
+
+
+class VoiceFingerprint(Base):
+    __tablename__ = "voice_fingerprints"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    character_slug: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
+    signature_line: Mapped[str] = mapped_column(Text, nullable=False)
+    cadence_profile: Mapped[str] = mapped_column(String(60), nullable=False, default="balanced")
+    conflict_tone: Mapped[str] = mapped_column(String(120), nullable=False, default="")
+    affection_tone: Mapped[str] = mapped_column(String(120), nullable=False, default="")
+    humor_markers: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    lexical_markers: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    taboo_markers: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    metadata_json: Mapped[dict] = mapped_column("metadata", JSON, default=dict, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, onupdate=_utcnow
+    )
+
+
+class GuestProfile(Base):
+    __tablename__ = "guest_profiles"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    guest_key: Mapped[str] = mapped_column(String(120), unique=True, nullable=False)
+    display_name: Mapped[str] = mapped_column(String(120), nullable=False)
+    role: Mapped[str] = mapped_column(String(120), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="active")
+    pressure_tags: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    summary: Mapped[str] = mapped_column(Text, nullable=False)
+    hook: Mapped[str] = mapped_column(Text, nullable=False)
+    linked_location_slug: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    metadata_json: Mapped[dict] = mapped_column("metadata", JSON, default=dict, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, onupdate=_utcnow
+    )
+
+
+class HotPatchCanaryRun(Base):
+    __tablename__ = "hot_patch_canary_runs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    status: Mapped[str] = mapped_column(String(20), nullable=False)
+    changed_files: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    checks: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    error_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    metadata_json: Mapped[dict] = mapped_column("metadata", JSON, default=dict, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, nullable=False
     )
 
 

@@ -36,9 +36,11 @@ from lantern_house.services.broadcast_assets import BroadcastAssetService
 from lantern_house.services.canon import CanonDistillationService
 from lantern_house.services.canon_court import CanonCourtService
 from lantern_house.services.character import CharacterService
+from lantern_house.services.chronology_graph import ChronologyGraphService
 from lantern_house.services.critic import TurnCriticService
 from lantern_house.services.event_extractor import EventExtractor
 from lantern_house.services.god_ai import GodAIService
+from lantern_house.services.guest_circulation import GuestCirculationService
 from lantern_house.services.highlights import HighlightPackagingService
 from lantern_house.services.hourly_ledger import HourlyBeatLedgerService
 from lantern_house.services.house import HousePressureService
@@ -53,6 +55,7 @@ from lantern_house.services.season_planner import SeasonPlannerService
 from lantern_house.services.story_gravity import StoryGravityService
 from lantern_house.services.turn_selection import EvaluatedTurnCandidate, TurnSelectionService
 from lantern_house.services.viewer_signals import ViewerSignalIngestionService
+from lantern_house.services.voice_fingerprints import VoiceFingerprintService
 from lantern_house.services.world_tracking import WorldTrackingService
 from lantern_house.utils.time import ensure_utc, utcnow
 
@@ -74,17 +77,20 @@ class RuntimeOrchestrator:
         season_planner_service: SeasonPlannerService,
         canon_service: CanonDistillationService,
         canon_court_service: CanonCourtService,
+        chronology_graph_service: ChronologyGraphService,
         house_pressure_service: HousePressureService,
         world_tracking_service: WorldTrackingService,
         story_gravity_service: StoryGravityService,
         god_ai_service: GodAIService,
         manager_service: StoryManagerService,
         character_service: CharacterService,
+        voice_fingerprint_service: VoiceFingerprintService,
         turn_selection_service: TurnSelectionService,
         critic_service: TurnCriticService,
         highlight_service: HighlightPackagingService,
         monetization_service: MonetizationPackagingService,
         broadcast_asset_service: BroadcastAssetService,
+        guest_circulation_service: GuestCirculationService,
         recap_service: RecapService,
         progression_service: StoryProgressionService,
         load_orchestration_service: LoadOrchestrationService,
@@ -97,6 +103,7 @@ class RuntimeOrchestrator:
         llm_client,
         fail_safe_executor: FailSafeExecutor,
         hot_patch_controller: HotPatchController | None = None,
+        hot_patch_validator: Any | None = None,
     ) -> None:
         self.config = config
         self.repository = repository
@@ -109,17 +116,20 @@ class RuntimeOrchestrator:
         self.season_planner_service = season_planner_service
         self.canon_service = canon_service
         self.canon_court_service = canon_court_service
+        self.chronology_graph_service = chronology_graph_service
         self.house_pressure_service = house_pressure_service
         self.world_tracking_service = world_tracking_service
         self.story_gravity_service = story_gravity_service
         self.god_ai_service = god_ai_service
         self.manager_service = manager_service
         self.character_service = character_service
+        self.voice_fingerprint_service = voice_fingerprint_service
         self.turn_selection_service = turn_selection_service
         self.critic_service = critic_service
         self.highlight_service = highlight_service
         self.monetization_service = monetization_service
         self.broadcast_asset_service = broadcast_asset_service
+        self.guest_circulation_service = guest_circulation_service
         self.recap_service = recap_service
         self.progression_service = progression_service
         self.load_orchestration_service = load_orchestration_service
@@ -132,6 +142,7 @@ class RuntimeOrchestrator:
         self.llm_client = llm_client
         self.fail_safe = fail_safe_executor
         self.hot_patch_controller = hot_patch_controller
+        self.hot_patch_validator = hot_patch_validator
         self._stop_event = asyncio.Event()
         self._checkpoint_task: asyncio.Task[None] | None = None
         self._god_ai_task: asyncio.Task[None] | None = None
@@ -280,7 +291,10 @@ class RuntimeOrchestrator:
         self._refresh_house_pressure(now=startup_now, force=True)
         self._refresh_story_gravity(now=startup_now, force=True)
         self._refresh_canon(now=startup_now)
+        self._refresh_voice_fingerprints(now=startup_now, force=True)
         self._refresh_world_tracking(now=startup_now, force=True)
+        self._refresh_chronology_graph(now=startup_now, force=True)
+        self._refresh_guest_circulation(now=startup_now, force=True)
         startup_load = self._capture_load_profile(now=startup_now)
         self._capture_ops_snapshot(load_profile=startup_load, now=startup_now)
         self.fail_safe.call(
@@ -328,6 +342,9 @@ class RuntimeOrchestrator:
         self._refresh_house_pressure(now=now)
         self._refresh_story_gravity(now=now)
         self._refresh_canon(now=now)
+        self._refresh_voice_fingerprints(now=now)
+        self._refresh_chronology_graph(now=now)
+        self._refresh_guest_circulation(now=now)
         load_profile = self._capture_load_profile(now=now)
         ops_snapshot = self._capture_ops_snapshot(load_profile=load_profile, now=now)
         self._apply_ops_remediations(snapshot=ops_snapshot, now=now)
@@ -895,6 +912,7 @@ class RuntimeOrchestrator:
             expected_inputs=["Readable world-tracking state and a valid persisted turn payload."],
             retry_advice="Retry world tracking on the next iteration.",
         )
+        self._refresh_chronology_graph(now=now, force=True)
         self._refresh_hourly_ledger(now=now)
         self._refresh_programming_grid(now=now)
         self._refresh_season_planner(now=now)
@@ -1098,6 +1116,8 @@ class RuntimeOrchestrator:
                         "applied_at": now.isoformat(),
                         "changed_files": report.changed_files,
                         "reloaded_modules": report.reloaded_modules,
+                        "shadow_validated": report.shadow_validated,
+                        "validation_checks": report.validation_checks,
                     }
                 },
                 now=now,
@@ -1205,6 +1225,18 @@ class RuntimeOrchestrator:
             retry_advice="Restore repository access so bounded canon memory can refresh.",
         )
 
+    def _refresh_voice_fingerprints(self, *, now, force: bool = False) -> None:
+        self.fail_safe.call(
+            "voice_fingerprints.refresh",
+            lambda: self.voice_fingerprint_service.refresh(now=now, force=force),
+            context={"phase": "voice-fingerprints", "force": force},
+            expected_inputs=[
+                "Readable character roster, recent messages, and a writable "
+                "voice_fingerprints table."
+            ],
+            retry_advice="Restore repository access so voice fingerprinting can refresh.",
+        )
+
     def _refresh_world_tracking(self, *, now, force: bool = False) -> None:
         self.fail_safe.call(
             "world_tracking.refresh",
@@ -1214,6 +1246,29 @@ class RuntimeOrchestrator:
                 "Readable character positions, story objects, and writable timeline tables."
             ],
             retry_advice="Restore repository access so deterministic world tracking can refresh.",
+        )
+
+    def _refresh_chronology_graph(self, *, now, force: bool = False) -> None:
+        self.fail_safe.call(
+            "chronology_graph.refresh",
+            lambda: self.chronology_graph_service.refresh(now=now, force=force),
+            context={"phase": "chronology-graph", "force": force},
+            expected_inputs=[
+                "Readable timeline facts, object possession state, and writable "
+                "chronology graph tables."
+            ],
+            retry_advice="Restore repository access so chronology graph updates can resume.",
+        )
+
+    def _refresh_guest_circulation(self, *, now, force: bool = False) -> None:
+        self.fail_safe.call(
+            "guest_circulation.refresh",
+            lambda: self.guest_circulation_service.refresh(now=now, force=force),
+            context={"phase": "guest-circulation", "force": force},
+            expected_inputs=[
+                "Readable world and house state, plus writable guest profile and beat tables."
+            ],
+            retry_advice="Restore repository access so guest circulation can refresh.",
         )
 
     def _build_manager_packet(
@@ -1550,7 +1605,9 @@ class RuntimeOrchestrator:
         season_planner_module = import_module("lantern_house.services.season_planner")
         canon_module = import_module("lantern_house.services.canon")
         canon_court_module = import_module("lantern_house.services.canon_court")
+        chronology_graph_module = import_module("lantern_house.services.chronology_graph")
         house_module = import_module("lantern_house.services.house")
+        guest_circulation_module = import_module("lantern_house.services.guest_circulation")
         gravity_module = import_module("lantern_house.services.story_gravity")
         highlights_module = import_module("lantern_house.services.highlights")
         monetization_module = import_module("lantern_house.services.monetization")
@@ -1564,6 +1621,7 @@ class RuntimeOrchestrator:
         critic_module = import_module("lantern_house.services.critic")
         turn_selection_module = import_module("lantern_house.services.turn_selection")
         world_tracking_module = import_module("lantern_house.services.world_tracking")
+        voice_fingerprints_module = import_module("lantern_house.services.voice_fingerprints")
         recap_module = import_module("lantern_house.services.recaps")
         progression_module = import_module("lantern_house.services.progression")
         scheduler_module = import_module("lantern_house.runtime.scheduler")
@@ -1604,6 +1662,10 @@ class RuntimeOrchestrator:
             latest_config.canon,
         )
         self.canon_court_service = canon_court_module.CanonCourtService(latest_config.canon_court)
+        self.chronology_graph_service = chronology_graph_module.ChronologyGraphService(
+            self.repository,
+            latest_config.chronology_graph,
+        )
         self.house_pressure_service = house_module.HousePressureService(
             self.repository,
             latest_config.house_pressure,
@@ -1612,9 +1674,17 @@ class RuntimeOrchestrator:
             self.repository,
             latest_config.world_tracking,
         )
+        self.voice_fingerprint_service = voice_fingerprints_module.VoiceFingerprintService(
+            self.repository,
+            latest_config.voice_fingerprints,
+        )
         self.story_gravity_service = gravity_module.StoryGravityService(
             self.repository,
             latest_config.story_gravity,
+        )
+        self.guest_circulation_service = guest_circulation_module.GuestCirculationService(
+            self.repository,
+            latest_config.guest_circulation,
         )
         simulation_lab = simulation_module.SimulationLabService(latest_config.simulation)
         soak_audit_service = soak_audit_module.SoakAuditService(
@@ -1696,5 +1766,6 @@ class RuntimeOrchestrator:
                 config=build_hot_patch_config(latest_config),
                 project_root=Path(__file__).resolve().parents[3],
                 rebuild_runtime=self.rebuild_runtime_components,
+                validate_patch=self.hot_patch_validator,
             )
             self.hot_patch_controller.bootstrap()
